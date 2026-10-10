@@ -159,8 +159,12 @@ public sealed class Asm
         var outp = _b.ToArray();
         foreach (var (pos, label) in _rel8)
         {
-            var target = _labels[label];
-            outp[pos] = (byte)(target - (pos + 1));
+            if (!_labels.TryGetValue(label, out var target))
+                throw new InvalidOperationException($"Undefined x86 branch label {label}");
+            var displacement = target - (pos + 1);
+            if (displacement < sbyte.MinValue || displacement > sbyte.MaxValue)
+                throw new InvalidOperationException($"x86 short branch to label {label} exceeds rel8 range: {displacement}");
+            outp[pos] = unchecked((byte)(sbyte)displacement);
         }
         foreach (var (pos, targetVa) in _rel32)
         {

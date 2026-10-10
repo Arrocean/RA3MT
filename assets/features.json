@@ -207,6 +207,17 @@
    "stub": "ammo",
    "asm": "mov eax,[ecx+1278]"
   },
+  "weapon_clip": {
+   "rva": {
+    "1.12": "0x3CF271",
+    "1.13": "0x3B9171"
+   },
+   "displaced": "83C8FF01461C",
+   "displacedLen": 6,
+   "asm": "or eax,-1; add [esi+1C],eax",
+   "pattern": "83 C8 FF 01 46 1C 01 46 24 01 46 2C 83 7E 2C 00",
+   "patternSiteOffset": 0
+  },
   "ammo_6": {
    "rva": {
     "1.12": "0x479E00",
@@ -221,17 +232,17 @@
  "globals": {
   "selectionList": {
    "rva": {
-    "1.12": "0x8E0940",
-    "1.13": "0x8e4c60"
+    "1.12": "0x8E08DC",
+    "1.13": "0x8E4BFC"
    },
-   "note": "[root+4]=begin,[root+8]=end vector of selected entries; entry+8->+138->unit fields (+3cc lv,+37c speednode,+33c hp,+374 movelist,+418 owner)"
+   "note": "[root]+0x5C=count,+0x50=head linked list; node+8->wrapper+0x138->body; body+0x418=side pointer"
   },
   "playerRoot": {
    "rva": {
-    "1.12": "0x8dde84",
-    "1.13": "0x8e21a4"
+    "1.12": "0x8ede2c",
+    "1.13": "0x8f214c"
    },
-   "note": "[root+0x28] = 本地玩家索引（俘掳/敌我判定）"
+   "note": "[root]+0x28 = 本地阵营指针；两版 side getter 与调用点静态确认，1.13 活体 owner 匹配（不是玩家索引）"
   }
  },
  "features": [
@@ -319,7 +330,7 @@
     "build_hp_a"
    ],
    "flag": "instantready",
-   "desc": "协议技能与超级武器冷却立即归零（仅己方；敌我判定用资金钩实时捕获的玩家对象，若不生效请点诊断采集查看属主值）",
+   "desc": "仅本地阵营：协议技能与超级武器立即就绪（修正属主判定与冷却链表查询，待实战复测）",
    "src": "orig[06]"
   },
   {
@@ -336,7 +347,7 @@
     "sidebar_pts"
    ],
    "flag": "freezeenemy",
-   "desc": "冻结敌方的协议技能/超级武器/生产进度（敌我判定锚同上）",
+   "desc": "延后非本地阵营的协议/超武冷却（含盟友；不冻结普通生产，待实战验证）",
    "src": "orig[07]"
   },
   {
@@ -350,7 +361,7 @@
     "power_cool"
    ],
    "flag": "zoom",
-   "desc": "解除镜头缩放限制（老版[08]站点，效果方向待实测）",
+   "desc": "绕过镜头范围钳制（修正 ZF 分支控制，待实战复测）",
    "src": "orig[06/08]"
   },
   {
@@ -372,13 +383,13 @@
    "no": "10",
    "name": "选中单位瞬升三星",
    "group": "选中单位",
-   "kind": "toggle",
+   "kind": "pending",
    "hotkey": "Ctrl+P",
    "hooks": [
     "zoom_unit_xp"
    ],
    "flag": "xp999",
-   "desc": "实验性：向选中列表条目+1C 写 999（字段语义未完全确认，可能影响单位行为，异常请关闭）",
+   "desc": "待实现游戏经验刷新流程，旧站点属于技能界面而非选中单位",
    "src": "orig[10]"
   },
   {
@@ -389,15 +400,10 @@
    "kind": "toggle",
    "hotkey": "Ctrl+;",
    "hooks": [
-    "ammo",
-    "ammo_2",
-    "ammo_3",
-    "ammo_4",
-    "ammo_5",
-    "ammo_6"
+    "weapon_clip"
    ],
    "flag": "ammo",
-   "desc": "实验性：向武器对象+8 写 50000（字段语义待确认；若引发现象异常请关闭并反馈）",
+   "desc": "本地选中单位开火后回填真实弹夹容量；不改变连发计数，待实战复测",
    "src": "orig[18]"
   },
   {
@@ -408,7 +414,7 @@
    "kind": "action",
    "hotkey": "Alt+P",
    "action": "lv",
-   "desc": "遍历选中列表写 [unit+3CC]→[+C]=999999",
+   "desc": "仅支持晋级的目标：经验值设为 999999，星级/属性待后续经验刷新",
    "src": "orig[10]"
   },
   {
@@ -419,7 +425,7 @@
    "kind": "action",
    "hotkey": "Alt+-",
    "action": "speed1",
-   "desc": "[+37C]→[+374]+200→[+8]=500",
+   "desc": "当前移动模式基础速度设为 500；保留游戏减速与速度上限",
    "src": "orig[11]"
   },
   {
@@ -430,7 +436,7 @@
    "kind": "action",
    "hotkey": "Alt+=",
    "action": "speed2",
-   "desc": "同上但走 [+4] 节点（两栖单位）",
+   "desc": "当前移动模式集合全部基础速度设为 500；切换模式后可能需重执行",
    "src": "orig[12]"
   },
   {
@@ -441,7 +447,7 @@
    "kind": "action",
    "hotkey": "Alt+PgUp",
    "action": "freeze1",
-   "desc": "速度置 0（普通单位）",
+   "desc": "当前模式基础速度置 0；编队速度覆盖可能影响效果，待实战复测",
    "src": "orig[13]"
   },
   {
@@ -452,7 +458,7 @@
    "kind": "action",
    "hotkey": "Alt+PgDn",
    "action": "freeze2",
-   "desc": "速度置 0（两栖节点）",
+   "desc": "当前模式集合基础速度置 0；模式重建后需重新执行",
    "src": "orig[14]"
   },
   {
@@ -480,23 +486,34 @@
   {
    "id": "sel_hpnormal",
    "no": "17",
-   "name": "选中目标恢复生命",
+   "name": "恢复选中目标正常生命",
    "group": "选中单位",
    "kind": "action",
    "hotkey": "Alt+\\",
    "action": "hpnormal",
-   "desc": "[+10]（上限）写回当前值",
+   "desc": "恢复基准生命上限并治疗，撤销生命上限修改（FINAL3同款）",
    "src": "orig[17]"
+  },
+  {
+   "id": "sel_heal",
+   "no": "17b",
+   "name": "治疗选中目标",
+   "group": "选中单位",
+   "kind": "action",
+   "hotkey": "",
+   "action": "heal",
+   "desc": "治疗至当前有效上限，保留生命上限修改",
+   "src": "modern"
   },
   {
    "id": "sel_capture",
    "no": "19",
    "name": "俘虏选中目标",
    "group": "选中单位",
-   "kind": "action",
+   "kind": "pending",
    "hotkey": "Alt+O",
    "action": "capture",
-   "desc": "[+418] 改写为本地玩家索引",
+   "desc": "待验证完整归属切换流程，禁止直接覆盖属主指针",
    "src": "orig[19]"
   },
   {
@@ -504,10 +521,10 @@
    "no": "20",
    "name": "摧毁选中目标",
    "group": "选中单位",
-   "kind": "action",
+   "kind": "pending",
    "hotkey": "Alt+Del",
    "action": "destroy",
-   "desc": "生命置 0（安全实现，替代老版危险 call）",
+   "desc": "待实现游戏线程死亡流程；已禁用绕过回调的直接生命置零",
    "src": "orig[20]"
   },
   {

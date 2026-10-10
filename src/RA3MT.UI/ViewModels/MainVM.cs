@@ -125,10 +125,10 @@ public sealed class MainVM : ObservableObject
 
     public int EnabledCount => Engine.ToggleState.Count(kv => kv.Value);
     public string PidText => Attached ? Pid.ToString() : "—";
-    public string AttachChipText => Attached ? "✓ 已附加游戏进程" : "未检测到进程 · 请先启动游戏";
+    public string AttachChipText => Engine.RecoveryRequired ? "挂钩恢复未完成" : Attached ? "✓ 已附加游戏进程" : "未检测到进程 · 请先启动游戏";
     public string AttachButtonText => Attached ? "脱离进程" : "附加进程";
-    public string ProcessStateText => Attached ? "已附加" : "未附加";
-    public string SiteCheckText => Attached
+    public string ProcessStateText => Engine.RecoveryRequired ? "恢复失败" : Attached ? "已附加" : "未附加";
+    public string SiteCheckText => Engine.RecoveryRequired ? "功能已禁用，请重试脱离" : Attached
         ? $"挂钩点 {Resolved}/{TotalSites} 校验通过"
         : $"支持 1.12 / 1.13 · {TotalSites} 个挂钩点";
 
@@ -152,7 +152,11 @@ public sealed class MainVM : ObservableObject
         HotkeyCount = Engine.Data.Features.Count(f =>
             !string.IsNullOrEmpty(f.Hotkey) && f.Kind != "pending");
 
-        AttachCmd = new RelayCommand(_ => TryAttach(), _ => NotAttached);
+        AttachCmd = new RelayCommand(_ =>
+        {
+            if (Attached) Engine.Detach();
+            else TryAttach();
+        });
         DetachCmd = new RelayCommand(_ =>
         {
             Engine.Detach();

@@ -1,5 +1,148 @@
 # 逆向笔记（重打包版 1.12/1.13）
 
+## FINAL3补充勘误（优先于下文历史）
+
+新主要参考见 docs/FINAL3_ANALYSIS.md 与 artifacts/final3/script_00_0008D05B.cea。
+FINAL3明确定义NormalHP为读取健康组件+10，恢复当前+4与有效上限+C；
+这是撤销生命上限作弊，不是仅治疗，不能将此原版语义误判为字段错误。
+v13恢复NormalHP原意，并新增独立heal动作只回填当前有效+C，保留原上限。
+actiontest现13例分别验证两种写入范围、非法float和禁用动作拒绝。
+FINAL3三参数晋级EA+35C200的重打包对应尚未定位；不以自然经验刷新0x705F60代替。
+该函数RET4，FINAL3调用push0/1/3预期不同签名，必须重新配对后接入游戏线程队列。
+
+## 此前勘误与修复（与上节矛盾时以上节为准）
+
+历史会话中的推测并不可靠，尤其是选中列表、玩家锚点、经验与弹药的定性。
+本轮只读实机检查 PID 43776，加上双版本反汇编，确认以下结论：
+
+- 真正选中全局 RVA：1.12 `0x8E08DC`，1.13 `0x8E4BFC`。
+  root+0x50 为循环链表哨兵，root+0x5C 为计数；node+8 为 Drawable，
+  Drawable+0x138 为 Body。Drawable+0x13D 的 bit 0x40 为选中标志，Body+0xF4 反向指回 Drawable。
+  已替换 SelectionActions 的临时 UI 捕获机制，加入计数/循环/反向引用/变化校验。
+- 本地阵营上下文全局 RVA：1.12 `0x8EDE2C`，1.13 `0x8F214C`；[root]+0x28 为阵营对象。
+  旧 money_h1.esi+0x1188 锚点会取到 vtable，不能用于归属检查。
+- 协议冷却 HpA 站点在游戏查找匹配节点之前；必须按 node+8 的协议键查询，
+  只能改匹配节点+0xC 截止时刻，不能修改首节点或哨兵。
+  JMP 没有旧 CALL 的额外返回地址，保存属主栈槽应为 pushfd/pushad 后 esp+0x28。
+  已加入 4096 节点搜索上限；立即就绪设置截止时刻为当前游戏时钟。
+- BuildPower 在钩子之前缓存 EDI 冷却截止值；修改内存后必须重新加载 EDI。
+  无属主判定的 HpB/Sidebar 增量写入已移除，避免冻结本地或无关记录。
+- 缩放桩旧 push 0/popfd 实际清除 ZF，与 JE 绕过钳制的需求相反。
+  已改为保存的 EFLAGS OR 0x40 后 popfd，保留其他标志。
+- zoom_unit_xp 遍历的是 Weapon：Weapon+8->WeaponSlot，slot+0x10->Body。
+  Weapon+0x1C 是弹夹数量，不是经验！旧 xp999 写入已移除，该功能暂不可用。
+- 旧六个 ammo 站点读取 Body+0x1278 的 RedAlert 威胁组件，+8 是威胁值。
+  已停止错误50000写入；v9改用真实Weapon开火扣弹站点（见下）。
+  真弹药链候选：Body+0x37C WeaponSetUpdate，+0x34/+0x38 为武器数组 begin/end，
+  Weapon+0x1C 当前弹夹，[[Weapon+4]+4]+0x70 容量；未完成开火持续性测试。
+  弹药调查补充：1.13 VA 0x7E7200 为 reload，0x7E724D/0x7E7302 写容量到 Weapon+0x1C，
+  增加时调用0x727AB0通知；0x727AA0仅返回类型名称常量。
+  勘误：前次代理递减候选的版本地址对调。当前1.13 VA 0x7DABAD 才是
+  83 43 1C FF 83 7B 1C 00，0x7EFFDD 实为6A 01 57 E8...调用序列。
+  0x7DABAD 周围用 EBX-0x2C 子对象、EBX+0x24 时间链表，递减归零后按游戏时间重设计数，
+  不能证明是Weapon弹夹，已排除直接挂钩。
+  真消耗已确认：1.13函数VA0x7B9020，1.12函数VA0x7CF120，entry ECX->ESI 为Weapon，
+  两个发射分支汇合到1.13 RVA0x3B9171 / 1.12 RVA0x3CF271，
+  重放6字节83 C8 FF 01 46 1C（OR EAX,-1；ADD [ESI+1C],EAX），15字节AOB双版本唯一。
+  v9桩先重放真实扣弹，保存全部寄存器/算术标志，再仅对本地且Drawable选中bit40的武器
+  回填已解析的弹夹容量（正值且<=100万），不修改+24/+2C连发计数。
+  owner链采用前次活体确认Weapon+8->slot+10->Body；Body+F4为Drawable。
+  已空弹时前置guard阻止进入开火钩子，需正常装填一次，不声称解除任何装填/射击间隔。
+  双版本挂钩42/42；Unicorn148执行用例通过，容量边界与本地/选中组合覆盖。
+  尚未由代理进行实战连续开火复测。
+  新增 tools/analysis/inspect_selection.py，只以VM_READ|QUERY打开自动发现的当前游戏，
+  输出选中Body/生命/经验rank/当前Locomotor速度上限/Weapon弹夹容量JSON，
+  使用标准ctypes显式Win32签名，关闭快照与进程句柄，无游戏内存写入。
+  本机运行成功返回PID35440、1.13、selectionCount0；单选详细输出仍待下一次目标选中。
+- 真经验组件 Body+0x3CC 的 +0xC 为经验浮点值，+0x24 为等级。
+  直接写经验不会立即晋级，游戏 setter 1.13 VA 0x76E080 会调用 0x705F60 刷新。
+  当前经验动作只声称设置经验，立即三星暂禁用。
+  增加setter同款晋级资格检查：tracker+4->wrapper+0x14->template，byte+0x245非零。
+  自然award函数1.13 VA0x76DF90，在0x76E06D写XP后0x76E072调用0x705F60；
+  该路径仅在奖励经验事件发生，不是每帧callback，不能作为可靠立即晋级实现。
+  未实现任意远程线程调用游戏setter，避免绕开游戏线程/锁的要求。
+  弹药Unicorn回归扩展到155例，7条缺失slot/body/drawable/controller/side/template链均不回填。
+  v10包含经验资格检查；selectiontest扩展到13项，新增支持/不支持晋级与缺组件/模板4例。
+  发布构建通过，无游戏写入，实战效果仍待复测。
+- 移动组件+0x1FC 是嵌入 vector 的 vtable，不得解引用后写游戏代码！
+  begin/end 为 +0x200/+0x204；当前模式实例为 AI+0x21C，实例+8 为基础速度。
+  已按双版本 getter（1.13 VA 0x77EC70 / 1.12 VA 0x793E90）证据改为操作当前实例，
+  第二组动作操作当前 LocomotorSet 全部实例，而非固定第二项。
+  +0x238 是懒生成的18模式聚合集，不是当前模式备份，不能用于持久修改。
+  实例+0x20 是游戏可更新的减速上限，修改动作保留它，不能统一恢复到构造默认99999。
+  编队速度 query3 可覆盖基础速度；模式重建会销毁实例，一次性冻结不能声称持久生效。
+  effective speed 1.13 VA 0x785D10 / 1.12 VA 0x79AF00，分配 ctor 0x73E3D0/0x753550，
+  实例0xC4字节，+4模板/+8基础速度/+20上限一致；无跨单位共享模板写入。
+  selectiontest 扩展为9项，包括当前实例非第一项、集合去重、空数组和异常边界。
+- 生命勘误：HP+4当前，HP+8前值，HP+0xC有效最大生命（比例分母），+0x10基准最大生命。
+  ratio getter1.13 VA0x6FEEA0 /1.12 VA0x714140使用+4/+C，+C不是显示当前生命。
+  hpnormal现只写当前值为有效+C，不覆盖上限；拒绝NaN/Inf/非正上限。
+  adjust vtable+0x94：1.13 VA0x78CB30 /1.12 VA0x7A3650，thiscall(delta, nullableContext)RET8，
+  更新前值/当前、钳制上限、行为回调并调用死亡状态通知0x7513F0/0x765C90。
+  通知设置Body+0x471 bit0及其他死亡流程，直接HP+4=0绕过这些副作用，故v12禁用摧毁动作。
+  factor setter+0x80=0x6FEDB0/0x714040；max setter+0x84=0x6FEDF0/0x714080，均走adjust回调。
+  当前其他生命动作仍是实验性直接数值写入，不能宣称行为/死亡状态完整刷新。
+  选中动作写前重新验证Body+F4<->Drawable+138与选中位；selectiontest扩展18例，
+  拒绝提前哨兵（count比链长大）及枚举中计数改变。
+  SelectionActions复用IInjectionMemory，actiontest8例实际断言写入范围：
+  有效+C恢复仅写+4、保留基准+10；NaN/Inf/非正上限无写入；取消选择无写入；
+  capture/destroy拒绝无写入。假内存测试不证明游戏行为回调。
+- 俘虏必须走完整归属切换流程，已禁止仅覆盖 Body+0x418。
+  新归属切换候选commit：1.12 RVA0x3CC0D8 / 1.13 RVA0x3B5F78，
+  MOV [ESI+0x418],EDI 后 MOV [ESI+0x414],EBP，前后有旧属主判断、管理器与通知调用，RET8。
+  新EDI从EBP相关结构或controller+0x30解析；参数/入口与捕获调用上下文尚未完整证明。
+  inspected slice起点1.12 RVA0x3CBF58 / 1.13 RVA0x3B5DF8在函数内部，不是已证明入口。
+  EBP与旧Body+0x414比较并替换该字段，EDI为解析出的Body+0x418；
+  后续已证明完整入口：1.13 RVA0x3B5DF0 / 1.12 RVA0x3CBF50，前有CC边界，
+  函数长0x288，RET8位于RVA0x3B6075/0x3CC1D5。
+  prologue PUSH ECX; PUSH EBP; MOV EBP,[ESP+0xC]; PUSH ESI; MOV ESI,ECX：
+  ECX=Body，第1参数entryESP+4是写入Body+0x414的可空指针，第2参数entryESP+8低字节bool。
+  helper1.13RVA0x2FDBC0 /1.12RVA0x166340返回[[arg1+4]+8]派生owner，
+  owner无效或arg1空回退controller+0x30；同旧+414直接返回。
+  +414指针名义类型仍未完全证明，不用于远程调用。
+  调用者追踪：1.13 VA0x7C6710正常wrapper调用0x7B5DF0（arg2=0），
+  序列化0x7B7C0A传arg2=1；1.12正常wrapper0x7DC370、序列化0x7CDD6A。
+  实际capture组件0x7E5870调用captor Body的getter0x7073F0，结果传0x7D6D40(target,newContext)。
+  getter返回Body+414（其+1F8非零）或owner+AC默认context；默认本地context=[localSide+AC]，
+  应验证[[context+4]+8]==localSide。调用为游戏组件同步路径，仍缺外部动作的安全游戏线程队列。
+  不能只跳到commit位置，不能以不明线程的远程调用冒充完整俘虏功能；下轮核实契约。
+- UI 附加/脱离共用按钮已改为双向命令，修复附加后脱离按钮禁用。
+
+验证：双版本 40/40 挂钩字节通过；selectiontest 5 项通过；
+C# 桩导出 + capstone 编码/跳转检查通过；新选中链只读实机解析 1 个单位通过。
+新增 Unicorn x86 执行回归 `tools/harness/test_execution_stubs.py`：100 个用例通过，
+覆盖本地/非本地、开关组合、空上下文、协议匹配/缺失/空表/异常循环，
+断言只修改匹配节点且哨兵与不匹配记录不变；校验栈/寄存器/EFLAGS 恢复、
+缩放 ZF、UI 武器 TEST 的空路径、六个威胁访问器无写入及两个冷却谓词纯重放。
+这是合成对象执行测试，不代替实际游戏效果验证。
+运行命令：先 `dotnet run --project src/RA3MT.SelfCheck -c Release -- stubdump artifacts/stubs_semantic`，
+再 `py tools/harness/test_execution_stubs.py`（依赖 unicorn 2.1.4）。
+新增 Asm rel8 范围与未定义标签拒绝检查，`SelfCheck asmtest` 5 个边界用例通过；
+当前 20 桩按 16 字节对齐后的末端为 0x3B0，小于捕获数据起点 0xFFC。
+Install 同步加入桩区/捕获区重叠拒绝检查。
+v11注入防护：附加要求全部21站点通过校验，不允许缺关键站点仍显示就绪。
+取消仅凭原始短字节/最近兄弟距离猜测重定位，只保留精确RVA或唯一上下文AOB。
+SelfCheck resolvertest4例覆盖原始字节拒绝、唯一特征通过、多候选拒绝和精确RVA通过。
+ProcessMemory检查实际写入长度及FlushInstructionCache结果。
+安装先写全量桩，再写跳板；写跳板前记录原始字节，以覆盖短写/刷新失败的回滚。
+附加失败尝试逆序恢复所有已记录站点，卸载逐点尝试并保留失败条目用于重试，
+卸载失败不再报告全部已还原。附加回滚失败保留内存句柄和MasterCode恢复记录，
+RecoveryRequired禁用全部功能/动作并保留脱离重试入口，UI明确显示恢复失败；
+重试仍失败时要求用户重启游戏。线程并发patch风险未完全解决。
+新增IInjectionMemory窄接口用于InstallerChecks假内存故障注入，不改变生产Win32调用。
+SelfCheck installertest132例通过：所有43写入点的写前/部分写后/完整写后失败129例，
+加3个卸载首/中/尾故障、逆序全量尝试、只重试残留、原始字节恢复断言。
+这是安装器离线故障测试；未对当前游戏注入错误，未证明Win32系统调用故障或线程安全。
+TrainerEngine附加回滚失败的UI/句柄保留路径仍未以假native端到端测试。
+发布 v8 包含当前 Locomotor 基础速度操作与真实选中数量诊断，
+发布构建0警告/0错误，9项选中/移动容器回归及100项x86执行回归通过。
+本轮过程中用户已重启游戏，当前 PID 为35440（此前43776已退出），
+只读检查选中计数为0，禁止复用前局堆地址。新版仍未由代理执行实战操作。
+未向正在运行的游戏注入本轮代码，未执行生命/摧毁等破坏性动作。
+所以协议/缩放、速度、生命动作的实战效果仍须复测；冻结敌方包含所有非本地阵营（包括盟友）。
+下文历史记录保留供溯源，但与本节矛盾时以本节为准。
+
+
 日期：2026-10-10。前置分析见 `D:\RA3TrainerWork\NOTES.md`（EA 原版 1.12 的老修改器分析）。
 
 ## 关键发现：重打包版 ≠ EA 原版

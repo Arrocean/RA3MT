@@ -56,14 +56,14 @@ public sealed class MasterCode
     public nuint Block { get; private set; }
     public bool Installed { get; private set; }
 
-    private readonly ProcessMemory _mem;
+    private readonly IInjectionMemory _mem;
     private readonly nuint _rootVa;             // player-context root global
     private readonly Dictionary<string, HookResolution> _sites;
     private readonly Dictionary<string, string> _stubBySite;   // site id -> stub id
     private readonly List<(string hookId, byte[] original, nuint va)> _patched = new();
     private readonly Action<string>? _log;
 
-    public MasterCode(ProcessMemory mem, nuint imageBase, nuint playerRootVa,
+    public MasterCode(IInjectionMemory mem, nuint imageBase, nuint playerRootVa,
         Dictionary<string, HookResolution> sites, IReadOnlyDictionary<string, HookDef> defs, Action<string>? log)
     {
         _mem = mem;
@@ -76,6 +76,7 @@ public sealed class MasterCode
     public void Install()
     {
         if (Installed) return;
+        if (_patched.Count != 0) throw new InvalidOperationException("残留挂钩尚未恢复，拒绝重新安装");
         if (StubArea < DiagSelIdx + 4)
             throw new InvalidOperationException("块内布局冲突：诊断区与桩代码区重叠");
         Block = _mem.Alloc(BlockSize);
@@ -88,7 +89,17 @@ public sealed class MasterCode
             if (!_stubBySite.TryGetValue(id, out var stubId) || !StubGen.Handles(stubId)) continue;
             var siteEnd = site.Va + (nuint)site.Displaced.Length;
             var code = StubGen.Emit(stubId, Block + off, siteEnd, Block, _rootVa);
+            var next = checked(off + (uint)((code.Length + 15) & ~15));
+            if (next > CaptureCount)
+                throw new InvalidOperationException($"Stub area overlaps capture data at hook '{id}'");
             layouts.Add((id, code));
+            off = next;
+        }
+
+        off = StubArea;
+        foreach (var (_, code) in layouts)
+        {
+            _mem.Write(Block + off, code);
             off += (uint)((code.Length + 15) & ~15);
         }
 
@@ -97,16 +108,14 @@ public sealed class MasterCode
         {
             var site = _sites[id];
             var stubVa = Block + off;
-            _mem.Write(stubVa, code);
-
             var siteVa = site.Va;
             var patch = new byte[site.Displaced.Length];
             patch[0] = 0xE9;
             BitConverter.GetBytes((int)(stubVa - (siteVa + 5))).CopyTo(patch, 1);
             for (var i = 5; i < patch.Length; i++) patch[i] = 0x90;
 
-            _mem.Write(siteVa, patch);
             _patched.Add((id, site.Displaced, siteVa));
+            _mem.Write(siteVa, patch);
             _log?.Invoke($"[mastercode] {id}: 0x{siteVa:X} -> 桩 0x{stubVa:X} ({code.Length}B)");
             off += (uint)((code.Length + 15) & ~15);
         }
@@ -116,13 +125,22 @@ public sealed class MasterCode
 
     public void Uninstall()
     {
-        if (!Installed) return;
-        foreach (var (id, original, va) in _patched)
+        if (_patched.Count == 0) { Installed = false; return; }
+        var failures = new List<Exception>();
+        foreach (var patch in _patched.ToArray().Reverse())
         {
-            _mem.Write(va, original);
-            _log?.Invoke($"[mastercode] {id}: 恢复原始字节 0x{va:X}");
+            var (id, original, va) = patch;
+            try
+            {
+                _mem.Write(va, original);
+                _patched.Remove(patch);
+                _log?.Invoke($"[mastercode] {id}: 恢复原始字节 0x{va:X}");
+            }
+            catch (Exception ex) { failures.Add(ex); }
         }
-        Installed = false;
+        Installed = _patched.Count != 0;
+        if (failures.Count != 0)
+            throw new AggregateException("部分挂钩恢复失败", failures);
     }
 
     public void SetFlag(string name, bool on)
@@ -181,7 +199,7 @@ public static class StubGen
         "money_h2" or "money_h1" or "money_h3" or "money_h4" or
         "proto_cool_a" or "proto_cool_b" or "power" or
         "build_power" or "build_hp_a" or "build_hp_b" or "sidebar_pts" or
-        "power_cool" or "unit_lv" or "zoom_unit_xp" or "ammo" => true,
+        "power_cool" or "unit_lv" or "zoom_unit_xp" or "ammo" or "weapon_clip" => true,
         _ => false,
     };
 
@@ -206,6 +224,7 @@ public static class StubGen
         "unit_lv" => UnitLv(stubVa, siteEnd, block),
         "zoom_unit_xp" => ZoomUnitXp(stubVa, siteEnd, block),
         "ammo" => Ammo(stubVa, siteEnd, block),
+        "weapon_clip" => WeaponClip(stubVa, siteEnd, block, rootVa),
         _ => throw new NotImplementedException(id),
     };
 
@@ -368,14 +387,16 @@ public static class StubGen
         a.MovRegRegDisp32(R.Edx, R.Eax, 0x418);
         a.MovM32AbsReg(R.Edx, (uint)(block + MasterCode.DiagOwner));
         // [06] 协议/超武立即就绪：属主==己方 → [esi+20]=0
-        // 己方判定：资金钩实时捕获的玩家 esi → [esi+0x1188]=阵营对象（实测），
-        // 与冷却对象 [eax+0x418]（重打包版为阵营对象指针）比对
+        // The global contains the local controller; controller+0x28 is the
+        // side pointer compared with body+0x418 (verified in both game images).
         c.Flag("instantready");
         a.JneShort(2);
-        a.MovRegAbs(R.Ebx, (uint)(block + MasterCode.DiagPlayerEsi));
+        a.MovRegAbs(R.Ebx, (uint)rootVa);
         a.TestRegReg(R.Ebx, R.Ebx);
         a.JeShort(2);                                     // 尚未捕获玩家 → 跳过
-        a.MovRegRegDisp32(R.Ecx, R.Ebx, MasterCode.SideFieldOff);
+        a.MovRegRegDisp8(R.Ecx, R.Ebx, 0x28);
+        a.TestRegReg(R.Ecx, R.Ecx);
+        a.JeShort(3);                                     // local side unavailable: no mutation
         a.CmpRegMRegDisp32(R.Ecx, R.Eax, 0x418);          // cmp ecx,[eax+418]
         a.JneShort(2);
         a.MovM32RegDisp8Imm32(R.Esi, 0x20, 0);
@@ -383,16 +404,19 @@ public static class StubGen
         a.Label(2);
         c.Flag("freezeenemy");
         a.JneShort(3);
-        a.MovRegAbs(R.Ebx, (uint)(block + MasterCode.DiagPlayerEsi));
+        a.MovRegAbs(R.Ebx, (uint)rootVa);
         a.TestRegReg(R.Ebx, R.Ebx);
         a.JeShort(3);
-        a.MovRegRegDisp32(R.Ecx, R.Ebx, MasterCode.SideFieldOff);
+        a.MovRegRegDisp8(R.Ecx, R.Ebx, 0x28);
+        a.TestRegReg(R.Ecx, R.Ecx);
+        a.JeShort(3);                                     // local side unavailable: no mutation
         a.CmpRegMRegDisp32(R.Ecx, R.Eax, 0x418);
         a.JeShort(3);                                     // 属主==己方 → 跳过
         a.AddM32RegDisp8Imm8(R.Esi, 0x20, 1);
         a.Label(3);
         a.Popad();
         a.Popfd();
+        a.Db(0x8B, 0x7E, 0x20);                           // reload deadline: game cached EDI before hook
         a.Db(0x8B, 0x98, 0x18, 0x04, 0x00, 0x00);         // mov ebx,[eax+418]
         return c.Fin();
     }
@@ -406,31 +430,37 @@ public static class StubGen
         a.Db(0x8B, 0x01);                                 // mov eax,[ecx]
         a.Pushfd();
         a.Pushad();
-        // [06]：属主==己方 → [eax+0C]=0; [[eax]]+0C=0
-        // 属主槽 [esp+0x2C]（pushfd+pushad 后） vs 己方阵营（[玩家esi+0x1188]，实测）
-        c.Flag("instantready");
-        a.JneShort(2);
-        a.MovRegAbs(R.Ebx, (uint)(block + MasterCode.DiagPlayerEsi));
-        a.TestRegReg(R.Ebx, R.Ebx);
-        a.JeShort(2);
-        a.MovRegRegDisp32(R.Ecx, R.Ebx, MasterCode.SideFieldOff);
-        a.CmpRegMEspDisp32(R.Ecx, 0x2C);
-        a.JneShort(2);
-        a.MovM32RegDisp8Imm32(R.Eax, 0x0C, 0);
+        // Mirror the game's search: ECX=sentinel, EDX=power key, EAX=head.
+        // JMP detour has no extra CALL return: saved side is [esp+0x28].
+        a.Db(0x8B, 0xF9);                                 // mov edi,ecx
+        a.Db(0xBB, 0x00, 0x10, 0x00, 0x00);               // bounded 4096 nodes
+        a.Label(7);
+        a.Db(0x3B, 0xC7);                                 // cmp eax,edi
+        a.JeShort(3);
+        a.TestRegReg(R.Eax, R.Eax);
+        a.JeShort(3);
+        a.Db(0x39, 0x50, 0x08);                           // cmp [eax+8],edx
+        a.JeShort(8);
         a.MovRegRegInd(R.Eax, R.Eax);
-        a.MovM32RegDisp8Imm32(R.Eax, 0x0C, 0);
-        // [07]：属主 != 己方 → +1 两次
-        a.Label(2);
+        a.Db(0x4B);                                       // dec ebx
+        a.JneShort(7);
+        a.JmpShort(3);
+        a.Label(8);
+        a.MovRegAbs(R.Ebx, (uint)rootVa);
+        a.TestRegReg(R.Ebx, R.Ebx);
+        a.JeShort(3);
+        a.MovRegRegDisp8(R.Ecx, R.Ebx, 0x28);
+        a.TestRegReg(R.Ecx, R.Ecx);
+        a.JeShort(3);
+        a.CmpRegMEspDisp32(R.Ecx, 0x28);
+        a.JneShort(9);
+        c.Flag("instantready");
+        a.JneShort(3);
+        a.Db(0x89, 0x70, 0x0C);                           // matched deadline=current clock ESI
+        a.JmpShort(3);
+        a.Label(9);
         c.Flag("freezeenemy");
         a.JneShort(3);
-        a.MovRegAbs(R.Ebx, (uint)(block + MasterCode.DiagPlayerEsi));
-        a.TestRegReg(R.Ebx, R.Ebx);
-        a.JeShort(3);
-        a.MovRegRegDisp32(R.Ecx, R.Ebx, MasterCode.SideFieldOff);
-        a.CmpRegMEspDisp32(R.Ecx, 0x2C);
-        a.JeShort(3);
-        a.AddM32RegDisp8Imm8(R.Eax, 0x0C, 1);
-        a.MovRegRegInd(R.Eax, R.Eax);
         a.AddM32RegDisp8Imm8(R.Eax, 0x0C, 1);
         a.Label(3);
         a.Popad();
@@ -438,45 +468,23 @@ public static class StubGen
         return c.Fin();
     }
 
-    // [07] — build_hp_b: mov edx,[ecx+50]; cmp edx,[eax+0C]（无属主检查，同原版）
+    // Completion predicate: replay only; no owner survives at this site.
     private static byte[] BuildHpB(nuint stubVa, nuint siteEnd, nuint block)
     {
         var c = new C(stubVa, siteEnd, block);
-        var a = c.A;
-        a.Db(0x8B, 0x51, 0x50);                           // mov edx,[ecx+50]
-        a.Db(0x3B, 0x50, 0x0C);                           // cmp edx,[eax+0C]
-        a.Pushfd();
-        a.Pushad();
-        c.Flag("freezeenemy");
-        a.JneShort(3);
-        a.AddM32RegDisp8Imm8(R.Eax, 0x0C, 1);
-        a.MovRegRegInd(R.Eax, R.Eax);
-        a.AddM32RegDisp8Imm8(R.Eax, 0x0C, 1);
-        a.Label(3);
-        a.Popad();
-        a.Popfd();
+        c.A.Db(0x8B, 0x51, 0x50, 0x3B, 0x50, 0x0C);
         return c.Fin();
     }
 
-    // [07] — sidebar_pts: mov ecx,[eax+50]; cmp ecx,[esi+20]
+    // Completion predicate fallback: replay only, never freeze unrelated owners.
     private static byte[] SidebarPts(nuint stubVa, nuint siteEnd, nuint block)
     {
         var c = new C(stubVa, siteEnd, block);
-        var a = c.A;
-        a.Db(0x8B, 0x48, 0x50);                           // mov ecx,[eax+50]
-        a.Db(0x3B, 0x4E, 0x20);                           // cmp ecx,[esi+20]
-        a.Pushfd();
-        a.Pushad();
-        c.Flag("freezeenemy");
-        a.JneShort(3);
-        a.AddM32RegDisp8Imm8(R.Esi, 0x20, 1);
-        a.Label(3);
-        a.Popad();
-        a.Popfd();
+        c.A.Db(0x8B, 0x48, 0x50, 0x3B, 0x4E, 0x20);
         return c.Fin();
     }
 
-    // [08] 技能零冷却 — power_cool: movss [esi+44],xmm0
+    // [08] Camera zoom limit — power_cool: movss [esi+44],xmm0
     // 特殊：游戏后续指令是 je（消费桩设置的 ZF）——沿用原版 TMK 技巧：
     // 开 → ZF=1（分支成立）；关 → 还原原始标志。
     private static byte[] PowerCool(nuint stubVa, nuint siteEnd, nuint block)
@@ -490,9 +498,8 @@ public static class StubGen
         a.Popfd();                                        // 关：还原原始标志
         a.JmpTo((uint)siteEnd);
         a.Label(1);
-        a.AddEsp8(0x04);                                  // 开：丢弃保存的标志
-        a.Push8(0x00);
-        a.Popfd();                                        // popf: ZF=1
+        a.Db(0x83, 0x0C, 0x24, 0x40);                     // or dword [esp],0x40: force ZF, preserve other EFLAGS
+        a.Popfd();
         a.JmpTo((uint)siteEnd);
         return a.Build((uint)stubVa);
     }
@@ -521,6 +528,7 @@ public static class StubGen
         var a = c.A;
         a.Db(0x8B, 0x0C, 0xBA);                           // mov ecx,[edx+edi*4]
         a.Db(0x85, 0xC9);                                 // test ecx,ecx
+        a.Pushfd();                                       // preserve TEST before capture's CMP/INC
         // 诊断：捕获 ecx(选中条目) / edx(数组) / edi(下标)
         a.MovM32AbsReg(R.Ecx, (uint)(block + MasterCode.DiagSelEntry));
         a.MovM32AbsReg(R.Edx, (uint)(block + MasterCode.DiagSelArr));
@@ -540,30 +548,68 @@ public static class StubGen
         a.Label(6);
         a.Popad();
         a.Label(5);
-        a.Pushfd();
-        c.Flag("xp999");
-        a.JneShort(2);
-        a.MovM32RegDisp8Imm32(R.Ecx, 0x1C, 0x3E7);        // [ecx+1C] = 999（不设 ebp 守卫：重打包版寄存器语义未知）
-        a.Label(2);
-        a.Popfd();                                        // 还原 test 的 ZF
+        // These are Weapon entries, not selected Drawables. Weapon+0x1C
+        // is clip ammo, not experience; selected actions use the real list.
+        a.Popfd();                                        // restore original TEST flags
         return c.Fin();
     }
 
-    // [18] 无限弹药 — ammo: mov eax,[ecx+1278]
+    private static byte[] WeaponClip(nuint stubVa, nuint siteEnd, nuint block, nuint rootVa)
+    {
+        var c = new C(stubVa, siteEnd, block);
+        var a = c.A;
+        a.Db(0x83, 0xC8, 0xFF, 0x01, 0x46, 0x1C);       // original shot consumption
+        a.Pushfd();
+        a.Pushad();
+        c.Flag("ammo");
+        a.JneShort(1);
+        a.MovRegRegDisp8(R.Ebx, R.Esi, 8);                // WeaponSlot
+        a.TestRegReg(R.Ebx, R.Ebx);
+        a.JeShort(1);
+        a.MovRegRegDisp8(R.Ebx, R.Ebx, 0x10);             // Body
+        a.TestRegReg(R.Ebx, R.Ebx);
+        a.JeShort(1);
+        a.MovRegRegDisp32(R.Edx, R.Ebx, 0xF4);            // Drawable
+        a.TestRegReg(R.Edx, R.Edx);
+        a.JeShort(1);
+        a.Db(0xF6, 0x82, 0x3D, 0x01, 0x00, 0x00, 0x40); // selected bit
+        a.JeShort(1);
+        a.MovRegAbs(R.Ecx, (uint)rootVa);
+        a.TestRegReg(R.Ecx, R.Ecx);
+        a.JeShort(1);
+        a.MovRegRegDisp8(R.Ecx, R.Ecx, 0x28);
+        a.TestRegReg(R.Ecx, R.Ecx);
+        a.JeShort(1);
+        a.CmpRegMRegDisp32(R.Ecx, R.Ebx, 0x418);
+        a.JneShort(1);
+        a.MovRegRegDisp8(R.Eax, R.Esi, 4);                // weapon template wrapper
+        a.TestRegReg(R.Eax, R.Eax);
+        a.JeShort(1);
+        a.MovRegRegDisp8(R.Eax, R.Eax, 4);
+        a.TestRegReg(R.Eax, R.Eax);
+        a.JeShort(1);
+        a.MovRegRegDisp8(R.Eax, R.Eax, 0x70);             // clip capacity
+        a.Db(0x48);                                      // dec eax: reject zero/negative capacity
+        a.CmpR32Imm32(R.Eax, 1000000);
+        a.JaeShort(1);
+        a.IncReg(R.Eax);
+        a.Db(0x89, 0x46, 0x1C);                          // refill only clip; preserve burst counters
+        a.Label(1);
+        a.Popad();
+        a.Popfd();
+        return c.Fin();
+    }
+
+    // Legacy threat accessor, not ammunition.
+    // ammo: mov eax,[ecx+1278]
     private static byte[] Ammo(nuint stubVa, nuint siteEnd, nuint block)
     {
         var c = new C(stubVa, siteEnd, block);
         var a = c.A;
         a.Db(0x8B, 0x81, 0x78, 0x12, 0x00, 0x00);         // mov eax,[ecx+1278]
-        a.MovM32AbsReg(R.Eax, (uint)(block + MasterCode.DiagWeaponEax)); // 诊断：捕获武器对象
-        a.Pushfd();
-        c.Flag("ammo");
-        a.JneShort(3);
-        a.TestRegReg(R.Eax, R.Eax);
-        a.JeShort(3);
-        a.MovM32RegDisp8Imm32(R.Eax, 0x08, 0xC350);       // [eax+08] = 50000
-        a.Label(3);
-        a.Popfd();
+        // +0x1278 resolves RedAlertThreatLevel, not a weapon. Preserve the
+        // original accessor and diagnostic capture without mutating threat.
+        a.MovM32AbsReg(R.Eax, (uint)(block + MasterCode.DiagWeaponEax));
         return c.Fin();
     }
 

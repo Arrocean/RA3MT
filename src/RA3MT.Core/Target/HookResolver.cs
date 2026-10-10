@@ -71,34 +71,8 @@ public static class HookResolver
                 }
             }
 
-            // Fallback 2: raw displaced-byte scan, disambiguated by sibling distance.
-            var candidates = new List<uint>();
-            for (var i = 0; i <= text.Length - expected.Length; i++)
-            {
-                var m = true;
-                for (var k = 0; k < expected.Length; k++)
-                    if (text[i + k] != expected[k]) { m = false; break; }
-                if (m) candidates.Add(0x1000u + (uint)i);
-            }
-            uint? chosen = candidates.Count switch
-            {
-                1 => candidates[0],
-                > 1 when def.Sibling != null && result.TryGetValue(def.Sibling, out var sib)
-                    => candidates.MinBy(c => Math.Abs((long)c - sib.Rva)),
-                _ => null,
-            };
-            if (chosen != null)
-            {
-                result[id] = new HookResolution
-                {
-                    HookId = id, Rva = chosen.Value, GameBase = gameBase,
-                    Displaced = expected, Method = "displaced-scan",
-                    Note = $"静态 RVA 失配，原始字节扫描定位 0x{chosen.Value:X}（{candidates.Count} 候选）",
-                };
-                log?.Invoke($"[resolver] {id}: 原始字节扫描重定位 0x{chosen.Value:X}（{candidates.Count} 候选）");
-                continue;
-            }
-
+            // A few displaced bytes or sibling proximity cannot prove the
+            // object's semantics. Refuse relocation without unique context.
             log?.Invoke($"[resolver] {id}: !! 无法定位（静态 0x{rva:X} 字节失配且无后备命中）");
         }
         return result;

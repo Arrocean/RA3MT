@@ -25,6 +25,186 @@ if (args.Length == 2 && args[0] == "stubdump")
     return 0;
 }
 
+if (args.Length == 1 && args[0] == "actiontest")
+{
+    RA3MT.SelfCheck.ActionChecks.Run();
+    return 0;
+}
+
+if (args.Length == 1 && args[0] == "installertest")
+{
+    RA3MT.SelfCheck.InstallerChecks.Run();
+    return 0;
+}
+
+if (args.Length == 1 && args[0] == "resolvertest")
+{
+    var fixture = new FeaturesData();
+    fixture.Hooks["test"] = new HookDef
+    {
+        Rva = new() { ["1.13"] = "0x1000" }, Displaced = "83C8FF01461C", DisplacedLen = 6,
+    };
+    var text = new byte[64];
+    var expected = fixture.Hooks["test"].DisplacedBytes();
+    expected.CopyTo(text, 16);
+    Dictionary<string, HookResolution> Resolve() => HookResolver.ResolveAll(fixture, "1.13",
+        (rva, length) => text.AsSpan((int)rva - 0x1000, length).ToArray(), text, 0x400000);
+    if (Resolve().Count != 0) throw new Exception("Raw-byte relocation was accepted");
+    fixture.Hooks["test"].Pattern = "83 C8 FF 01 46 1C";
+    if (Resolve()["test"].Rva != 0x1010) throw new Exception("Unique pattern failed");
+    expected.CopyTo(text, 32);
+    if (Resolve().Count != 0) throw new Exception("Ambiguous pattern accepted");
+    expected.CopyTo(text, 0);
+    if (Resolve()["test"].Method != "exact-rva") throw new Exception("Exact RVA failed");
+    Console.WriteLine("PASS 4 resolver refusal and unique-context cases");
+    return 0;
+}
+
+if (args.Length == 1 && args[0] == "asmtest")
+{
+    foreach (var distance in new[] { 127, 128 })
+    {
+        var asm = new Asm();
+        asm.JmpShort(1);
+        asm.Db(new byte[distance]);
+        asm.Label(1);
+        var rejected = false;
+        try
+        {
+            var code = asm.Build(0x10000);
+            if (distance == 127 && code[1] != 127) throw new Exception("Bad rel8 encoding");
+        }
+        catch (InvalidOperationException) { rejected = true; }
+        if (rejected != (distance == 128)) throw new Exception("Forward rel8 range check failed");
+    }
+    foreach (var padding in new[] { 126, 127 })
+    {
+        var asm = new Asm();
+        asm.Label(1);
+        asm.Db(new byte[padding]);
+        asm.JmpShort(1);
+        var rejected = false;
+        try
+        {
+            var code = asm.Build(0x10000);
+            if (padding == 126 && code[^1] != 128) throw new Exception("Bad backward encoding");
+        }
+        catch (InvalidOperationException) { rejected = true; }
+        if (rejected != (padding == 127)) throw new Exception("Backward rel8 range check failed");
+    }
+    var missing = new Asm();
+    missing.JeShort(99);
+    try { missing.Build(0); throw new Exception("Missing label accepted"); }
+    catch (InvalidOperationException) { }
+    uint offset = MasterCode.StubArea;
+    foreach (var (id, def) in FeaturesData.LoadEmbedded().Hooks.OrderBy(pair => pair.Key))
+    {
+        var stubId = def.Stub ?? id;
+        if (!StubGen.Handles(stubId)) continue;
+        var code = StubGen.Emit(stubId, 0x40000000u + offset,
+            0x452100u + (uint)def.DisplacedLen, 0x40000000u, 0x400000u);
+        offset += (uint)((code.Length + 15) & ~15);
+    }
+    if (offset > MasterCode.CaptureCount) throw new Exception("Stub layout overlaps capture data");
+    Console.WriteLine($"PASS 5 assembler branch boundary cases; aligned stub end 0x{offset:X} < capture 0x{MasterCode.CaptureCount:X}");
+    return 0;
+}
+
+if (args.Length == 1 && args[0] == "selectiontest")
+{
+    var words = new Dictionary<nuint, uint>
+    {
+        [0x10000] = 0x20000, [0x20050] = 0x30000, [0x2005C] = 2,
+        [0x30000] = 0x30020, [0x30008] = 0x40000,
+        [0x30020] = 0x20050, [0x30028] = 0x41000,
+        [0x40138] = 0x50000, [0x41138] = 0x51000,
+        [0x500F4] = 0x40000, [0x510F4] = 0x41000,
+    };
+    uint[] Read() => RA3MT.Core.Features.SelectionActions.ReadSelection(
+        address => words.GetValueOrDefault(address), _ => 0x40, 0x10000);
+    void Check(bool ok, string name)
+    {
+        if (!ok) throw new InvalidOperationException(name);
+        Console.WriteLine("PASS " + name);
+    }
+    Check(Read().Order().SequenceEqual(new uint[] { 0x50000, 0x51000 }), "multi-selection chain");
+    words[0x2005C] = 0;
+    Check(Read().Length == 0, "empty selection");
+    words[0x2005C] = 2;
+    words[0x510F4] = 0;
+    Check(Read().SequenceEqual(new uint[] { 0x50000 }), "stale drawable rejected");
+    words[0x2005C] = 3;
+    var rejected = false;
+    try { Read(); } catch (InvalidOperationException) { rejected = true; }
+    Check(rejected, "early sentinel with excessive count rejected");
+    words[0x2005C] = 2;
+    var countReads = 0;
+    rejected = false;
+    try
+    {
+        RA3MT.Core.Features.SelectionActions.ReadSelection(address =>
+            address == 0x2005C && ++countReads == 2 ? 1u : words.GetValueOrDefault(address),
+            _ => 0x40, 0x10000);
+    }
+    catch (InvalidOperationException) { rejected = true; }
+    Check(rejected, "selection count mutation rejected");
+    words[0x30020] = 0x30000;
+    rejected = false;
+    try { Read(); } catch (InvalidOperationException) { rejected = true; }
+    Check(rejected, "cyclic corrupt list rejected");
+    words[0x2005C] = 4097;
+    rejected = false;
+    try { Read(); } catch (InvalidOperationException) { rejected = true; }
+    Check(rejected, "oversized count rejected");
+    words.Clear();
+    words[0x50374] = 0x60000;
+    words[0x6021C] = 0x70020;
+    words[0x60200] = 0x80000;
+    words[0x60204] = 0x80008;
+    words[0x80000] = 0x70000;
+    words[0x80004] = 0x70020;
+    var current = RA3MT.Core.Features.SelectionActions.ReadLocomotors(
+        address => words.GetValueOrDefault(address), 0x50000, false);
+    Check(current.SequenceEqual(new uint[] { 0x70020 }), "active locomotor is not first array entry");
+    var modes = RA3MT.Core.Features.SelectionActions.ReadLocomotors(
+        address => words.GetValueOrDefault(address), 0x50000, true);
+    Check(modes.Order().SequenceEqual(new uint[] { 0x70000, 0x70020 }), "current locomotor set deduplicated");
+    words[0x60200] = words[0x60204] = 0;
+    Check(RA3MT.Core.Features.SelectionActions.ReadLocomotors(
+        address => words.GetValueOrDefault(address), 0x50000, true).SequenceEqual(current),
+        "empty array retains valid active locomotor");
+    words[0x60200] = 0x80000;
+    words[0x60204] = 0x80003;
+    rejected = false;
+    try
+    {
+        RA3MT.Core.Features.SelectionActions.ReadLocomotors(
+            address => words.GetValueOrDefault(address), 0x50000, true);
+    }
+    catch (InvalidOperationException) { rejected = true; }
+    Check(rejected, "misaligned locomotor array rejected");
+    words.Clear();
+    words[0x90004] = 0xA0000;
+    words[0xA0014] = 0xB0000;
+    bool Eligible(uint tracker, byte flag) => RA3MT.Core.Features.SelectionActions.CanGainExperience(
+        address => words.GetValueOrDefault(address), _ => flag, tracker);
+    Check(Eligible(0x90000, 1), "eligible experience template accepted");
+    Check(!Eligible(0x90000, 0), "non-veterancy target rejected");
+    Check(!Eligible(0, 1), "missing tracker rejected");
+    words[0xA0014] = 0;
+    Check(!Eligible(0x90000, 1), "missing experience template rejected");
+    words.Clear();
+    words[0x500F4] = 0x40000;
+    words[0x40138] = 0x50000;
+    bool StillSelected(byte flags) => RA3MT.Core.Features.SelectionActions.IsSelectedBody(
+        address => words.GetValueOrDefault(address), _ => flags, 0x50000);
+    Check(StillSelected(0x40), "selected target revalidation accepted");
+    Check(!StillSelected(0), "deselected target rejected before write");
+    words[0x40138] = 0x51000;
+    Check(!StillSelected(0x40), "changed drawable reference rejected before write");
+    return 0;
+}
+
 var data = FeaturesData.LoadEmbedded();
 
 var dataDir = args.Length > 0 ? args[0] : TrainerGameDataDir();
@@ -113,7 +293,7 @@ foreach (var ver in versions)
         if (found) break;
     }
     Console.WriteLine(found
-        ? $"  ✓ 玩家索引全局 [root+28]: 0x{rootRva:X} 访问模式在 .text 中确认"
+        ? $"  ✓ 本地阵营全局 [root+28]: 0x{rootRva:X} 访问模式在 .text 中确认"
         : $"  ⚠ 玩家索引全局 0x{rootRva:X} 未找到访问模式（需进游戏验证）");
     Console.WriteLine();
 }

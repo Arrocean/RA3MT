@@ -5,7 +5,7 @@ namespace RA3MT.Core.Memory;
 
 /// <summary>Read/write access to a foreign process's address space.
 /// The trainer runs x86 and targets the 32-bit game, so all VAs fit in 32 bits.</summary>
-public sealed class ProcessMemory : IDisposable
+public sealed class ProcessMemory : IDisposable, IInjectionMemory
 {
     private IntPtr _h;
 
@@ -40,7 +40,10 @@ public sealed class ProcessMemory : IDisposable
         var buf = data.ToArray();
         if (!NativeMethods.WriteProcessMemory(_h, addr, buf, (nuint)buf.Length, out var written))
             throw new InvalidOperationException($"WriteProcessMemory(0x{addr:X}) failed");
-        NativeMethods.FlushInstructionCache(_h, addr, (nuint)buf.Length);
+        if (written != (nuint)buf.Length)
+            throw new InvalidOperationException($"WriteProcessMemory(0x{addr:X}) short write {written}/{buf.Length}");
+        if (!NativeMethods.FlushInstructionCache(_h, addr, (nuint)buf.Length))
+            throw new InvalidOperationException($"FlushInstructionCache(0x{addr:X}) failed");
     }
 
     public void WriteU32(nuint addr, uint value) => Write(addr, BitConverter.GetBytes(value));
