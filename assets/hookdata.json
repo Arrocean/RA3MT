@@ -1,0 +1,145 @@
+{
+ "hooks": {
+  "money_h2": {
+   "asm112": "add edi,[eax+4]; mov edx,[ecx]",
+   "displaced": "0378048B11",
+   "displacedLen": 5,
+   "rva112": "0x664e9e",
+   "rva113": "0x6699ce",
+   "pattern": "8B CF E8 ?? ?? ?? ?? 8B 78 14 8B 8E 08 07 00 00 03 78 04 8B 11 8B 42 0C 57 FF D0 6A 01 8B 8E 08 07 00 00 8B 11 8B 42 04 FF D0 8B 96 10 07 00 00",
+   "siteOffset": 16,
+   "patternLen": 48
+  },
+  "money_h1": {
+   "asm112": "mov eax,[eax+4]; mov ecx,[esi+3B0]",
+   "displaced": "8B40048B8EB0030000",
+   "displacedLen": 9,
+   "rva112": "0x664dad",
+   "rva113": "0x6698dd",
+   "pattern": "8D 48 20 39 09 5B 74 04 33 C0 EB 03 8B 40 04 8B 8E B0 03 00 00 8B 39 52 8B 57 0C 50 FF D2 8D 8E B8 03 00 00 E8 ?? ?? ?? ?? 8D 8E 30 06 00 00 E8",
+   "siteOffset": 12,
+   "patternLen": 48
+  },
+  "proto_cool_b": {
+   "asm112": "cvttss2si eax,[esi+1C]",
+   "displaced": "F30F2C461C",
+   "displacedLen": 5,
+   "rva112": "0x34d81e",
+   "rva113": "0x3386ce",
+   "pattern": "F3 0F 58 46 60 F3 0F 2C C0 5E 59 C3 F3 0F 2C 46 1C 5E 59 C3 CC CC CC CC CC CC CC CC CC CC 83 EC 08 55 8B 6C 24 10 85 ED 56 8B F1 75 0A 5E 32 C0",
+   "siteOffset": 12,
+   "patternLen": 48
+  },
+  "proto_cool_a": {
+   "asm112": "fld [esi+1C]; mov [esi+5C],eax",
+   "displaced": "D9461C89465C",
+   "displacedLen": 6,
+   "rva112": "0x34d77c",
+   "rva113": "0x33862c",
+   "pattern": "CC CC CC CC 51 56 8B F1 8B 46 04 85 C0 74 0F 8B ?? ?? ?? ?? 00 3B 46 18 75 04 B0 01 EB 02 32 C0 ?? ?? ?? ?? 0F 85 ?? ?? ?? ?? 84 C0 0F 84 B0 00",
+   "siteOffset": 64,
+   "patternLen": 48
+  },
+  "build_hp_b": {
+   "asm112": "mov edx,[ecx+50]; cmp edx,[eax+0C]",
+   "displaced": "8B51503B500C",
+   "displacedLen": 6,
+   "rva112": "0x47cc16",
+   "rva113": "0x468056",
+   "pattern": "00 CC CC CC CC CC CC CC CC CC 8B 44 24 04 8B 50 08 8B 02 8B 50 04 8B 81 18 02 00 00 81 C1 18 02 00 00 3B C1 74 0F 8D ?? ?? ?? ?? 50 08 74 0B 8B",
+   "siteOffset": 64,
+   "patternLen": 48
+  },
+  "zoom_unit_xp": {
+   "asm112": "mov ecx,[edx+edi*4]; test ecx,ecx",
+   "displaced": "8B0CBA85C9",
+   "displacedLen": 5,
+   "rva112": "0x169d85",
+   "rva113": "0x152115",
+   "pattern": "24 10 0F 8E ?? ?? ?? ?? 8B 74 24 44 8B 0C BA 85 C9 0F 84 ?? ?? ?? ?? 8B 41 04 8B 40 04 83 B8 B8 00 00 00 02 0F 85 ?? ?? ?? ?? 8B ?? ?? ?? ?? E8",
+   "siteOffset": 12,
+   "patternLen": 48
+  },
+  "money_h3": {
+   "rva112": "0x664F0C",
+   "displaced": "8B78348B4E3C",
+   "displacedLen": 6,
+   "rva113": "0x669a3c"
+  },
+  "build_hp_a": {
+   "rva112": "0x47CB89",
+   "displaced": "8B70508B01",
+   "displacedLen": 5,
+   "rva113": "0x467fc9"
+  },
+  "sidebar_pts": {
+   "rva112": "0x348A06",
+   "displaced": "8B48503B4E20",
+   "displacedLen": 6,
+   "rva113": "0x333886"
+  },
+  "unit_lv": {
+   "rva112": "0x4005BC",
+   "displaced": "F30F118560020000",
+   "displacedLen": 8,
+   "rva113": "0x3eb50c"
+  },
+  "fast_build": {
+   "rva112": "0x312EB3",
+   "displaced": "8B40082B4114",
+   "displacedLen": 6,
+   "rva113": "0x2fdbb3"
+  },
+  "power_cool": {
+   "rva112": "0x22B82D",
+   "displaced": "F30F114644",
+   "displacedLen": 5,
+   "rva113": "0x216C7D"
+  },
+  "build_power": {
+   "rva112": "0x329f19",
+   "rva113": "0x314d19",
+   "displaced": "8B9818040000",
+   "displacedLen": 6,
+   "pattern": "F6 C1 01 74 06 D9 EE 5F 5E 59 C3 53 8B 98 18 04 00 00 85 DB 74 2D 8B 16 8B 42 1C 8B CE FF D0 8B 48 08 8B 51 1C C1 EA 0C F6 C2 01 74 16 8B 06 8B",
+   "siteOffset": 12,
+   "patternLen": 48
+  },
+  "ammo": {
+   "rva112": "0x4770b0",
+   "rva113": "0x462300",
+   "displaced": "8B8178120000",
+   "displacedLen": 6,
+   "pattern": "CC CC CC CC CC CC CC CC CC CC CC CC 8B 81 78 12 00 00 85 C0 74 07 8B 40 04 8A 40 5A C3 32 C0 C3 CC CC CC CC CC CC CC CC CC CC CC CC 8B 44 24 04",
+   "siteOffset": 12,
+   "patternLen": 48
+  },
+  "power": {
+   "displaced": "D986BC010000",
+   "displacedLen": 6,
+   "asm112": "fld [esi+1BC]",
+   "rva112": "0x33511F",
+   "rva113": "0x31FEDF"
+  },
+  "money_h4": {
+   "displaced": "F30F10472C",
+   "displacedLen": 5,
+   "asm112": "movss xmm0,[edi+2C]",
+   "rva112": "0x664F55",
+   "rva113": "0x669A85"
+  }
+ },
+ "threatFn": {
+  "rva112": "0x39ECB0",
+  "rva113": "0x39E3E0",
+  "pattern": "56 8B 74 24 0C 57 8B 7C 24 0C 57 8B C6 E8 ?? ?? ?? ?? 83 C4 04 84 C0 74 28 8B ?? ?? ?? ?? 6A 0C 8D 4E 08 E8 ?? ?? ?? ?? 8D 48 08 85 C9 74 02 89 39 89 30 8B 4E 04 89 48 04 8B 56 04 89 02 89 46",
+  "status": "suspect-region-delta-0; verify in game",
+  "note": "kill/destroy unit function; called with ecx=unit"
+ },
+ "zoomFnStart112": "0x169cce",
+ "selectionGlobal": {
+  "rva112": "0x8E0940",
+  "rva113": "0x8e4c60",
+  "note": "[root+4]=begin,[root+8]=end vector of selected entries; entry+8->+138->unit fields (+3cc lv,+37c speednode,+33c hp,+374 movelist,+418 owner)"
+ }
+}

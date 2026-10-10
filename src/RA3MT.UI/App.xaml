@@ -1,0 +1,196 @@
+<Application x:Class="RA3MT.UI.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:RA3MT.UI"
+             StartupUri="MainWindow.xaml">
+  <Application.Resources>
+    <ResourceDictionary>
+
+      <!-- ======== palette (design A) ======== -->
+      <SolidColorBrush x:Key="Bg" Color="#0d1117" />
+      <SolidColorBrush x:Key="Bg2" Color="#11161f" />
+      <SolidColorBrush x:Key="Panel" Color="#151c28" />
+      <SolidColorBrush x:Key="Panel2" Color="#1a2332" />
+      <SolidColorBrush x:Key="Line" Color="#232d40" />
+      <SolidColorBrush x:Key="Line2" Color="#2c3950" />
+      <SolidColorBrush x:Key="Txt" Color="#e6ebf4" />
+      <SolidColorBrush x:Key="Txt2" Color="#8b96ab" />
+      <SolidColorBrush x:Key="Txt3" Color="#5b6680" />
+      <SolidColorBrush x:Key="Acc" Color="#6d7cff" />
+      <SolidColorBrush x:Key="Acc2" Color="#8b5cf6" />
+      <SolidColorBrush x:Key="Ok" Color="#34d399" />
+      <SolidColorBrush x:Key="Warn" Color="#fbbf24" />
+
+      <LinearGradientBrush x:Key="Grad" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#6d7cff" Offset="0" />
+        <GradientStop Color="#8b5cf6" Offset="1" />
+      </LinearGradientBrush>
+
+      <!-- ======== base styles ======== -->
+      <Style TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource Txt}" />
+      </Style>
+
+      <Style x:Key="Chip" TargetType="Border">
+        <Setter Property="CornerRadius" Value="99" />
+        <Setter Property="Padding" Value="9,3" />
+        <Setter Property="Background" Value="#1a2233" />
+        <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+        <Setter Property="BorderThickness" Value="1" />
+      </Style>
+
+      <Style x:Key="BtnGhost" TargetType="Button">
+        <Setter Property="Background" Value="#1b2436" />
+        <Setter Property="Foreground" Value="{StaticResource Txt}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="18,10" />
+        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="Button">
+              <Border x:Name="bd" Background="{TemplateBinding Background}"
+                      BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
+                      CornerRadius="9" Padding="{TemplateBinding Padding}">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="bd" Property="Background" Value="#212c42" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                  <Setter Property="Opacity" Value="0.45" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
+      <Style x:Key="BtnPrimary" TargetType="Button" BasedOn="{StaticResource BtnGhost}">
+        <Setter Property="Background" Value="{StaticResource Grad}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="Button">
+              <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="9"
+                      Padding="{TemplateBinding Padding}">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="bd" Property="Opacity" Value="0.88" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                  <Setter Property="Opacity" Value="0.45" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
+      <Style x:Key="BtnExec" TargetType="Button">
+        <Setter Property="Background" Value="#1c2537" />
+        <Setter Property="Foreground" Value="#aeb9d0" />
+        <Setter Property="BorderBrush" Value="#303c58" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="14,7" />
+        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="Button">
+              <Border x:Name="bd" Background="{TemplateBinding Background}"
+                      BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
+                      CornerRadius="8" Padding="{TemplateBinding Padding}">
+                <ContentPresenter x:Name="cp" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="bd" Property="Background" Value="{StaticResource Grad}" />
+                  <Setter TargetName="bd" Property="BorderBrush" Value="Transparent" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                  <Setter Property="Opacity" Value="0.45" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
+      <!-- toggle switch -->
+      <Style x:Key="Switch" TargetType="ToggleButton">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Width" Value="40" />
+        <Setter Property="Height" Value="22" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="ToggleButton">
+              <Grid>
+                <Border x:Name="tr" Background="#242f45" BorderBrush="#303c58" BorderThickness="1" CornerRadius="99" />
+                <Ellipse x:Name="dot" Width="16" Height="16" Fill="#77839c"
+                         HorizontalAlignment="Left" Margin="3,0,0,0" />
+              </Grid>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                  <Setter TargetName="tr" Property="Background" Value="{StaticResource Grad}" />
+                  <Setter TargetName="tr" Property="BorderBrush" Value="Transparent" />
+                  <Setter TargetName="dot" Property="Fill" Value="White" />
+                  <Setter TargetName="dot" Property="HorizontalAlignment" Value="Right" />
+                  <Setter TargetName="dot" Property="Margin" Value="0,0,3,0" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                  <Setter Property="Opacity" Value="0.4" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
+      <!-- converters -->
+      <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+      <!-- stat card -->
+      <Style x:Key="StatCard" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource Panel}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="11" />
+        <Setter Property="Padding" Value="15,13" />
+        <Setter Property="Margin" Value="0,0,12,0" />
+      </Style>
+
+      <!-- scroll bar -->
+      <Style TargetType="ScrollBar">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Width" Value="10" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="ScrollBar">
+              <Grid Background="Transparent">
+                <Track x:Name="PART_Track" IsDirectionReversed="True">
+                  <Track.Thumb>
+                    <Thumb>
+                      <Thumb.Template>
+                        <ControlTemplate TargetType="Thumb">
+                          <Border Background="#242f45" CornerRadius="8" Margin="2" />
+                        </ControlTemplate>
+                      </Thumb.Template>
+                    </Thumb>
+                  </Track.Thumb>
+                </Track>
+              </Grid>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
+    </ResourceDictionary>
+  </Application.Resources>
+</Application>

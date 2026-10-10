@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RA3MT.Core/RA3MT.Core.csproj" />
+    <Project Path="src/RA3MT.SelfCheck/RA3MT.SelfCheck.csproj" />
+    <Project Path="src/RA3MT.UI/RA3MT.UI.csproj" />
+  </Folder>
+</Solution>
