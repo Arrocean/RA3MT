@@ -24,7 +24,7 @@ TEXT_LO, TEXT_HI = 0x401000, 0xBD0000
 # 1.13: (site VA, displaced bytes, replay tail = displaced, jump back = site+len)
 SITES = {
     'kill': (0x7513F0, bytes.fromhex('807C240400')),           # cmp byte [esp+4],0
-    'place': (0x511E00, bytes.fromhex('83EC0C8B442410F30F1010')),  # sub esp,0C; mov eax,[esp+10]; movss xmm2,[eax]
+    'place': (0xA3AAB0, bytes.fromhex('83EC08568BF1')),          # sub esp,8; push esi; mov esi,ecx (THE live-hit placement cell query 0x63AAB0)
     'placeui': (0x707880, bytes.fromhex('56578B7C240C8BF1')),      # push esi; push edi; mov edi,[esp+0C]; mov esi,ecx (UI can-place predicate)
     'anchor': (0x7A14B0, bytes.fromhex('8B4424088B4C240483EC0C')),  # anchor search cdecl(hash, position, restriction, out); position = mouse world float3
 }

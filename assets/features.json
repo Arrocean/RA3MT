@@ -227,18 +227,6 @@
       "displacedLen": 6,
       "stub": "ammo",
       "asm": "mov eax,[ecx+1278]"
-    },
-    "buildanywhere": {
-      "rva": {
-        "1.12": "0x3bbdd0",
-        "1.13": "0x3a14b0"
-      },
-      "displacedLen": 11,
-      "asm": "mov eax,[esp+8]; mov ecx,[esp+4]; sub esp,0C",
-      "pattern": "8B 44 24 08 8B 4C 24 04 83 EC 0C 53 55 56 57",
-      "patternSiteOffset": 0,
-      "note": "锚点查找（cdecl 4 参，唯一调用者=放置命令处理器 0x642524）：遍历己方建筑，PlacementRestriction(0x30FB20) + 距离判定(0x38C3B0) 双检查通过才算找到锚，全部失败→放置被拒。活体捕获：放置操作链 0x6424E0(命令处理器)→0x3A14B0→0x641510(网格循环)→0x63AAB0(cell 查询)。开→恒'找到锚'（建筑仍在鼠标位置生成，锚只决定许可）；关→逐字节重放。1.12 对称 0x3BBDD0 同签名。旧挂点 0x50FD60（区域连线检查）实测不在玩家路径，废弃。",
-      "displaced": "8B4424088B4C240483EC0C"
     }
   },
   "globals": {
@@ -261,6 +249,13 @@
         "1.13": "0x8e15b8"
       },
       "note": "鼠标地面交点 float3：+0=x, +4=z, +8=地面高度 y——UI 每帧更新的 .data 静态副本，任意时刻跟随鼠标（放置/悬停/命令共用），活体差分验证。1.12 对应待活体扫描（无静态引用，运行时指针访问）。"
+    },
+    "placementDistance": {
+      "rva": {
+        "1.12": "0x8ee98c",
+        "1.13": "0x8f2cac"
+      },
+      "note": "建筑放置距离全局：[rva]→GameData 对象，[obj+0x0C]=BuildingPlacementDistance（活体实测 90.0）。放置验证 0x642450→0x120780（网格 worker）以此作距离上限；1.12 对称 0x63D8E7→0x138250 逐指令一致。随地建造=改写该值（开 100000/关还原）。"
     }
   },
   "features": [
@@ -683,12 +678,9 @@
       "group": "战场增援",
       "kind": "toggle",
       "hotkey": "",
-      "hooks": [
-        "buildanywhere"
-      ],
-      "flag": "buildanywhere",
-      "desc": "建筑放置不再要求邻近己方建筑（服务器侧锚点检查恒过；地形/占用/碰撞保留）。开关经重放原指令完全可逆",
-      "src": "orig FINAL3 随地建造（重推导：锚点查找函数 0x3A14B0 恒真，活体调用链定位）"
+      "hooks": [],
+      "desc": "建筑放置距离放宽到全图（改写游戏自己的 BuildingPlacementDistance 数值 90→100000，关=还原；地形/占用/碰撞检查全部保留）。切换对局后需重新开关一次",
+      "src": "orig FINAL3 随地建造（活体定位：放置验证链 0x647300→0x642450→0x120780 的距离参数）"
     }
   ],
   "references": {

@@ -30,7 +30,6 @@ public sealed class MasterCode
         ["revealmap"] = 0x08,
         ["xp999"] = 0x09,
         ["ammo"] = 0x0A,
-        ["buildanywhere"] = 0x0B,
         ["threatmax"] = 0x0D,
         ["threatzero"] = 0x0E,
             };
@@ -277,8 +276,7 @@ public static class StubGen
         "money_h2" or "money_h1" or "money_h3" or "money_h4" or
         "proto_cool_a" or "proto_cool_b" or "power" or
         "build_power" or "build_hp_a" or "build_hp_b" or "sidebar_pts" or
-        "power_cool" or "unit_lv" or "zoom_unit_xp" or "ammo" or "weapon_clip" or
-        "buildanywhere" => true,
+        "power_cool" or "unit_lv" or "zoom_unit_xp" or "ammo" or "weapon_clip" => true,
         _ => false,
     };
 
@@ -306,7 +304,6 @@ public static class StubGen
         "zoom_unit_xp" => ZoomUnitXp(stubVa, siteEnd, block),
         "ammo" => Ammo(stubVa, siteEnd, block),
         "weapon_clip" => WeaponClip(stubVa, siteEnd, block, rootVa),
-        "buildanywhere" => BuildAnywhere(stubVa, siteEnd, block, replay),
         _ => throw new NotImplementedException(id),
     };
 
@@ -682,29 +679,6 @@ public static class StubGen
         return c.Fin();
     }
 
-    // 随地建造 — buildanywhere: 锚点查找函数头（cdecl 4 参，caller 清栈）
-    // 目标函数唯一被放置命令处理器（1.13 0x642524 / 1.12 对称）调用：遍历己方建筑，
-    // PlacementRestriction + 距离双检查通过才算找到锚，全失败 → 服务器拒绝放置。
-    // 开 → 恒"找到锚"（建筑仍在鼠标位置生成——锚只决定许可，不决定位置）；
-    // 关 → 逐字节重放 displaced 原指令后跳回（两版指令均无位置相关性）。
-    // 地形/占用/碰撞由下游网格处理（0x641510 循环）保留，不会把建筑放进山里。
-    private static byte[] BuildAnywhere(nuint stubVa, nuint siteEnd, nuint block, byte[]? replay)
-    {
-        if (replay is null || replay.Length < 5)
-            throw new InvalidOperationException("buildanywhere requires the displaced replay bytes");
-        var c = new C(stubVa, siteEnd, block);
-        var a = c.A;
-        a.Pushfd();
-        c.Flag("buildanywhere");
-        a.JneShort(1);
-        a.Popfd();
-        a.Db(0xB0, 0x01);                               // mov al,1
-        a.Ret();                                        // cdecl: caller cleans the four args
-        a.Label(1);
-        a.Popfd();
-        a.Db(replay);                                   // original position-independent prologue
-        return c.Fin();                                 // jmp siteEnd
-    }
 
     // 威胁等级访问器（旧名 ammo 站点族）：eax=[ecx+0x1278] 为 RedAlert 威胁分量，+8 为威胁值。
     // EA FINAL3 Danger Level 语义：标志=1 → [分量+8]=50000（最大）；=2 → 0（归零）。

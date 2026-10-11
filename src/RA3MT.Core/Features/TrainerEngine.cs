@@ -205,6 +205,22 @@ public sealed class TrainerEngine : IDisposable
             Log?.Invoke("卸载失败，功能已禁用；请重试脱离或重启游戏: " + ex.Message);
             return;
         }
+        // restore the placement distance if the toggle was left on
+        if (float.IsFinite(_savedPlacementDistance) && _mem != null && Version != null)
+        {
+            try
+            {
+                var g = _data.Globals.PlacementDistance;
+                if (g != null && g.Rva.TryGetValue(Version, out var rvaStr))
+                {
+                    var obj = _mem.ReadU32(Base + Convert.ToUInt32(rvaStr, 16));
+                    if (obj >= 0x10000)
+                        _mem.WriteF32(obj + 0xC, _savedPlacementDistance);
+                }
+            }
+            catch { /* best-effort restore on detach */ }
+            _savedPlacementDistance = float.NaN;
+        }
         _mem?.Dispose();
         _mem = null;
         _mc = null;
@@ -221,9 +237,20 @@ public sealed class TrainerEngine : IDisposable
         if (RecoveryRequired) return (false, "挂钩恢复未完成，禁止启用功能");
         if (!Attached || _mc == null) return (false, "未附加");
         var f = _data.Features.FirstOrDefault(x => x.Id == featureId);
-        if (f?.Kind != "toggle" || f.Flag == null) return (false, "功能尚未可用或无开关标志");
+        if (f?.Kind != "toggle") return (false, "功能尚未可用或非开关型功能");
         try
         {
+            // 随地建造 = 数值切换（改写游戏自己的放置距离 90→100000/还原），非代码桩
+            if (f.Id == "build_anywhere")
+            {
+                var (vok, vmsg) = SetPlacementDistance(on);
+                if (!vok) return (vok, vmsg);
+                _toggleState[featureId] = on;
+                Log?.Invoke($"{f.Name} = {(on ? "开" : "关")}{(vmsg.Length > 0 ? $"（{vmsg}）" : "")}");
+                StateChanged?.Invoke();
+                return (true, "");
+            }
+            if (f.Flag == null) return (false, "功能无开关标志");
             _mc.SetFlag(f.Flag, on);
             _toggleState[featureId] = on;
             Log?.Invoke($"{f.Name} = {(on ? "开" : "关")}");
@@ -234,6 +261,39 @@ public sealed class TrainerEngine : IDisposable
         {
             return (false, ex.Message);
         }
+    }
+
+    private float _savedPlacementDistance = float.NaN;
+
+    /// <summary>随地建造：改写 [placementDistance 全局]+0xC 的
+    /// BuildingPlacementDistance（活体实测默认 90.0）。开=100000（全图距离），
+    /// 关=还原保存值。对局切换会重建 GameData（值回默认），需重新开关。</summary>
+    private (bool, string) SetPlacementDistance(bool on)
+    {
+        var global = _data.Globals.PlacementDistance;
+        if (global is null || !global.Rva.TryGetValue(Version!, out var rvaStr))
+            return (false, "本版本暂不支持（全局未注册）");
+        var addr = Base + Convert.ToUInt32(rvaStr, 16);
+        var obj = _mem!.ReadU32(addr);
+        if (obj < 0x10000) return (false, "放置距离对象不可用（主菜单？进对局后使用）");
+        var slot = obj + 0xC;
+        if (on)
+        {
+            var current = _mem.ReadF32(slot);
+            if (float.IsFinite(current) && current is > 1f and < 5000f)
+            {
+                _savedPlacementDistance = current;
+                _mem.WriteF32(slot, 100000f);
+                return (true, $"距离 {current:F0}→100000");
+            }
+            return (false, $"当前距离值异常（{current}），拒绝改写");
+        }
+        if (float.IsFinite(_savedPlacementDistance))
+        {
+            _mem.WriteF32(slot, _savedPlacementDistance);
+            return (true, $"距离还原 {_savedPlacementDistance:F0}");
+        }
+        return (true, "无保存值（未曾开启）");
     }
 
     public (bool ok, string msg) ExecuteAction(string featureId, string? arg = null)
