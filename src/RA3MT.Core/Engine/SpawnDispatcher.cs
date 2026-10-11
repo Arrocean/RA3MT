@@ -137,58 +137,54 @@ public static class SpawnDispatcher
 /// <summary>Single outstanding spawn request. Publishes the payload before the
 /// state byte; template may be given directly (holder path) or as a WB-string
 /// hash resolved on the game thread through the game's static template table.</summary>
-public sealed class SpawnRequestMailbox
+public sealed class SpawnRequestMailbox : RequestMailbox
 {
     public const uint Offset = SpawnDispatcher.MailboxOffset;
-    private readonly IInjectionMemory _memory;
-    private readonly nuint _address;
-    private readonly object _gate = new();
 
-    public SpawnRequestMailbox(IInjectionMemory memory, nuint block)
+    private uint[] _position = [];
+
+    public SpawnRequestMailbox(IInjectionMemory memory, nuint block) : base(memory, block, Offset) { }
+
+    public new uint State => ReadTerminalState();
+
+    protected override void Validate(BridgeRequest request)
     {
-        _memory = memory;
-        _address = block + Offset;
-    }
-
-    public uint State => _memory.ReadU32(_address);
-
-    public void Submit(uint hash, uint holder, float x, float y, float z, uint owner)
-    {
+        var hash = request.Third;
+        var holder = request.Fourth;
         if (hash == 0 && holder < 0x10000)
             throw new ArgumentException("Spawn request needs a hash or a template holder");
-        if (owner != 0 && owner < 0x10000)
+        if (request.Body != 0 && request.Body < 0x10000)
             throw new ArgumentException("Invalid spawn owner");
+    }
+
+    protected override void WritePayload(BridgeRequest request)
+    {
+        WriteU32(4, request.Third);   // hash
+        WriteU32(8, request.Fourth);  // holder
+        WriteU32(0xC, _position.Length > 0 ? _position[0] : 0u);
+        WriteU32(0x10, _position.Length > 1 ? _position[1] : 0u);
+        WriteU32(0x14, _position.Length > 2 ? _position[2] : 0u);
+        WriteU32(0x18, request.Body); // owner (0 = resolve local side)
+        WriteU32(0x1C, 0u);
+        WriteU32(0x20, 0u);
+    }
+
+    /// <summary>Submit a spawn carrying an explicit world position and owner.
+    /// The position is staged on the instance so the base publish sequence stays
+    /// the single place that writes the mailbox.</summary>
+    public void Submit(uint hash, uint holder, float x, float y, float z, uint owner)
+    {
         if (!float.IsFinite(x) || !float.IsFinite(y) || !float.IsFinite(z))
             throw new ArgumentException("Spawn position must be finite");
-        lock (_gate)
-        {
-            var state = State;
-            if (state is not (0 or 3 or 4))
-                throw new InvalidOperationException("Spawn request still pending or mailbox invalid");
-            _memory.Write(_address + 4, BitConverter.GetBytes(hash));
-            _memory.Write(_address + 8, BitConverter.GetBytes(holder));
-            _memory.Write(_address + 0xC, BitConverter.GetBytes(x));
-            _memory.Write(_address + 0x10, BitConverter.GetBytes(y));
-            _memory.Write(_address + 0x14, BitConverter.GetBytes(z));
-            _memory.Write(_address + 0x18, BitConverter.GetBytes(owner));
-            _memory.Write(_address + 0x1C, BitConverter.GetBytes(0u));
-            _memory.Write(_address + 0x20, BitConverter.GetBytes(0u));
-            _memory.Write(_address, BitConverter.GetBytes(1u)); // publish last
-        }
+        _position = [BitConverter.SingleToUInt32Bits(x), BitConverter.SingleToUInt32Bits(y),
+                     BitConverter.SingleToUInt32Bits(z)];
+        Submit(BridgeRequest.For(owner, 0, hash, holder));
     }
 
     public (uint state, uint resultBody, uint resolvedHolder) ReadResult()
     {
-        lock (_gate)
-        {
-            var state = State;
-            if (state is not (3 or 4))
-                return (state, 0, 0);
-            var result = _memory.ReadU32(_address + 0x1C);
-            var resolved = _memory.ReadU32(_address + 0x20);
-            if (State != state)
-                throw new InvalidOperationException("Spawn result changed while reading");
-            return (state, result, resolved);
-        }
+        var state = ReadTerminalState();
+        if (state is not (Success or Reject)) return (state, 0, 0);
+        return (state, ReadU32(0x1C), ReadU32(0x20));
     }
 }

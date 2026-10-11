@@ -70,10 +70,22 @@ public sealed class MasterCode
     public bool CaptureBridgeEnabled => _captureApi != 0;
     public bool KillBridgeEnabled => _killApi != 0 && _killDeathMarkerApi != 0;
     public bool SpawnBridgeEnabled => _spawnWrapperApi != 0 && _hashLookupApi != 0 && _hashTableGlobalVa != 0;
-    public RankRequestMailbox? RankMailbox { get; private set; }
-    public CaptureRequestMailbox? CaptureMailbox { get; private set; }
-    public KillRequestMailbox? KillMailbox { get; private set; }
-    public SpawnRequestMailbox? SpawnMailbox { get; private set; }
+
+    /// <summary>Bridges that passed resolution and will be installed. The engine
+    /// drives submit/wait through this set instead of switching on a bridge kind.</summary>
+    public BridgeConsumerSet Bridges { get; private set; } = new([]);
+
+    private readonly Dictionary<BridgeId, IBridgeMailbox> _mailboxes = new();
+
+    /// <summary>The installed mailbox for a bridge, or null when the bridge is off.</summary>
+    public IBridgeMailbox? Mailbox(BridgeId id) => _mailboxes.GetValueOrDefault(id);
+
+    // Typed views kept for the feature code and the mailbox tests.
+    public RankRequestMailbox? RankMailbox => Mailbox(BridgeId.Rank) as RankRequestMailbox;
+    public CaptureRequestMailbox? CaptureMailbox => Mailbox(BridgeId.Capture) as CaptureRequestMailbox;
+    public KillRequestMailbox? KillMailbox => Mailbox(BridgeId.Kill) as KillRequestMailbox;
+    public SpawnRequestMailbox? SpawnMailbox => Mailbox(BridgeId.Spawn) as SpawnRequestMailbox;
+
     private readonly nuint _rootVa;             // player-context root global
     private readonly Dictionary<string, HookResolution> _sites;
     private readonly Dictionary<string, string> _stubBySite;   // site id -> stub id
@@ -101,6 +113,20 @@ public sealed class MasterCode
         _log = log;
     }
 
+    /// <summary>Build the consumers for every bridge whose API resolution passed.
+    /// Adding a bridge means adding one consumer here, not a new branch in
+    /// Install/Submit/uninstall.</summary>
+    private BridgeConsumerSet BuildBridgeConsumers()
+    {
+        var consumers = new List<IBridgeConsumer>();
+        if (RankBridgeEnabled) consumers.Add(new RankBridgeConsumer(_rankApi, _rootVa));
+        if (CaptureBridgeEnabled) consumers.Add(new CaptureBridgeConsumer(_captureApi, _rootVa));
+        if (KillBridgeEnabled) consumers.Add(new KillBridgeConsumer(_killApi, _killDeathMarkerApi, _rootVa));
+        if (SpawnBridgeEnabled)
+            consumers.Add(new SpawnBridgeConsumer(_spawnWrapperApi, _hashLookupApi, _hashTableGlobalVa, _rootVa));
+        return new BridgeConsumerSet(consumers);
+    }
+
     public void Install()
     {
         if (Installed) return;
@@ -108,6 +134,8 @@ public sealed class MasterCode
         Block = _mem.Alloc(BlockSize);
         _mem.Write(Block, new byte[BlockSize]); // zero
         _layout = BlockLayoutCatalog.Create();
+        Bridges = BuildBridgeConsumers();
+        foreach (var consumer in Bridges.Consumers) consumer.Declare(_layout);
 
         var layouts = new List<(string id, byte[] code)>();
         uint off = StubArea;
@@ -115,17 +143,15 @@ public sealed class MasterCode
         {
             if (!_stubBySite.TryGetValue(id, out var stubId) || !StubGen.Handles(stubId)) continue;
             var siteEnd = site.Va + (nuint)site.Displaced.Length;
-            var bridgeOffsets = new List<uint>();
-            if (RankBridgeEnabled) bridgeOffsets.Add(_layout.OffsetOf("RankDispatcher"));
-            if (CaptureBridgeEnabled) bridgeOffsets.Add(_layout.OffsetOf("CaptureDispatcher"));
-            if (KillBridgeEnabled) bridgeOffsets.Add(_layout.OffsetOf("KillDispatcher"));
-            if (SpawnBridgeEnabled) bridgeOffsets.Add(_layout.OffsetOf("SpawnDispatcher"));
+            var bridgeOffsets = Bridges.Consumers
+                .Select(c => _layout.OffsetOf($"{c.BlockSlot.Owner}Dispatcher"))
+                .ToArray();
             // Bridge consumers ride both settlement sites: money_h2 (cash settle)
             // and money_h1 (power settle). With infinite cash enabled the cash
             // settlement can go quiet for long stretches, but the power settle
             // keeps ticking, so mailbox requests get consumed either way.
-            var code = bridgeOffsets.Count != 0 && (stubId == "money_h2" || stubId == "money_h1")
-                ? RankDispatcher.EmitMoneyBridge(Block + off, siteEnd, Block, _rootVa, stubId, bridgeOffsets.ToArray())
+            var code = bridgeOffsets.Length != 0 && (stubId == "money_h2" || stubId == "money_h1")
+                ? RankDispatcher.EmitMoneyBridge(Block + off, siteEnd, Block, _rootVa, stubId, bridgeOffsets)
                 : StubGen.Emit(stubId, Block + off, siteEnd, Block, _rootVa, site.Displaced);
             var next = checked(off + (uint)((code.Length + 15) & ~15));
             if (next > CaptureCount)
@@ -134,42 +160,17 @@ public sealed class MasterCode
             off = next;
         }
 
-        if (RankBridgeEnabled)
+        // One loop for every bridge: declare was done above, so this only emits,
+        // measures (AmendSize) and installs the mailbox facade.
+        foreach (var consumer in Bridges.Consumers)
         {
-            if (!_sites.ContainsKey("money_h2")) throw new InvalidOperationException("Rank bridge requires money_h2");
-            var at = BlockLayoutCatalog.DeclareBridge(_layout, "Rank").Offset;
-            var dispatcher = RankDispatcher.Emit(Block + at, Block, _rankApi, _rootVa);
-            _layout.AmendSize("RankDispatcher", dispatcher.Length);
-            _mem.Write(Block + at, dispatcher);
-            RankMailbox = new RankRequestMailbox(_mem, Block);
-        }
-        if (CaptureBridgeEnabled)
-        {
-            if (!_sites.ContainsKey("money_h2")) throw new InvalidOperationException("Capture bridge requires money_h2");
-            var at = BlockLayoutCatalog.DeclareBridge(_layout, "Capture").Offset;
-            var dispatcher = CaptureDispatcher.Emit(Block + at, Block, _captureApi, _rootVa);
-            _layout.AmendSize("CaptureDispatcher", dispatcher.Length);
-            _mem.Write(Block + at, dispatcher);
-            CaptureMailbox = new CaptureRequestMailbox(_mem, Block);
-        }
-        if (KillBridgeEnabled)
-        {
-            if (!_sites.ContainsKey("money_h2")) throw new InvalidOperationException("Kill bridge requires money_h2");
-            var at = BlockLayoutCatalog.DeclareBridge(_layout, "Kill").Offset;
-            var dispatcher = KillDispatcher.Emit(Block + at, Block, _killApi, _killDeathMarkerApi, _rootVa);
-            _layout.AmendSize("KillDispatcher", dispatcher.Length);
-            _mem.Write(Block + at, dispatcher);
-            KillMailbox = new KillRequestMailbox(_mem, Block);
-        }
-        if (SpawnBridgeEnabled)
-        {
-            if (!_sites.ContainsKey("money_h2")) throw new InvalidOperationException("Spawn bridge requires money_h2");
-            var at = BlockLayoutCatalog.DeclareBridge(_layout, "Spawn").Offset;
-            var dispatcher = SpawnDispatcher.Emit(Block + at, Block,
-                _spawnWrapperApi, _hashLookupApi, _hashTableGlobalVa, _rootVa);
-            _layout.AmendSize("SpawnDispatcher", dispatcher.Length);
-            _mem.Write(Block + at, dispatcher);
-            SpawnMailbox = new SpawnRequestMailbox(_mem, Block);
+            if (!_sites.ContainsKey("money_h2"))
+                throw new InvalidOperationException($"{consumer.DisplayName} requires money_h2");
+            var region = _layout.OffsetOf($"{consumer.BlockSlot.Owner}Dispatcher");
+            var dispatcher = consumer.EmitDispatcher(Block + region, Block);
+            _layout.AmendSize($"{consumer.BlockSlot.Owner}Dispatcher", dispatcher.Length);
+            _mem.Write(Block + region, dispatcher);
+            _mailboxes[consumer.Id] = consumer.CreateMailbox(_mem, Block);
         }
 
         // Stub arena size is known from the emitted code before anything is

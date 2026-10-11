@@ -392,15 +392,15 @@ public sealed class TrainerEngine : IDisposable
 
             // 晋级桥路径：请求经资金结算（游戏线程）分派到已配对的晋级函数
             if (f.Action == "lv" && RankBridgeActive)
-                return SubmitBridgeRequests(f.Name, BridgeKind.Rank);
+                return SubmitBridgeRequests(f.Name, BridgeId.Rank);
             if (f.Action == "capture")
             {
-                if (CaptureBridgeActive) return SubmitBridgeRequests(f.Name, BridgeKind.Capture);
+                if (CaptureBridgeActive) return SubmitBridgeRequests(f.Name, BridgeId.Capture);
                 return (false, "需要 bridges.enable 启用俘虏桥并通过校验（直接改属主指针不安全，已禁用）");
             }
             if (f.Action == "destroy")
             {
-                if (KillBridgeActive) return SubmitBridgeRequests(f.Name, BridgeKind.Kill);
+                if (KillBridgeActive) return SubmitBridgeRequests(f.Name, BridgeId.Kill);
                 return (false, "需要 bridges.enable 启用摧毁桥并通过校验（直接清血量绕过死亡流程，已禁用）");
             }
 
@@ -456,88 +456,73 @@ public sealed class TrainerEngine : IDisposable
         }
     }
 
-    private enum BridgeKind { Rank, Capture, Kill }
-
-    /// <summary>向游戏线程桥逐个提交选中目标：每次提交后等待资金结算消费（限时），
-    /// 再提交下一个。邮箱同时只允许一个未完成请求。</summary>
-    private (bool, string) SubmitBridgeRequests(string featureName, BridgeKind kind)
+    /// <summary>向生成桥逐个提交请求（每次等待游戏线程消费后再提交下一个）。
+    /// owner 传 0：消费桩在游戏线程用 playerRoot 全局补齐本地阵营。</summary>
+    /// <summary>Submit requests to a game-thread bridge one at a time, waiting for
+    /// the settlement stub to consume each before sending the next (the mailbox
+    /// allows a single outstanding request). One implementation for every bridge:
+    /// the differences live in the consumer's payload, not in this loop.</summary>
+    private (bool, string) DrainBridge(string featureName, BridgeId id, IReadOnlyList<BridgeRequest> requests,
+        int perTargetTimeoutMs, int totalBudgetMs)
     {
-        var mailbox = _mc!;
-        uint MailState() => kind switch
-        {
-            BridgeKind.Rank => mailbox.RankMailbox!.State,
-            BridgeKind.Capture => mailbox.CaptureMailbox!.State,
-            _ => mailbox.KillMailbox!.State,
-        };
-        void SubmitOne(uint body, uint drawable, uint third)
-        {
-            switch (kind)
-            {
-                case BridgeKind.Rank: mailbox.RankMailbox!.Submit(body, drawable, third); break;
-                case BridgeKind.Capture: mailbox.CaptureMailbox!.Submit(body, drawable); break;
-                default: mailbox.KillMailbox!.Submit(body, drawable, third); break;
-            }
-        }
+        if (_mc is null) return (false, "修改器未初始化");
+        var mailbox = _mc.Mailbox(id);
+        if (mailbox is null) return (false, $"{featureName}: 桥未启用");
+        var consumer = _mc.Bridges[id];
 
-        var targets = kind switch
-        {
-            BridgeKind.Rank => SelectionActions.EnumerateRankTargets(_mem!, _data, Version!, Base)
-                .Select(t => (t.body, t.drawable, t.tracker)).ToList(),
-            BridgeKind.Capture => SelectionActions.EnumerateCaptureTargets(_mem!, _data, Version!, Base)
-                .Select(t => (t.body, t.drawable, 0u)).ToList(),
-            _ => SelectionActions.EnumerateKillTargets(_mem!, _data, Version!, Base)
-                .Select(t => (t.body, t.drawable, t.hp)).ToList(),
-        };
-        if (targets.Count == 0)
-            return (false, kind switch
-            {
-                BridgeKind.Rank => "没有可晋级目标（未选中或不支持经验）",
-                BridgeKind.Capture => "没有可俘虏目标（未选中或目标已属己方）",
-                _ => "没有可摧毁目标（未选中或无生命组件）",
-            });
-
-        const int perTargetTimeoutMs = 800;
-        const int totalBudgetMs = 4000;
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var applied = 0;
         var rejected = 0;
         var outstanding = 0;
-        for (var i = 0; i < targets.Count; i++)
+        for (var i = 0; i < requests.Count; i++)
         {
-            var (body, drawable, third) = targets[i];
+            var request = requests[i];
             try
             {
-                SubmitOne(body, drawable, third);
+                mailbox.Submit(request);
             }
             catch (InvalidOperationException ex)
             {
-                var busyState = MailState();
-                Log?.Invoke($"{featureName}: 0x{body:X} 未提交（邮箱状态 {busyState}: {ex.Message}）");
-                outstanding += targets.Count - i;
+                Log?.Invoke($"{featureName}: 0x{request.Body:X} 未提交（邮箱状态 {mailbox.RawState}: {ex.Message}）");
+                outstanding += requests.Count - i;
                 break;
             }
-            // 等待游戏线程消费（资金结算频率约一次/秒内）
+
             var deadline = System.Diagnostics.Stopwatch.StartNew();
-            uint state;
+            var outcome = BridgeOutcome.Pending;
             while (true)
             {
-                state = MailState();
-                if (state is 3 or 4) break;
+                outcome = mailbox.Outcome;
+                if (outcome != BridgeOutcome.Pending) break;
                 if (deadline.ElapsedMilliseconds > perTargetTimeoutMs ||
                     sw.ElapsedMilliseconds > totalBudgetMs) break;
                 Thread.Sleep(25);
             }
-            if (state == 3) applied++;
-            else if (state == 4) rejected++;
-            else outstanding++;
+
+            switch (outcome)
+            {
+                case BridgeOutcome.Applied:
+                    applied++;
+                    Log?.Invoke($"{featureName}: {DescribeRequest(consumer, mailbox, request)}");
+                    break;
+                case BridgeOutcome.Rejected:
+                    rejected++;
+                    Log?.Invoke($"{featureName}: {DescribeRejection(consumer, request)}");
+                    break;
+                default:
+                    outstanding++;
+                    break;
+            }
+
             if (sw.ElapsedMilliseconds > totalBudgetMs)
             {
-                outstanding += targets.Count - i - 1;
+                outstanding += requests.Count - i - 1;
                 break;
             }
         }
+
         var msg = applied > 0
-            ? $"已作用于 {applied}/{targets.Count} 个目标"
+            ? $"已作用于 {applied}/{requests.Count} 个目标"
             : "游戏线程未消费请求（资金未结算？稍后重试）";
         if (rejected > 0) msg += $"，{rejected} 个被校验拒绝";
         if (outstanding > 0) msg += $"，{outstanding} 个待处理（再次触发继续）";
@@ -546,16 +531,53 @@ public sealed class TrainerEngine : IDisposable
         return (applied > 0, applied > 0 ? "" : msg);
     }
 
-    /// <summary>向生成桥逐个提交请求（每次等待游戏线程消费后再提交下一个）。
-    /// owner 传 0：消费桩在游戏线程用 playerRoot 全局补齐本地阵营。</summary>
+    /// <summary>Per-bridge success line. Only the spawn bridge has a resolved
+    /// holder / result body worth reporting.</summary>
+    private static string DescribeRequest(IBridgeConsumer consumer, IBridgeMailbox mailbox, BridgeRequest request) =>
+        mailbox is SpawnRequestMailbox spawn
+            ? (request.Third != 0
+                ? $"已生成 哈希 0x{request.Third:X8}（解析模板 0x{spawn.ReadResult().resolvedHolder:X}）" +
+                  $" → 新单位 0x{spawn.ReadResult().resultBody:X}"
+                : $"已生成 模板 0x{request.Fourth:X} → 新单位 0x{spawn.ReadResult().resultBody:X}")
+            : $"{consumer.DisplayName}: 0x{request.Body:X} 已执行";
+
+    /// <summary>Per-bridge rejection line.</summary>
+    private static string DescribeRejection(IBridgeConsumer consumer, BridgeRequest request) =>
+        consumer.Id == BridgeId.Spawn
+            ? (request.Third != 0
+                ? $"哈希 0x{request.Third:X8} 不在模板表，被拒绝"
+                : $"模板 0x{request.Fourth:X} 校验失败，被拒绝")
+            : $"{consumer.DisplayName}: 0x{request.Body:X} 校验未通过";
+
+    /// <summary>Selected-unit bridges (rank/capture/kill) share this entry point.</summary>
+    private (bool, string) SubmitBridgeRequests(string featureName, BridgeId kind)
+    {
+        var targets = kind switch
+        {
+            BridgeId.Rank => SelectionActions.EnumerateRankTargets(_mem!, _data, Version!, Base)
+                .Select(t => BridgeRequest.For(t.body, t.drawable, t.tracker)).ToList(),
+            BridgeId.Capture => SelectionActions.EnumerateCaptureTargets(_mem!, _data, Version!, Base)
+                .Select(t => BridgeRequest.For(t.body, t.drawable)).ToList(),
+            _ => SelectionActions.EnumerateKillTargets(_mem!, _data, Version!, Base)
+                .Select(t => BridgeRequest.For(t.body, t.drawable, t.hp)).ToList(),
+        };
+        if (targets.Count == 0)
+            return (false, _mc is not null && _mc.Bridges.TryGet(kind, out var consumer)
+                ? consumer.NoTargetMessage
+                : "桥未启用");
+        return DrainBridge(featureName, kind, targets, perTargetTimeoutMs: 800, totalBudgetMs: 4000);
+    }
+
+    /// <summary>Spawn bridge entry point: every request carries a template hash or
+    /// a template holder plus a world position.</summary>
     private (bool, string) SubmitSpawnRequests(string featureName,
         List<(uint hash, uint holder, float x, float y, float z)> requests)
     {
-        var mailbox = _mc!.SpawnMailbox!;
-        const int perTargetTimeoutMs = 1500;
-        const int totalBudgetMs = 6000;
+        var spawn = _mc?.SpawnMailbox;
+        if (spawn is null) return (false, $"{featureName}: 生成桥未启用");
+
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var spawned = 0;
+        var applied = 0;
         var rejected = 0;
         var outstanding = 0;
         for (var i = 0; i < requests.Count; i++)
@@ -563,27 +585,28 @@ public sealed class TrainerEngine : IDisposable
             var (hash, holder, x, y, z) = requests[i];
             try
             {
-                mailbox.Submit(hash, holder, x, y, z, 0);
+                spawn.Submit(hash, holder, x, y, z, 0);
             }
             catch (InvalidOperationException ex)
             {
-                Log?.Invoke($"{featureName}: 第 {i + 1} 个未提交（邮箱状态 {mailbox.State}: {ex.Message}）");
+                Log?.Invoke($"{featureName}: 第 {i + 1} 个未提交（邮箱状态 {spawn.State}: {ex.Message}）");
                 outstanding += requests.Count - i;
                 break;
             }
+
             var deadline = System.Diagnostics.Stopwatch.StartNew();
             (uint state, uint body, uint resolved) result;
             while (true)
             {
-                result = mailbox.ReadResult();
+                result = spawn.ReadResult();
                 if (result.state is 3 or 4) break;
-                if (deadline.ElapsedMilliseconds > perTargetTimeoutMs ||
-                    sw.ElapsedMilliseconds > totalBudgetMs) break;
+                if (deadline.ElapsedMilliseconds > 1500 || sw.ElapsedMilliseconds > 6000) break;
                 Thread.Sleep(25);
             }
+
             if (result.state == 3)
             {
-                spawned++;
+                applied++;
                 var describe = hash != 0
                     ? $"哈希 0x{hash:X8}（解析模板 0x{result.resolved:X}）"
                     : $"模板 0x{holder:X}";
@@ -596,20 +619,21 @@ public sealed class TrainerEngine : IDisposable
                 Log?.Invoke($"{featureName}: {reason}，被拒绝");
             }
             else outstanding++;
-            if (sw.ElapsedMilliseconds > totalBudgetMs)
+
+            if (sw.ElapsedMilliseconds > 6000)
             {
                 outstanding += requests.Count - i - 1;
                 break;
             }
         }
-        var msg = spawned > 0
-            ? $"已生成 {spawned}/{requests.Count} 个单位"
+        var msg = applied > 0
+            ? $"已生成 {applied}/{requests.Count} 个单位"
             : "游戏线程未消费生成请求（资金未结算？稍后重试）";
         if (rejected > 0) msg += $"，{rejected} 个被校验拒绝";
         if (outstanding > 0) msg += $"，{outstanding} 个待处理（再次触发继续）";
         Log?.Invoke($"{featureName}: {msg}");
         StateChanged?.Invoke();
-        return (spawned > 0, spawned > 0 ? "" : msg);
+        return (applied > 0, applied > 0 ? "" : msg);
     }
 
     private (bool, string) DiagDump()

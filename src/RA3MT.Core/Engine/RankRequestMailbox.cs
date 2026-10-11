@@ -2,52 +2,35 @@ using RA3MT.Core.Memory;
 
 namespace RA3MT.Core.Engine;
 
-/// <summary>Single outstanding request for a future game-thread rank dispatcher.</summary>
-public sealed class RankRequestMailbox
+/// <summary>Single outstanding request for a game-thread rank dispatcher.
+/// Payload published before state; do not reset a pending request on timeout —
+/// the game may still consume it.</summary>
+public sealed class RankRequestMailbox : RequestMailbox
 {
-    public const uint Offset = 0x1800;
-    private readonly IInjectionMemory _memory;
-    private readonly nuint _address;
-    private readonly object _gate = new();
+    public const uint Offset = RankDispatcher.MailboxOffset;
 
-    public RankRequestMailbox(IInjectionMemory memory, nuint block)
+    public RankRequestMailbox(IInjectionMemory memory, nuint block) : base(memory, block, Offset) { }
+
+    public new uint State => ReadTerminalState();
+
+    protected override void Validate(BridgeRequest request)
     {
-        _memory = memory;
-        _address = block + Offset;
+        RequireObject(request.Body, "rank body");
+        RequireObject(request.Drawable, "rank drawable");
+        RequireObject(request.Third, "rank tracker");
     }
 
-    public uint State => _memory.ReadU32(_address);
+    protected override void WritePayload(BridgeRequest request) =>
+        // single 20-byte payload write, then the base publishes the state
+        WriteDwords(4, request.Body, request.Drawable, request.Third, 0, 0);
 
-    // Do not reset a pending/executing request on timeout: the game may still consume it.
-    public void Submit(uint body, uint drawable, uint tracker)
-    {
-        if (body < 0x10000 || drawable < 0x10000 || tracker < 0x10000)
-            throw new ArgumentException("Invalid rank request object");
-        lock (_gate)
-        {
-            var state = State;
-            if (state != 0 && state != 3 && state != 4)
-                throw new InvalidOperationException("Rank request still pending or mailbox state invalid");
-            var payload = new byte[20];
-            BitConverter.GetBytes(body).CopyTo(payload, 0);
-            BitConverter.GetBytes(drawable).CopyTo(payload, 4);
-            BitConverter.GetBytes(tracker).CopyTo(payload, 8);
-            _memory.Write(_address + 4, payload);
-            // Publish last, after all pointers/results are complete.
-            _memory.Write(_address, BitConverter.GetBytes(1u));
-        }
-    }
+    public void Submit(uint body, uint drawable, uint tracker) =>
+        Submit(BridgeRequest.For(body, drawable, tracker));
 
     public (uint state, uint before, uint after) ReadResult()
     {
-        lock (_gate)
-        {
-            var first = State;
-            if (first != 3 && first != 4) return (first, 0, 0);
-            var before = _memory.ReadU32(_address + 0x10);
-            var after = _memory.ReadU32(_address + 0x14);
-            if (State != first) throw new InvalidOperationException("Rank result changed while reading");
-            return (first, before, after);
-        }
+        var state = ReadTerminalState();
+        if (state is not (Success or Reject)) return (state, 0, 0);
+        return (state, ReadU32(0x10), ReadU32(0x14));
     }
 }

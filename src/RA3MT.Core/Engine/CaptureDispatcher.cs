@@ -99,46 +99,29 @@ public static class CaptureDispatcher
 }
 
 /// <summary>Single outstanding capture request; payload published before state.</summary>
-public sealed class CaptureRequestMailbox
+public sealed class CaptureRequestMailbox : RequestMailbox
 {
     public const uint Offset = CaptureDispatcher.MailboxOffset;
-    private readonly IInjectionMemory _memory;
-    private readonly nuint _address;
-    private readonly object _gate = new();
 
-    public CaptureRequestMailbox(IInjectionMemory memory, nuint block)
+    public CaptureRequestMailbox(IInjectionMemory memory, nuint block) : base(memory, block, Offset) { }
+
+    public new uint State => ReadTerminalState();
+
+    protected override void Validate(BridgeRequest request)
     {
-        _memory = memory;
-        _address = block + Offset;
+        RequireObject(request.Body, "capture body");
+        RequireObject(request.Drawable, "capture drawable");
     }
 
-    public uint State => _memory.ReadU32(_address);
+    protected override void WritePayload(BridgeRequest request)
+    {
+        WriteU32(4, request.Body);
+        WriteU32(8, request.Drawable);
+    }
+
+    public void Submit(uint body, uint drawable) => Submit(BridgeRequest.For(body, drawable));
 
     /// <summary>Result after a terminal state; Reject means a gate failed or the
     /// transition did not move the target to the local side.</summary>
-    public uint ReadResult()
-    {
-        lock (_gate)
-        {
-            var first = State;
-            if (first is not (3 or 4)) return first;
-            if (State != first) throw new InvalidOperationException("Capture result changed while reading");
-            return first;
-        }
-    }
-
-    public void Submit(uint body, uint drawable)
-    {
-        if (body < 0x10000 || drawable < 0x10000)
-            throw new ArgumentException("Invalid capture request object");
-        lock (_gate)
-        {
-            var state = State;
-            if (state is not (0 or 3 or 4))
-                throw new InvalidOperationException("Capture request still pending or mailbox invalid");
-            _memory.Write(_address + 4, BitConverter.GetBytes(body));
-            _memory.Write(_address + 8, BitConverter.GetBytes(drawable));
-            _memory.Write(_address, BitConverter.GetBytes(1u)); // publish last
-        }
-    }
+    public uint ReadResult() => ReadTerminalState();
 }

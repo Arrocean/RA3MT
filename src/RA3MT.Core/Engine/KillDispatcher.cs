@@ -127,49 +127,34 @@ public static class KillDispatcher
 }
 
 /// <summary>Single outstanding destroy request.</summary>
-public sealed class KillRequestMailbox
+public sealed class KillRequestMailbox : RequestMailbox
 {
     public const uint Offset = KillDispatcher.MailboxOffset;
-    private readonly IInjectionMemory _memory;
-    private readonly nuint _address;
-    private readonly object _gate = new();
 
-    public KillRequestMailbox(IInjectionMemory memory, nuint block)
+    public KillRequestMailbox(IInjectionMemory memory, nuint block) : base(memory, block, Offset) { }
+
+    public new uint State => ReadTerminalState();
+
+    protected override void Validate(BridgeRequest request)
     {
-        _memory = memory;
-        _address = block + Offset;
+        RequireObject(request.Body, "destroy body");
+        RequireObject(request.Drawable, "destroy drawable");
+        RequireObject(request.Third, "destroy health component");
     }
 
-    public uint State => _memory.ReadU32(_address);
-
-    public uint ReadResult()
+    protected override void WritePayload(BridgeRequest request)
     {
-        lock (_gate)
-        {
-            var first = State;
-            if (first is not (3 or 4)) return first;
-            if (State != first) throw new InvalidOperationException("Kill result changed while reading");
-            return first;
-        }
+        WriteU32(4, request.Body);
+        WriteU32(8, request.Drawable);
+        WriteU32(0xC, request.Third);
+        // Static DamageInfo payload: adjust() reads ctx+8/ctx+0xC only.
+        // FINAL3 passes damage type 6 / death type 0x13 for its destroy.
+        WriteU32(0x18, 6u);
+        WriteU32(0x1C, 0x13u);
     }
 
-    public void Submit(uint body, uint drawable, uint hp)
-    {
-        if (body < 0x10000 || drawable < 0x10000 || hp < 0x10000)
-            throw new ArgumentException("Invalid destroy request object");
-        lock (_gate)
-        {
-            var state = State;
-            if (state is not (0 or 3 or 4))
-                throw new InvalidOperationException("Destroy request still pending or mailbox invalid");
-            _memory.Write(_address + 4, BitConverter.GetBytes(body));
-            _memory.Write(_address + 8, BitConverter.GetBytes(drawable));
-            _memory.Write(_address + 0xC, BitConverter.GetBytes(hp));
-            // Static DamageInfo payload: adjust() reads ctx+8/ctx+0xC only.
-            // FINAL3 passes damage type 6 / death type 0x13 for its destroy.
-            _memory.Write(_address + 0x18, BitConverter.GetBytes(6u));
-            _memory.Write(_address + 0x1C, BitConverter.GetBytes(0x13u));
-            _memory.Write(_address, BitConverter.GetBytes(1u)); // publish last
-        }
-    }
+    public void Submit(uint body, uint drawable, uint hp) =>
+        Submit(BridgeRequest.For(body, drawable, hp));
+
+    public uint ReadResult() => ReadTerminalState();
 }
