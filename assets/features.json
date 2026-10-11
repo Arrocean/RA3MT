@@ -285,7 +285,7 @@
     "money_h3"
    ],
    "flag": "scpoints",
-   "desc": "秘密协议点数恒为 99",
+   "desc": "秘密协议点数恒为 15（FINAL3同款）",
    "src": "orig[03]"
   },
   {
@@ -389,7 +389,7 @@
     "zoom_unit_xp"
    ],
    "flag": "xp999",
-   "desc": "待实现游戏经验刷新流程，旧站点属于技能界面而非选中单位",
+   "desc": "待配对FINAL3三参数晋级函数；旧界面条目钩子实际是弹药",
    "src": "orig[10]"
   },
   {
@@ -409,12 +409,12 @@
   {
    "id": "sel_lv",
    "no": "10",
-   "name": "选中单位等级拉满",
+   "name": "提高选中单位经验",
    "group": "选中单位",
    "kind": "action",
    "hotkey": "Alt+P",
    "action": "lv",
-   "desc": "仅支持晋级的目标：经验值设为 999999，星级/属性待后续经验刷新",
+   "desc": "现代替代动作：经验值设为 999999，星级待后续刷新；不等同FINAL3直接晋级",
    "src": "orig[10]"
   },
   {
@@ -431,13 +431,13 @@
   {
    "id": "sel_speed2",
    "no": "12",
-   "name": "选中单位高速移动2",
+   "name": "选中单位低速移动",
    "group": "选中单位",
    "kind": "action",
    "hotkey": "Alt+=",
    "action": "speed2",
-   "desc": "当前移动模式集合全部基础速度设为 500；切换模式后可能需重执行",
-   "src": "orig[12]"
+   "desc": "当前移动模式基础速度设为 10；FINAL3低速意图，保留原速度以便恢复",
+   "src": "orig[12] FINAL3 slow"
   },
   {
    "id": "sel_freeze",
@@ -453,13 +453,13 @@
   {
    "id": "sel_freeze2",
    "no": "14",
-   "name": "冻结选中单位2",
+   "name": "恢复选中单位速度",
    "group": "选中单位",
    "kind": "action",
    "hotkey": "Alt+PgDn",
-   "action": "freeze2",
-   "desc": "当前模式集合基础速度置 0；模式重建后需重新执行",
-   "src": "orig[14]"
+   "action": "speedrestore",
+   "desc": "仅恢复本会话记录、且Locomotor实例未重建的原始速度",
+   "src": "orig[14] FINAL3 restore"
   },
   {
    "id": "sel_hpmax",
@@ -510,62 +510,83 @@
    "no": "19",
    "name": "俘虏选中目标",
    "group": "选中单位",
-   "kind": "pending",
+   "kind": "action",
    "hotkey": "Alt+O",
    "action": "capture",
-   "desc": "待验证完整归属切换流程，禁止直接覆盖属主指针",
-   "src": "orig[19]"
+   "desc": "经游戏线程调用完整归属切换函数俘虏目标（需 bridges.enable；仅非己方目标）",
+   "src": "orig[19] FINAL3 ChangeID（完整流程版）"
   },
   {
    "id": "sel_destroy",
    "no": "20",
    "name": "摧毁选中目标",
    "group": "选中单位",
-   "kind": "pending",
+   "kind": "action",
    "hotkey": "Alt+Del",
    "action": "destroy",
-   "desc": "待实现游戏线程死亡流程；已禁用绕过回调的直接生命置零",
-   "src": "orig[20]"
+   "desc": "经游戏线程用 HP 调整函数施加致死伤害（完整死亡流程+通知；需 bridges.enable）",
+   "src": "orig[20] FINAL3 KillSelectUnit（adjust 重推导）"
   },
   {
    "id": "threat_max",
    "no": "21",
    "name": "威胁等级最大",
    "group": "其他",
-   "kind": "pending",
+   "kind": "toggle",
    "hotkey": "",
-   "desc": "需定位威胁等级全局（老版 LM MAX）",
-   "src": "orig[21]"
+   "hooks": [
+    "ammo",
+    "ammo_2",
+    "ammo_3",
+    "ammo_4",
+    "ammo_5",
+    "ammo_6"
+   ],
+   "flag": "threatmax",
+   "desc": "所有单位威胁分量持续写 50000（FINAL3 Danger Max 同款；与归零同开时最大优先）",
+   "src": "orig[21] FINAL3 Danger Max"
   },
   {
    "id": "threat_zero",
    "no": "22",
    "name": "威胁等级归零",
    "group": "其他",
-   "kind": "pending",
+   "kind": "toggle",
    "hotkey": "",
-   "desc": "同上",
-   "src": "orig[22]"
+   "hooks": [
+    "ammo",
+    "ammo_2",
+    "ammo_3",
+    "ammo_4",
+    "ammo_5",
+    "ammo_6"
+   ],
+   "flag": "threatzero",
+   "desc": "所有单位威胁分量持续写 0（FINAL3 Danger Min 同款）",
+   "src": "orig[22] FINAL3 Danger Min"
   },
   {
    "id": "threat_normal",
    "no": "23",
    "name": "威胁等级恢复",
    "group": "其他",
-   "kind": "pending",
+   "kind": "action",
    "hotkey": "",
-   "desc": "同上",
-   "src": "orig[23]"
+   "action": "threatnormal",
+   "desc": "关闭最大/归零覆盖，威胁等级交还游戏自然重算（FINAL3 同款：不保存旧值）",
+   "src": "orig[23] FINAL3 Danger Normal"
   },
   {
    "id": "oremine",
    "no": "24",
    "name": "矿脉恢复满量",
    "group": "其他",
-   "kind": "pending",
+   "kind": "action",
    "hotkey": "",
-   "desc": "需定位矿脉对象链（老版 #222）",
-   "src": "orig[24]"
+   "hooks": [],
+   "desc": "恢复选中的矿脉至 100000 并清零已采量（活体验证链 body+0x398→状态→容器+8）",
+   "src": "orig[24] FINAL3 RestoreOreMine（选中版）",
+   "action": "oreminerestore"
   },
   {
    "id": "diag",

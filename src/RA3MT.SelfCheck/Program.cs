@@ -22,6 +22,152 @@ if (args.Length == 2 && args[0] == "stubdump")
             $"stubVa=0x{fakeBase + MasterCode.StubArea:X}\nsiteEnd=0x{siteEnd:X}\nlen={code.Length}\n");
         Console.WriteLine($"{id,-14} {code.Length} bytes -> {id}.bin");
     }
+    File.WriteAllBytes(Path.Combine(args[1], "money_h2_rank.bin"),
+        RankDispatcher.EmitMoneyBridge(0x40000040, 0x452105, 0x40000000, 0x400000, RankDispatcher.CodeOffset));
+    File.WriteAllBytes(Path.Combine(args[1], "money_h2_full_bridge.bin"),
+        RankDispatcher.EmitMoneyBridge(0x40000040, 0x452105, 0x40000000, 0x400000,
+            RankDispatcher.CodeOffset, CaptureDispatcher.CodeOffset, KillDispatcher.CodeOffset));
+    File.WriteAllBytes(Path.Combine(args[1], "rank_dispatcher.bin"),
+        RankDispatcher.Emit(0x40001200, 0x40000000, 0x785600, 0x400000));
+    File.WriteAllBytes(Path.Combine(args[1], "capture_dispatcher.bin"),
+        CaptureDispatcher.Emit(0x40001300, 0x40000000, 0x7B5DF0, 0x400000));
+    File.WriteAllBytes(Path.Combine(args[1], "kill_dispatcher.bin"),
+        KillDispatcher.Emit(0x40001400, 0x40000000, 0x78CB30, 0x400000));
+    return 0;
+}
+
+if (args.Length == 1 && args[0] == "bridgetest")
+{
+    var rankDataDir = TrainerGameDataDir() ?? throw new InvalidOperationException("Game Data directory not found");
+    foreach (var version in new[] { "1.12", "1.13" })
+    {
+        var image = new StaticImage(Path.Combine(rankDataDir, $"ra3_{version}.game"));
+        var rank = RA3MT.Core.Target.RankApiResolver.Resolve(version, 0x400000, (rva, len) => image.GetRva(rva, len));
+        var capture = RA3MT.Core.Target.CaptureApiResolver.Resolve(version, 0x400000, (rva, len) => image.GetRva(rva, len));
+        var kill = RA3MT.Core.Target.KillApiResolver.Resolve(version, 0x400000, (rva, len) => image.GetRva(rva, len));
+        Console.WriteLine($"PASS {version} rank 0x{rank:X} capture 0x{capture:X} kill 0x{kill:X}");
+        foreach (var (name, resolve, altered) in new (string, Func<nuint>, int)[]
+                 {
+                     ("rank", () => RA3MT.Core.Target.RankApiResolver.Resolve(version, 0x400000, (r, l) => Alter(image, r, l, 0)), 0),
+                     ("capture", () => RA3MT.Core.Target.CaptureApiResolver.Resolve(version, 0x400000, (r, l) => Alter(image, r, l, 1)), 1),
+                     ("kill", () => RA3MT.Core.Target.KillApiResolver.Resolve(version, 0x400000, (r, l) => Alter(image, r, l, 0xA)), 0xA),
+                 })
+        {
+            var refused = false;
+            try { resolve(); }
+            catch (InvalidOperationException) { refused = true; }
+            if (!refused) throw new Exception($"Altered {name} contract accepted");
+        }
+        Console.WriteLine($"PASS {version} three altered bridge contracts rejected");
+    }
+    RA3MT.SelfCheck.BridgeMailboxChecks.Run();
+    return 0;
+
+    byte[] Alter(StaticImage img, uint rva, int len, int index)
+    {
+        var code = img.GetRva(rva, len);
+        if (index < code.Length) code[index] ^= 1;
+        return code;
+    }
+}
+
+if (args.Length == 1 && args[0] == "spawntest")
+{
+    var spawnDataDir = TrainerGameDataDir() ?? throw new InvalidOperationException("Game Data directory not found");
+    var cases = 0;
+    foreach (var version in new[] { "1.12", "1.13" })
+    {
+        var image = new StaticImage(Path.Combine(spawnDataDir, $"ra3_{version}.game"));
+        var address = SpawnApiResolver.Resolve(version, 0x400000, (rva, len) => image.GetRva(rva, len));
+        Console.WriteLine($"PASS {version} strict spawn wrapper identity 0x{address:X} (304 bytes)");
+        var support = SpawnSupportApiResolver.Resolve(version, 0x400000,
+            (rva, len) => image.GetRva(rva, len));
+        Console.WriteLine($"PASS {version} startup hash/owner helper identities " +
+                          $"lookup=0x{support.TemplateHashLookup:X}, owner=0x{support.OwnerResolver:X}");
+        foreach (var changedRva in new[]
+                 {
+                     version == "1.12" ? 0x422510u : 0x40D5B0u,
+                     version == "1.12" ? 0x4793B0u : 0x4647A0u,
+                     version == "1.12" ? 0x1175D0u : 0xFF4A0u,
+                 })
+        {
+            var refused = false;
+            try
+            {
+                SpawnSupportApiResolver.Resolve(version, 0x400000, (rva, len) =>
+                {
+                    var bytes = image.GetRva(rva, len);
+                    if (rva == changedRva) bytes[^1] ^= 1;
+                    return bytes;
+                });
+            }
+            catch (InvalidOperationException) { refused = true; }
+            if (!refused) throw new Exception($"Altered {version} spawn support API accepted at 0x{changedRva:X}");
+            cases++;
+        }
+        var entry = version == "1.12" ? 0x2440F0u : 0x22E3E0u;
+        var changed = new HashSet<int> { 0, 0x19, 0x98, 0xA7, 0xDA, 0x12F };
+        foreach (var offset in new[] { 0x5B, 0x71, 0x93, 0x9F, 0xAC, 0xBF, 0xC8, 0xD3, 0xDF, 0x107, 0x119, 0x121 })
+            changed.Add(offset + 1); // each rel32 edge
+        foreach (var offset in changed)
+        {
+            var refused = false;
+            try
+            {
+                SpawnApiResolver.Resolve(version, 0x400000, (rva, len) =>
+                {
+                    var bytes = image.GetRva(rva, len);
+                    if (rva == entry && offset < bytes.Length) bytes[offset] ^= 1;
+                    return bytes;
+                });
+            }
+            catch (InvalidOperationException) { refused = true; }
+            if (!refused) throw new Exception($"Altered {version} spawn wrapper accepted at +0x{offset:X}");
+            cases++;
+        }
+        var shortReadRefused = false;
+        try { SpawnApiResolver.Resolve(version, 0x400000, (rva, len) => image.GetRva(rva, len - 1)); }
+        catch (InvalidOperationException) { shortReadRefused = true; }
+        if (!shortReadRefused) throw new Exception($"Short {version} spawn wrapper read accepted");
+        cases++;
+    }
+    Console.WriteLine($"PASS {cases} spawn wrapper byte/relative-call/manager/length mutation refusals");
+    Console.WriteLine("Identity only: no game invocation, allocation/lifecycle/thread-safety claim, or production dispatcher.");
+    return 0;
+}
+
+if (args.Length == 1 && args[0] == "rankmailboxtest")
+{
+    RA3MT.SelfCheck.RankMailboxChecks.Run();
+    return 0;
+}
+
+if (args.Length == 1 && args[0] == "ranktest")
+{
+    var rankDataDir = TrainerGameDataDir() ?? throw new InvalidOperationException("Game Data directory not found");
+    foreach (var version in new[] { "1.12", "1.13" })
+    {
+        var image = new StaticImage(Path.Combine(rankDataDir, $"ra3_{version}.game"));
+        var address = RA3MT.Core.Target.RankApiResolver.Resolve(version, 0x400000,
+            (rva, len) => image.GetRva(rva, len));
+        Console.WriteLine($"PASS {version} rank API 0x{address:X}");
+        foreach (var changedOffset in new[] { 0, 0x22, 0x2A, 0x4D })
+        {
+            var refused = false;
+            try
+            {
+                RA3MT.Core.Target.RankApiResolver.Resolve(version, 0x400000, (rva, len) =>
+                {
+                    var code = image.GetRva(rva, len);
+                    code[changedOffset] ^= 1;
+                    return code;
+                });
+            }
+            catch (InvalidOperationException) { refused = true; }
+            if (!refused) throw new Exception($"Altered rank contract accepted at {changedOffset:X}");
+        }
+        Console.WriteLine($"PASS {version} four altered rank contracts rejected");
+    }
     return 0;
 }
 
@@ -274,7 +420,6 @@ foreach (var ver in versions)
     var rootAbs = 0x400000 + rootRva;
     var text2 = img.SectionBytes(0x1000).ToArray();
     var found = false;
-    Span<byte> needle = stackalloc byte[10];
     foreach (var prefix in new[] { new byte[] { 0x8B, 0x0D }, new byte[] { 0xA1 }, new byte[] { 0x8B, 0x1D } })
     {
         for (var i = 0; i < text2.Length - 16 && !found; i++)

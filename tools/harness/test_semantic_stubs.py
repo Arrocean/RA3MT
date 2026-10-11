@@ -53,10 +53,15 @@ assert code[-7:-5] == bytes.fromhex('619d')
 assert bytes.fromhex('c7400c00000000') not in code
 for name in ['ammo'] + ['ammo_' + str(i) for i in range(2, 7)]:
     code, ins = instructions(name)
-    assert bytes.fromhex('c7400850c30000') not in code  # threat is not ammunition
-    assert code[:6] == bytes.fromhex('8b8178120000')
-    assert len(ins) == 3 and [i.mnemonic for i in ins] == ['mov', 'mov', 'jmp']
-    assert ins[1].op_str == 'dword ptr [0x4000002c], eax'  # diagnostics only
+    assert code[:6] == bytes.fromhex('8b8178120000')  # mov eax,[ecx+1278]
+    assert [i.mnemonic for i in ins] == [
+        'mov', 'mov', 'pushfd', 'test', 'je', 'cmp', 'jne', 'mov', 'jmp',
+        'cmp', 'jne', 'mov', 'popfd', 'jmp']
+    assert ins[1].op_str == 'dword ptr [0x4000002c], eax'  # diagnostic capture
+    assert ins[5].op_str == 'byte ptr [0x4000000d], 1'  # threatmax flag
+    assert ins[7].op_str == 'dword ptr [eax + 8], 0xc350'  # 50000
+    assert ins[9].op_str == 'byte ptr [0x4000000e], 1'  # threatzero flag
+    assert ins[11].op_str == 'dword ptr [eax + 8], 0'  # 0
 code, ins = instructions('weapon_clip')
 assert code[:8] == bytes.fromhex('83c8ff01461c9c60')
 assert bytes.fromhex('f6823d01000040') in code

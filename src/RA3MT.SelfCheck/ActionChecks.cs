@@ -85,6 +85,51 @@ public static class ActionChecks
             if (!refused || memory.Writes.Count != 0) throw new Exception("Unsafe action was not refused");
             count++;
         }
+        var movement = Fixture(200);
+        movement.U32(0x50374, 0x70000);
+        movement.U32(0x7021C, 0x80000);
+        movement.U32(0x80004, 0x90000);
+        movement.WriteF32(0x80008, 35);
+        movement.WriteF32(0x80020, 20);
+        var movementState = new SelectionActionState();
+        foreach (var (action, expected) in new[] { ("speed1", 500f), ("speed2", 10f), ("freeze1", 0f), ("speedrestore", 35f) })
+        {
+            movement.Writes.Clear();
+            if (SelectionActions.Apply(movement, data, "1.13", action, 0x400000, movementState) != 1 ||
+                movement.ReadF32(0x80008) != expected || movement.ReadF32(0x80020) != 20)
+                throw new Exception("Incorrect FINAL3 speed or restore outcome");
+            count++;
+        }
+        movementState.SetSpeed(movement, 0x80000, 500);
+        movement.U32(0x80004, 0xA0000);
+        movement.Writes.Clear();
+        if (movementState.RestoreSpeed(movement, 0x80000) || movement.Writes.Count != 0)
+            throw new Exception("Stale locomotor restored");
+        count++;
+        movementState.SetSpeed(movement, 0x80000, 10);
+        movementState.Clear();
+        movement.Writes.Clear();
+        if (movementState.RestoreSpeed(movement, 0x80000) || movement.Writes.Count != 0)
+            throw new Exception("Previous session speed restored");
+        count++;
+        movementState.SetSpeed(movement, 0x80000, 500);
+        movement.WriteF32(0x80008, 45);
+        movement.Writes.Clear();
+        if (movementState.RestoreSpeed(movement, 0x80000) || movement.Writes.Count != 0)
+            throw new Exception("Changed same-template instance restored");
+        count++;
+        movementState.SetSpeed(movement, 0x80000, 10);
+        movement.Writes.Clear();
+        if (!movementState.RestoreSpeed(movement, 0x80000) || movement.ReadF32(0x80008) != 45)
+            throw new Exception("Fresh backup did not retain changed original");
+        count++;
+        foreach (var invalid in new[] { float.NaN, float.PositiveInfinity, -1f })
+        {
+            movement.Writes.Clear();
+            if (movementState.SetSpeed(movement, 0x80000, invalid) || movement.Writes.Count != 0)
+                throw new Exception("Invalid speed written");
+            count++;
+        }
         var deselected = Fixture(200);
         deselected.Write(0x4013D, new byte[] { 0 });
         deselected.Writes.Clear();

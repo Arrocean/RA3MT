@@ -1,0 +1,6 @@
+等待解锁（最长 1800 秒）：真实点选征召兵 或 启动修改器(UAC)
+选中 1: ['0x6f557b0']
+body=0x6F557B0 side=0x48075A0 tracker=0x59887A0 wrapper=0xFDA9238 template=0xFDACBB0 
+已排 5 征召兵
+守卫页 0xFDA9000（wrapper 0xFDA9238）开始捕获 60s……
+捕获完成：0 次写

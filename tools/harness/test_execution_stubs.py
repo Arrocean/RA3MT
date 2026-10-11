@@ -54,6 +54,23 @@ def snapshot(vm):
 
 
 cases = 0
+for enabled in [0, 1]:
+    for original in [0, 4, 99]:
+        vm, end = machine('money_h3')
+        vm.reg_write(UC_X86_REG_EAX, DATA)
+        vm.reg_write(UC_X86_REG_ESI, DATA + 0x1000)
+        put(vm, DATA + 0x34, original)
+        put(vm, DATA + 0x103c, 0x123456)
+        vm.mem_write(BLOCK + 2, bytes([enabled]))
+        before = snapshot(vm)
+        execute(vm, end)
+        expected = 15 if enabled else original
+        assert get(vm, DATA + 0x34) == expected
+        assert vm.reg_read(UC_X86_REG_EDI) == expected
+        assert vm.reg_read(UC_X86_REG_ECX) == 0x123456
+        preserved(vm, before, [UC_X86_REG_EDI, UC_X86_REG_ECX])
+        cases += 1
+
 for ready in [0, 1]:
     for freeze in [0, 1]:
         for local in [False, True]:
@@ -159,18 +176,24 @@ for capture in [0, 1]:
 
 for name in ['ammo'] + ['ammo_' + str(i) for i in range(2, 7)]:
     for component in [0, DATA + 0x2000]:
-        vm, end = machine(name)
-        vm.reg_write(UC_X86_REG_ECX, DATA)
-        put(vm, DATA + 0x1278, component)
-        put(vm, DATA + 0x2008, 25)
-        vm.mem_write(BLOCK + 0xa, b'\x01')
-        before = snapshot(vm)
-        execute(vm, end)
-        assert vm.reg_read(UC_X86_REG_EAX) == component
-        assert get(vm, BLOCK + 0x2c) == component
-        assert get(vm, DATA + 0x2008) == 25
-        preserved(vm, before, [UC_X86_REG_EAX])
-        cases += 1
+        for maxon, zeroon in [(0, 0), (1, 0), (0, 1), (1, 1)]:
+            vm, end = machine(name)
+            vm.reg_write(UC_X86_REG_ECX, DATA)
+            put(vm, DATA + 0x1278, component)
+            put(vm, DATA + 0x2008, 25)
+            vm.mem_write(BLOCK + 0xD, bytes([maxon]))
+            vm.mem_write(BLOCK + 0xE, bytes([zeroon]))
+            before = snapshot(vm)
+            execute(vm, end)
+            assert vm.reg_read(UC_X86_REG_EAX) == component
+            assert get(vm, BLOCK + 0x2c) == component
+            expected = 25
+            if component != 0:
+                if maxon: expected = 50000
+                elif zeroon: expected = 0
+            assert get(vm, DATA + 0x2008) == expected, (name, component, maxon, zeroon)
+            preserved(vm, before, [UC_X86_REG_EAX])
+            cases += 1
 
 for name in ['build_hp_b', 'sidebar_pts']:
     for left, right in [(700, 700), (700, 800), (800, 700)]:

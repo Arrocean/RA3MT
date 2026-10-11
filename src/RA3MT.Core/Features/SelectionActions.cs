@@ -9,6 +9,8 @@ public static class SelectionActions
     public static int Apply(IInjectionMemory mem, FeaturesData data, string version,
         string action, nuint imageBase, SelectionActionState? state = null)
     {
+        if (action == "oreminerestore")
+            return RestoreOreMines(mem, data, version, imageBase);
         if (action == "capture")
             throw new NotSupportedException("俘虏需要游戏归属切换流程，不能直接覆盖属主指针");
 
@@ -98,6 +100,125 @@ public static class SelectionActions
         return template >= 0x10000 && readByte(template + 0x245u) != 0;
     }
 
+    /// <summary>Eligible (body, drawable, tracker) triples for the game-thread rank bridge.
+    /// Same validation gates as RankDispatcher so host and consumer agree.</summary>
+    public static List<(uint body, uint drawable, uint tracker)> EnumerateRankTargets(
+        IInjectionMemory mem, FeaturesData data, string version, nuint imageBase)
+    {
+        var bodies = ReadSelection(address => mem.ReadU32(address), address => mem.Read(address, 1)[0],
+            imageBase + data.Globals.SelectionList.RvaFor(version));
+        var targets = new List<(uint, uint, uint)>();
+        foreach (var body in bodies)
+        {
+            if (!IsSelectedBody(address => mem.ReadU32(address), address => mem.Read(address, 1)[0], body)) continue;
+            var drawable = mem.ReadU32(body + 0xF4u);
+            var tracker = mem.ReadU32(body + 0x3CCu);
+            if (drawable < 0x10000 || tracker < 0x10000) continue;
+            if (!CanGainExperience(address => mem.ReadU32(address), address => mem.Read(address, 1)[0], tracker)) continue;
+            targets.Add((body, drawable, tracker));
+        }
+        return targets;
+    }
+
+    private static uint LocalSide(IInjectionMemory mem, FeaturesData data, string version, nuint imageBase)
+    {
+        var root = mem.ReadU32(imageBase + data.Globals.PlayerRoot.RvaFor(version));
+        return root < 0x10000 ? 0 : mem.ReadU32(root + 0x28u);
+    }
+
+    /// <summary>Capturable targets: still selected, cross-linked, and NOT already on the
+    /// local side (capture bridge also re-checks in the game thread).</summary>
+    public static List<(uint body, uint drawable)> EnumerateCaptureTargets(
+        IInjectionMemory mem, FeaturesData data, string version, nuint imageBase)
+    {
+        var side = LocalSide(mem, data, version, imageBase);
+        var bodies = ReadSelection(address => mem.ReadU32(address), address => mem.Read(address, 1)[0],
+            imageBase + data.Globals.SelectionList.RvaFor(version));
+        var targets = new List<(uint, uint)>();
+        if (side == 0) return targets;
+        foreach (var body in bodies)
+        {
+            if (!IsSelectedBody(address => mem.ReadU32(address), address => mem.Read(address, 1)[0], body)) continue;
+            if (mem.ReadU32(body + 0x418u) == side) continue;
+            var drawable = mem.ReadU32(body + 0xF4u);
+            if (drawable < 0x10000) continue;
+            targets.Add((body, drawable));
+        }
+        return targets;
+    }
+
+    /// <summary>Destroyable targets: still selected with a live HP component
+    /// (kill bridge re-validates cross-links and hp in the game thread).</summary>
+    public static List<(uint body, uint drawable, uint hp)> EnumerateKillTargets(
+        IInjectionMemory mem, FeaturesData data, string version, nuint imageBase)
+    {
+        var bodies = ReadSelection(address => mem.ReadU32(address), address => mem.Read(address, 1)[0],
+            imageBase + data.Globals.SelectionList.RvaFor(version));
+        var targets = new List<(uint, uint, uint)>();
+        foreach (var body in bodies)
+        {
+            if (!IsSelectedBody(address => mem.ReadU32(address), address => mem.Read(address, 1)[0], body)) continue;
+            var drawable = mem.ReadU32(body + 0xF4u);
+            var hp = mem.ReadU32(body + 0x33Cu);
+            if (drawable < 0x10000 || hp < 0x10000) continue;
+            targets.Add((body, drawable, hp));
+        }
+        return targets;
+    }
+
+    // Ore node layout verified live (2026-10-11): body+0x398 → state C;
+    // [C+4] → container O; [O+8] = amount, [C+0x14] = extracted;
+    // remaining = [O+8] - [C+0x14] (matches the FINAL3 ore accessor site).
+    private const uint OreStateOff = 0x398;
+
+    /// <summary>Restore every selected ore node to 100000 and reset the extracted
+    /// counters of all states pointing at the same container.</summary>
+    public static int RestoreOreMines(IInjectionMemory mem, FeaturesData data, string version, nuint imageBase)
+    {
+        var bodies = ReadSelection(address => mem.ReadU32(address), address => mem.Read(address, 1)[0],
+            imageBase + data.Globals.SelectionList.RvaFor(version));
+        var restored = 0;
+        foreach (var body in bodies)
+        {
+            var state = mem.ReadU32(body + OreStateOff);
+            if (state < 0x10000) continue;
+            var container = mem.ReadU32(state + 4u);
+            if (container < 0x10000) continue;
+            var amount = mem.ReadU32(container + 8u);
+            if (amount is 0 or > 5_000_000) continue;
+            if (mem.ReadU32(state + 0x14u) > amount) continue;
+            // 所有指向同一容器的采集状态一起清零（深度≤2 的指针图遍历，带界）
+            var seen = new HashSet<uint> { body };
+            var queue = new Queue<uint>();
+            queue.Enqueue(body);
+            var resets = 0;
+            while (queue.Count > 0 && resets < 64)
+            {
+                var node = queue.Dequeue();
+                byte[] block;
+                try { block = mem.Read(node, 0x800); }
+                catch { continue; }
+                if (block.Length < 0x800) continue;
+                var cand = BitConverter.ToUInt32(block, (int)OreStateOff);
+                if (cand >= 0x10000 && mem.ReadU32(cand + 4u) == container)
+                {
+                    mem.Write(cand + 0x14u, BitConverter.GetBytes(0u));
+                    resets++;
+                }
+                for (var off = 0; off + 4 <= 0x800; off += 4)
+                {
+                    var next = BitConverter.ToUInt32(block, off);
+                    if (next < 0x1000000 || next > 0x14000000) continue;
+                    if (next == container || !seen.Add(next)) continue;
+                    if (queue.Count < 64) queue.Enqueue(next);
+                }
+            }
+            mem.Write(container + 8u, BitConverter.GetBytes(100000u));
+            restored++;
+        }
+        return restored;
+    }
+
     private static bool ApplyOne(IInjectionMemory mem, string action, uint body, SelectionActionState? state)
     {
         switch (action)
@@ -115,8 +236,13 @@ public static class SelectionActions
             case "freeze2":
             case "speedrestore":
             {
-                var locomotors = ReadLocomotors(address => mem.ReadU32(address), body, action.EndsWith('2') || action == "speedrestore");
-                var speed = action.StartsWith("freeze", StringComparison.Ordinal) ? 0f : 500f;
+                var locomotors = ReadLocomotors(address => mem.ReadU32(address), body, action == "speedrestore");
+                var speed = action switch
+                {
+                    "speed2" => 10f,
+                    "freeze1" => 0f,
+                    _ => 500f,
+                };
                 var changed = false;
                 foreach (var locomotor in locomotors)
                 {

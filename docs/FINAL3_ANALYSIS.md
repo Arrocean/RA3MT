@@ -55,33 +55,39 @@ FINAL3主脚本明确标注：
 热键LevelUP记录文件偏移0x92315：地址payload偏移0x92348、长度10、XOR种子2得到`iEnable+20`，请求值字符串`0x08`。
 独立遍历所有同key地址payload确认：Level/速度1/速度2/冻结/恢复速度/HP MAX/MIN/NORMAL/ID/摧毁/Base/Copy/WeNeedBack 全写 iEnable+20，分别对应请求码08/01/02/03/04/05/06/07/09/0A/0B/0D/0C；弹药1/2都写 iEnable+12，威胁 Max/Min/Normal写 iEnable+13，OreMine写 iEnable+14。
 
-### 真正晋级与摧毁调用
+### 晋级函数的重打包配对结果
 
-晋级桩：
+FINAL3旧EA调用 `push 0; push 1; push 3` 的真实重打包对应已确认：
 
-```asm
-mov ecx,eax  ; ExperienceTracker
-push 0
-push 1
-push 3
-call ra3_1.12.game+35C200
-ret
-```
+| 版本 | 函数VA | RVA | 长度 | 返回 |
+|---|---:|---:|---:|---:|
+| 1.13 | 0x785600 | 0x385600 | 99 bytes | ret 0xC |
+| 1.12 | 0x79A840 | 0x39A840 | 99 bytes | ret 0xC |
 
-摧毁桩：
+两版21字节入口保护和99字节带通配地址的完整AOB各自唯一；非地址指令布局一致。
+ECX是ExperienceTracker，参数1是正的晋级增量次数，参数2/3是传给XP award的两个标志。
+函数每轮通过阈值查询取得下一等级所需经验，再调用自然XP award；因此请求3表示最多尝试三级，
+会在资格、等级上限或经验路径拒绝时提前结束，并不保证一定到三星。
 
-```asm
-mov ecx,eax  ; Body
-push 0
-push 19
-push 6
-call ra3_1.12.game+39EA50
-ret
-```
+阈值/XP处理器：1.13 `0x5213C0` / `0x76DF90`，1.12 `0x538F90` / `0x781EB0`。
+已生成 `artifacts/final3/rank_pair.json`，并运行 `tools/analysis/verify_final3_rank.py`：
+两版本结构、相对调用、参数顺序、正/非正次数、四种标志组合和提前停止共160个Unicorn模拟用例通过。
+模拟替换了两个游戏helper，仅证明调用约定和控制流，不证明游戏资格或画面效果。
 
-这给出了此前缺失的游戏调用与线程分派组合。EA旧RVA不等于本机重打包1.12/1.13的RVA，必须先定位函数并验证参数语义、完整调用约定及浮点/SIMD保存，再移植。
+尚未接入RA3MT：需要把请求放进已证明的游戏线程分派桥，并为1.13/1.12制作请求状态的原子/生命周期处理。
+直接从WPF线程调用0x785600或0x705F60仍不安全。
+工程新增 `RankApiResolver`：只读验证版本入口、完整99字节特征、上下文全局和两个相对helper目标，
+`SelfCheck ranktest` 对1.12/1.13真实镜像通过，并拒绝每版4种篡改（指令、全局、两个helper位移）。
+这保证将来动作桥拿到的目标仍是配对函数，但不执行该函数。
 
-### 速度与正常生命
+### 晋级请求桥离线验证
+
+新增 `RankDispatcher.Emit`，对应未来游戏线程CALL目标；邮箱要求state=1时原子领取为2，
+验证Body/Drawable/Tracker/选中位/属主/经验资格链，调用配对rank API（ECX tracker，push0/1/3），
+记录rank前后并将状态置3成功或4拒绝。FXSAVE/FXRSTOR保护x87/MXCSR/XMM，保存全部GPR/EFLAGS/ESP。
+未解决的游戏对象销毁竞态仍需在游戏线程语义下处理；非空旧堆地址不是安全证明。
+`test_rank_dispatcher.py`现有218个Unicorn用例通过，覆盖16栈对齐、4种rank结果、标志、递归state2、
+所有关系/资格/低地址门禁、不可写payload和浮点/寄存器恢复。仅离线验证，未接入money_h2，未向游戏注入。
 
 - FINAL3把加速/低速/冻结前的速度保存在Locomotor+0x40，再恢复到+8。
 - 操作+0x200数组第一项，并根据第二项+0x18检查进行处理；仍存在空指针和模式假设，不能直接复制。
@@ -103,11 +109,16 @@ FINAL3 ChangeID在排除几个模板ID后仍直接写Body+0x418，不调用完�
 资金改为请求一次加100000并清标志，而非无限每次增加；协议点数写15，而非99。
 Map桩先原始写入再写100000，单位动作在游戏线程内执行。
 
-## 当前项目处理原则
+## 游戏线程动作桥进展（未接入生产钩子）
 
-本轮用户要求先停下，旧持久修复目标已暂停；未启用新的自动继续目标。
-未改RA3MT生产代码、未执行原FINAL3修改器、未向游戏写入。
-此前v12保留作历史实验版，不应被当作按FINAL3完整移植的结果。
+已新增 `RankRequestMailbox` 与 `SelfCheck rankmailboxtest`，邮箱位于未来MasterCode块+0x1800：
+state +0x00、Body +0x04、Drawable +0x08、Tracker +0x0C、rankBefore/+After +0x10/+0x14。
+提交只允许state 0/3/4，先写20字节目标快照，最后写state=1；state1/2拒绝覆盖；
+非法指针和写入失败不发布请求。12个离线生命周期/发布顺序用例通过。
+真正的 x86 游戏线程消费桩尚在实现/审查中，不能把邮箱测试当成游戏效果验证。
+
+以FINAL3作为主要参考；当前生产版本没有执行FINAL3二进制，也没有向游戏写入。
+此前v13保留作历史实验版；新的生产改动须通过双版本静态配对、离线执行测试和受控实机测试。
 
 下一步以FINAL3作为主要参考：
 

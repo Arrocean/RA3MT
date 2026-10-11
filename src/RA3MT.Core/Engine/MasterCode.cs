@@ -30,6 +30,8 @@ public sealed class MasterCode
         ["revealmap"] = 0x08,
         ["xp999"] = 0x09,
         ["ammo"] = 0x0A,
+        ["threatmax"] = 0x0D,
+        ["threatzero"] = 0x0E,
             };
 
     public const uint BlockSize = 0x2000;
@@ -57,6 +59,15 @@ public sealed class MasterCode
     public bool Installed { get; private set; }
 
     private readonly IInjectionMemory _mem;
+    private readonly nuint _rankApi;
+    private readonly nuint _captureApi;
+    private readonly nuint _killApi;
+    public bool RankBridgeEnabled => _rankApi != 0;
+    public bool CaptureBridgeEnabled => _captureApi != 0;
+    public bool KillBridgeEnabled => _killApi != 0;
+    public RankRequestMailbox? RankMailbox { get; private set; }
+    public CaptureRequestMailbox? CaptureMailbox { get; private set; }
+    public KillRequestMailbox? KillMailbox { get; private set; }
     private readonly nuint _rootVa;             // player-context root global
     private readonly Dictionary<string, HookResolution> _sites;
     private readonly Dictionary<string, string> _stubBySite;   // site id -> stub id
@@ -64,9 +75,13 @@ public sealed class MasterCode
     private readonly Action<string>? _log;
 
     public MasterCode(IInjectionMemory mem, nuint imageBase, nuint playerRootVa,
-        Dictionary<string, HookResolution> sites, IReadOnlyDictionary<string, HookDef> defs, Action<string>? log)
+        Dictionary<string, HookResolution> sites, IReadOnlyDictionary<string, HookDef> defs, Action<string>? log,
+        nuint rankApi = 0, nuint captureApi = 0, nuint killApi = 0)
     {
         _mem = mem;
+        _rankApi = rankApi;
+        _captureApi = captureApi;
+        _killApi = killApi;
         _rootVa = playerRootVa;
         _sites = sites;
         _stubBySite = defs.ToDictionary(kv => kv.Key, kv => kv.Value.Stub ?? kv.Key);
@@ -88,12 +103,46 @@ public sealed class MasterCode
         {
             if (!_stubBySite.TryGetValue(id, out var stubId) || !StubGen.Handles(stubId)) continue;
             var siteEnd = site.Va + (nuint)site.Displaced.Length;
-            var code = StubGen.Emit(stubId, Block + off, siteEnd, Block, _rootVa);
+            var bridgeOffsets = new List<uint>();
+            if (RankBridgeEnabled) bridgeOffsets.Add(RankDispatcher.CodeOffset);
+            if (CaptureBridgeEnabled) bridgeOffsets.Add(CaptureDispatcher.CodeOffset);
+            if (KillBridgeEnabled) bridgeOffsets.Add(KillDispatcher.CodeOffset);
+            var code = bridgeOffsets.Count != 0 && stubId == "money_h2"
+                ? RankDispatcher.EmitMoneyBridge(Block + off, siteEnd, Block, _rootVa, bridgeOffsets.ToArray())
+                : StubGen.Emit(stubId, Block + off, siteEnd, Block, _rootVa);
             var next = checked(off + (uint)((code.Length + 15) & ~15));
             if (next > CaptureCount)
                 throw new InvalidOperationException($"Stub area overlaps capture data at hook '{id}'");
             layouts.Add((id, code));
             off = next;
+        }
+
+        if (RankBridgeEnabled)
+        {
+            if (!_sites.ContainsKey("money_h2")) throw new InvalidOperationException("Rank bridge requires money_h2");
+            var dispatcher = RankDispatcher.Emit(Block + RankDispatcher.CodeOffset, Block, _rankApi, _rootVa);
+            if (RankDispatcher.CodeOffset + (uint)dispatcher.Length > CaptureDispatcher.CodeOffset)
+                throw new InvalidOperationException("Rank dispatcher overlaps capture dispatcher");
+            _mem.Write(Block + RankDispatcher.CodeOffset, dispatcher);
+            RankMailbox = new RankRequestMailbox(_mem, Block);
+        }
+        if (CaptureBridgeEnabled)
+        {
+            if (!_sites.ContainsKey("money_h2")) throw new InvalidOperationException("Capture bridge requires money_h2");
+            var dispatcher = CaptureDispatcher.Emit(Block + CaptureDispatcher.CodeOffset, Block, _captureApi, _rootVa);
+            if (CaptureDispatcher.CodeOffset + (uint)dispatcher.Length > KillDispatcher.CodeOffset)
+                throw new InvalidOperationException("Capture dispatcher overlaps kill dispatcher");
+            _mem.Write(Block + CaptureDispatcher.CodeOffset, dispatcher);
+            CaptureMailbox = new CaptureRequestMailbox(_mem, Block);
+        }
+        if (KillBridgeEnabled)
+        {
+            if (!_sites.ContainsKey("money_h2")) throw new InvalidOperationException("Kill bridge requires money_h2");
+            var dispatcher = KillDispatcher.Emit(Block + KillDispatcher.CodeOffset, Block, _killApi, _rootVa);
+            if (KillDispatcher.CodeOffset + (uint)dispatcher.Length > RankRequestMailbox.Offset)
+                throw new InvalidOperationException("Kill dispatcher overlaps mailboxes");
+            _mem.Write(Block + KillDispatcher.CodeOffset, dispatcher);
+            KillMailbox = new KillRequestMailbox(_mem, Block);
         }
 
         off = StubArea;
@@ -299,7 +348,7 @@ public static class StubGen
         a.Pushfd();
         c.Flag("scpoints");
         a.JneShort(1);
-        a.MovM32RegDisp8Imm32(R.Eax, 0x34, 99);
+        a.MovM32RegDisp8Imm32(R.Eax, 0x34, 15);
         a.Label(1);
         a.Popfd();
         a.Db(0x8B, 0x78, 0x34);                           // mov edi,[eax+34]
@@ -600,16 +649,29 @@ public static class StubGen
         return c.Fin();
     }
 
-    // Legacy threat accessor, not ammunition.
+    // 威胁等级访问器（旧名 ammo 站点族）：eax=[ecx+0x1278] 为 RedAlert 威胁分量，+8 为威胁值。
+    // EA FINAL3 Danger Level 语义：标志=1 → [分量+8]=50000（最大）；=2 → 0（归零）。
+    // 拆成两个独立开关，同开时"最大"优先；恢复=双关（交还游戏自然重算）。
     // ammo: mov eax,[ecx+1278]
     private static byte[] Ammo(nuint stubVa, nuint siteEnd, nuint block)
     {
         var c = new C(stubVa, siteEnd, block);
         var a = c.A;
         a.Db(0x8B, 0x81, 0x78, 0x12, 0x00, 0x00);         // mov eax,[ecx+1278]
-        // +0x1278 resolves RedAlertThreatLevel, not a weapon. Preserve the
-        // original accessor and diagnostic capture without mutating threat.
-        a.MovM32AbsReg(R.Eax, (uint)(block + MasterCode.DiagWeaponEax));
+        a.MovM32AbsReg(R.Eax, (uint)(block + MasterCode.DiagWeaponEax)); // 诊断捕获
+        a.Pushfd();
+        a.TestRegReg(R.Eax, R.Eax);
+        a.JeShort(1);                                     // 无威胁分量 → 不写
+        c.Flag("threatmax");
+        a.JneShort(2);
+        a.MovM32RegDisp8Imm32(R.Eax, 0x08, 50000);        // [eax+08] = 50000（最大）
+        a.JmpShort(1);
+        a.Label(2);
+        c.Flag("threatzero");
+        a.JneShort(1);
+        a.MovM32RegDisp8Imm32(R.Eax, 0x08, 0);            // [eax+08] = 0（归零）
+        a.Label(1);
+        a.Popfd();
         return c.Fin();
     }
 

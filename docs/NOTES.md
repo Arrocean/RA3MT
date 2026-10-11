@@ -1,5 +1,196 @@
 # 逆向笔记（重打包版 1.12/1.13）
 
+## Round 3 收口（离线核验；仅以下新增事实）
+
+- 新增严格 `src/RA3MT.Core/Target/SpawnApiResolver.cs`：双版本重建并比对 304B wrapper 完整字节、12 个 rel32 CALL 目标及 manager VA（按 imageBase + RVA）；仅返回地址，不调用、不安装、不连接生产桥。SelfCheck `spawntest` 通过两版真实磁盘映像并拒绝 38 项改动（函数体、call displacement、manager operand、短读）；Release build 0 warning/0 error。该身份解析不能证明运行时线程/生命周期/单位适配安全。
+- 双版本核对实际由 wrapper 调用的 owner resolver：1.13 RVA `0x4647A0` / 1.12 RVA `0x4793B0` 为 thiscall(ECX=owner-record)，无栈参数、`ret`。它向 global VA `0xCE21A4` / `0xCDDE84` 的 helper `0xFF4A0` / `0x1175D0` 查类别（helper 读 global object+`0x148`，类别 5/6/7/8 返回 true）；global 与 owner ECX 在解引用前都无 null guard。helper 为 true 且 owner+`0x8C` 非空时返回 `[owner+0x8C]+0x10`（该最终指针不验证，可能为 null）；否则——包括 helper false 或 owner+`0x8C` 为空——直接返回 `[owner+0xAC]`，也不验证，可能为 null。字段名义类型及 enum 业务含义未证；这是 map startup owner-record 路径，不能当作任意 `Side*` API。另有独立构造器 fallback：1.13 RVA `0x3EB718` 在 request+4 为空时读取 `[0xCF214C]+0x30` 写入 Body+`0x418`；1.12 对应 global VA 为 `0xCEDE2C`。这不是 resolver 的 null/有效性保证。
+- startup hash→template 链两版均已核对：1.13 caller RVA `0x22E5A3` 先调 key getter `0x4629C0`（返回 `[*arg+0x34]`），取 `[*result]` hash，再以全局 VA `0xCF0108` 为 hash-table owner 调查找器 `0x40D5B0`；1.12 配对 RVA `0x2442B3`、getter `0x477760`、全局 VA `0xCEBDE8`、查找器 `0x422510`。两查找器分别调通用 map finder `0x40D2C0` / `0x11F110`，map header 为 owner+`0x28`。1.12 finder 的调用 ECX=`map+0x28`，通过栈上传入 key/out 参数；helper 以 key 指针取 uint hash，按 bucket count 取模、索引 buckets 并沿 node+8 链比较 node[0]，以 out 参数返回 iterator/value 指针（`ret 8`）。外层 hash lookup 检查 bucket/key，命中返回 node+4 的 value，未找到/sentinel 返回 null（`ret 4`）。startup caller 将结果直接当 wrapper arg2；其模板-like类型由后续 Body 构造器处理验证，但名义类型和任意运行时 hash 的合法性仍不能单由这一条路径推出。全局/桶数的 null/零保护不足。
+- startup caller 参数源进一步配对：1.13 outer helper `0x22E510` / 1.12 `0x244220`；其 direct caller 分别 `0x240232` / `0x255EA2`。在 inner wrapper call `0x22E64E` / `0x24435E` 处 arg2 是上述 hash lookup 返回项，arg3 是 waypoint记录 `+0xC/+0x10/+0x14` 填出的局部 Coord3D（经 terrain manager 高度转换），arg4 来自 startup side/name object，arg5 来自 outer arg3，arg1 来自 outer arg1；wrapper 自己忽略 arg1/arg5，所以不必假设它们为0或 `[side+0x10]`。第二个 caller `0x22EACD` / `0x2447DD` 也显式推入五个值、`add ESP,0x14`。Direct CALL byte candidates each version exactly two;都属于 startup/map path而非可复用的 match-time spawn contract。
+- hash lookup 配对：1.13 `0x40D5B0` / 1.12 `0x422510` 接收 ECX=hash-table owner、栈 arg1=uint hash、RET4；table header 在 owner+28，分别调用通用 map-find `0x40D2C0` / `0x11F110` 执行 bucket/chained-node 查找。找不到结果时返回 NULL；找到时比较 hash，并返回 `foundRecord+4` 所指内容。地图 caller `0x22E5A3` 先调 `0x4629C0` 返回 hash-record `+34`，然后该值作为 hash 传给 helper；此 startup path 结果在 wrapper中直接当 template pointer，但不能推论所有哈希输入都返回 `ObjectTemplate*`。另一路 startup hash 有 237 个CALL-byte候选，须按指令边界分类，不能当唯一模板 lookup。
+- 1.13 caller `0x22E64E` / `0x22EACD`、1.12 `0x24435E` / `0x2447DD` 为 wrapper 唯二 rel32 CALL 候选（字节扫描，前后皆验证）；地点值来自 caller 堆栈 waypoint/记录结构，并经过 terrain manager vfunc `+0x20` 和高度处理，不是屏幕XY。wrapper arg4 实为 startup side/name owner-record；owner resolver按上段继续取 owner context。map startup path既不能代表 match-time外部线程合同，也未验证所有单位模板接受该路径。
+- Body 构造器开头 request+0 被当作 pointer 解引用，后续复制模板列出的组件、写 Body+310组件表；Body+4 被解析器提取后作为创建上下文域之一，但其名义类型仍不明。组件部分失败、后期 factory setup 没有完整事务回滚。
+- 两版位姿 helper的 disk disassembly复核与已有 note一致：1.13 `0x40CFC0/0x40C430/0x3D6A30`、1.12 `0x421FE0/0x421450/0x3EC240`（Coord3D*、yaw按值、矩阵指针）；位置是 world/engine-space，不含屏幕转换。
+- 随地建造玩家路径审查完成但未找到安全移植点：1.13 StructurePlacementBehavior ctor RVA `0x30EBA0` 设两张接口表（VA `0xC2CF48/0xC2CE18`），已查非默认槽多为getter/默认实现而非 permission validator；AssistedPlacementInfoBehavior ctor `0x309880`、method `0x3098F0`（RET `0x10`）查 global hash table、遍历 stride `0x14` 记录并调用 template/component predicate `0x109C70`，唯一直接 CALL `0x63CCFA`，没有证据连到玩家 UI/command/free-build/radius permission。1.12 两组件对应 ctor/vtable 尚未独立配对。已知 PlacementGrid worker/iterator/retry 全为 AI candidate search 并含占格、碰撞和 16 项 footprint/bounds 检查；EA `0xE7565` 不可映射，也禁止以裸 `75 0C/EB 0C` 签名改分支。当前结论：玩家 permission站点尚未定位，保留验证/碰撞/bounds，不做跳过。
+
+## Round 2 收口（以下结论优先于历史猜测）
+
+- 确认地图开局 spawn wrapper RVA：1.13 `0x22E3E0`，1.12 `0x2440F0`，长度 304B。cdecl：`Body* spawn(unused, ObjectTemplate*, Coord3D*, Side/Player*, unused)`。第 1/5 参数全函数未读；位置是第 **3** 参数，不是历史 note 的 arg5。严格栈证据：entry ESP=S；局部0x3C+三个push后ESP=S-0x48，owner `[esp+0x58]`=S+0x10；再push EBP保留、angle helper RET4后ESP=S-0x4C，位置 `[esp+0x58]`=S+0xC，模板 `[esp+0x54]`=S+8。与 FINAL3 `(0,template,&pos,side,[side+10])` 调用合同一致（ignored slots 不必解引用旧 side+10）。
+- 直接调用者仅两处/版：1.13 `0x22E64E/0x22EACD`、1.12 `0x24435E/0x2447DD`，均 push5/addESP0x14；都在地图开局 `Player_%d_Start` / `Player_%d_Rally` / `BASE_FLAG_%d` 流程。模板来自 side startup hash → global lookup（1.13 VA `0xCF0108`、helper RVA `0x40D5B0`）；位置来自 waypoint XYZ 并经 terrain manager 调整高度。可以否定历史“附近候选只是链表遍历”的一概判断，但不代表证明任意 match-time 外部请求安全。
+- wrapper 调用 owner resolver、通用 factory、默认 yaw setter、Coord3D setter、模板属性查询、Body 激活/注册与可选 locomotor setup。null template 能安全早退；owner/position 未guard，必须有效；factory 自身 OOM 分支仍可能解引用null，后期 setup/组件失败未见完整rollback。不以外部WPF/remote thread调用；任何后续生产实现必须走游戏线程并校验当前match模板/side/manager存活。
+- 新增 `tools/analysis/verify_spawn_wrapper.py`：双版本**全304B**精确指令+12相对call+manager全局匹配，每版18篡改拒绝；Unicorn 12 mock用例验证模板/位置/side参数读取、ignored参数、request blob构造、null模板/null工厂结果、callee保存寄存器及cdecl栈不清理、初始化调用顺序。全部通过；mock不验证真实构造/回调、可选locomotor分支、线程或游戏效果。
+- 新增 `tools/analysis/inspect_creation.py` 只读磁盘，显示统一RVA并用rel32字节扫描列出factory每版55个candidate xref；避免整段linear disasm提前停止误报0个caller，也避免混用VA/RVA。
+- 变换契约：request+14=engine-space三float位置，+18=float* radians yaw，+1C=48B矩阵优先；1.13 helpers `0x40CFC0/0x40C430/0x3D6A30` 配对1.12 `0x421FE0/0x421450/0x3EC240`。角度helper规范到(-π,π]，不能误称XYZ规范；request+8=28B opaque blob原样复制至Body+80..9B，不是栈局部。
+- 随地建造：此前网格iterator向上链已由 `GetAIStructurePlacementLocation.cpp` 确认为AI候选放置搜索，不能当玩家permission bypass。下一玩家组件线索：1.13 StructurePlacementBehavior ctor `0x30EBA0` 设置VA方法表`0xC2CF48/0xC2CE18`，已查非默认槽为interface getter，不是validator；AssistedPlacementInfoBehavior ctor`0x309880`、方法`0x3098F0`遍历0x14字节记录并调用`0x109C70`。尚无安全FreeBuild branch；保留碰撞与bounds检查。
+- 下一轮具体可实现方向：制作严格C# spawn API resolver（暂不自动安装）及fake-only mailbox/dispatcher回归；同时配对hash lookup与确认Body+4模板包装链、side→context；追玩家组件permission而非AI grid，坐标先复用选中目标world XYZ，不依赖鼠标转换。四功能仍未完成，保持目标active。
+
+## v18f 离线静态续查（遵守不操作运行中游戏）
+
+- 本轮只分析了磁盘上的 1.12/1.13 映像、现有脚本和源码；未附加、读取或写入运行中游戏，未模拟点击、调试或启停游戏。无意间查看到的进程清单信息不用于逆向，也未对该进程做任何操作。
+- PlacementGrid 静态配对确认：网格 worker 1.13 RVA `0x111980` / 1.12 `0x128E20` 访问 `[this+0x24]` 网格，入口后调用 cell-test，再检查邻格和 16 个 footprint/bounds float 条件；返回小状态码（RET 0x14），属于**占格/放置验证**而不是创建对象。range iterator 1.13 `0x111C60` / 1.12 `0x129100` 对格子调用该 worker，允许时向虚回调传计算的 X/Y；唯一直接 caller 为 1.13 `0x4E8C26` / 1.12 `0x500848`。进一步向上追到 1.13 `0x4E8710` / 1.12 `0x500330` 的 5 次重试路径；其中 1.13 `0x4E87DB` 的源码字符串是 `GetAIStructurePlacementLocation.cpp`，确认这条 iterator/candidate 路径属于 **Skirmish AI 放置搜索**，不是玩家 FreeBuild/radius 权限。worker 的候选早期门是 `test eax,eax; je +0x17`（1.13 `0x1119CE-0x1119D0` / 1.12 `0x128E6E-0x128E70`），不是 EA Free Build `75 0C` 的直接等价；拒绝路径仍有 16 项边界检查，不能安全单点跳过。字节 `75 0C` 在 .text 中 1.12/1.13 分别约 1193/1173 命中，`EB 0C` 约 494/496 命中，裸签名不具辨识度。EA RVA `0xE7565` 在重打包版本也不等价。因此仍未找到可用的随地建造 production patch；下一静态方向是 StructurePlacementBehavior/AssistedPlacementInfo 的玩家组件虚函数表，而不是 AI 路径。
+- Free Build script #12 `[MustCode+1201] db EB 0C` 的最合理静态读法：主脚本 `globalalloc(MustCode,0x3000)` 且 `MustCode+1200` 为 `mov eax,[game+E7565]; ret`，其机器码为 `A1 imm32`，imm32 正位于 +1201；因此脚本较可能解引用该 operand 再把 EA 地址 `0x4E7565` 的分支从 `75 0C` 改成 `EB 0C`。CE5.5 解析语义未用 CE parser 独立验证，故仍标 hypothesis；不能映射到重打包版。
+- `GenericObjectCreationNugget.cpp` 源码名字符串 xref（1.13 `push 0xC29AE8`@`0x3E919E` / 1.12 `push 0xC27360`@`0x3FE24E`）位于较大调用者中，该调用者 RVA 约 1.13 `0x3E98F0`，不是早先误指的 `0x3E85C0`。1.13 `0x3E9E1D` 调真实 RVA `0x102410`（1.12 `0x11A210`），传入局部 request/descriptor；深入追踪表明这是强 Object/Body factory 候选，不是单纯 manager accessor：1.13 `0x10241F` push `0x4FC` 后调用 freelist 分配器 RVA `0x3062E0`，随后 push 1 / push request 并以 ECX=分配指针调用 constructor RVA `0x3EAF30`（1.12 `0x3FFFE0`）；constructor 在 1.13 `0x3EAF98` 写 Body 标签 `0xC57340`（1.12 `0xC54BB0`）并初始化字段/接口表。返回的对象具有组件列表 `+0x310`、Drawable `+0xF4`、HP `+0x33C`、XP `+0x3CC`、side `+0x418` 等布局。之后调用者写 `[result+0x418]` 并调用注册/初始化 helper；仍未完整确认 factory request 字段、生命周期/失败合同，不能连接生产。目标 `0x3E85C0`（近似配对 1.12 `0x3FD670`）反而是 8 个栈参数的 thiscall 处理函数：ECX=context、首栈参数来自 ESI/EDI，入口读 `[arg+0x308]` 等既有对象字段；三个直接调用者分别在 1.13 `0x3EA128/0x3EA167/0x3EA511` 与 1.12 `0x3FF1D8/0x3FF217/0x3FF5C1`，函数 epilogue `ret 0x20`，调用者不消费 EAX。更像更新/处理已有对象，不能当 CreateUnit。邻近 RVA `0x502420` 同样不构成新对象 factory 证据。
+- factory constructor 的 request 至少 0x20 字节（当前只读静态推导）：`+0` 为必需 ObjectTemplate 指针（较早就解引用，晚期 null check 不能当保护）；`+4` owner/context（有全局 fallback）；`+8` 可选七 DWORD 初始化/变换数据；`+C` 注册/context ID；`+10` 写 Body+E4 的 metadata；`+14` 候选位置指针；`+18` 候选朝向 float*；`+1C` 候选完整变换，优先于 `+18`。位置/变换名义类型仍须进一步证明。constructor 从模板 `+194/+1A8/+1AC` 的组件记录数组构造 `Body+310` 的 null-terminated 组件列表并注册；部分组件失败不会统一回滚，后续可能在首个 null 截断；分配失败路径也未证明可安全拒绝。因此仅确认 factory 身份，不能暴露可调用 spawn API。
+- 新工具 `tools/analysis/verify_object_factory.py` 只读磁盘确认两版 factory 指令、分配 0x4FC、三个 CALL edge、constructor Body tag，并逐版拒绝六种锚点篡改（通过）；`tools/analysis/verify_spawn_hashes.py` 只读 BIG4/XML 校验四个 hash 无歧义名称（通过）。均未调用 API 或安装钩子。
+- 结论：旧 FINAL3 的 EA RVA `0x205240` 是参考脚本中唯一直接 CreateUnit 调用，但不是重打包版 1.12/1.13 的已配对 ABI。已识别的 generic factory 使用单 request 指针 + constructor thiscall，而非已确认的旧五栈参数入口。owner/template/position 名义类型、线程/manager 约束、对象生命周期和失败回滚仍未完整证实；复制/MCV/增援不能连接生产桥。随地建造属于另一条 placement permission 分支，不能假设 CreateUnit 成功即已解决。
+- Free Build 脚本的更正见下方本节第 4 项：EA 老脚本更像通过指针把游戏 RVA `0xE7565` 的两字节分支 `75 0C` 改为 `EB 0C`；这仍不是当前两版本的已定位摆放限制站点。
+- FINAL3 模板 hash 的离线名称映射已确认：`0x28DA574E`=`AlliedMCV`，`0xAF4C0DA5`=`SovietMCV`，`0x1C2EF767`=`JapanMCV`；WeNeedBack 默认 `0x6586A5A0`=`JapanCommandoTech1`（日本武士，不是基地车）。证据为 `Data/WBStringHashes.big` 的 `data\stringhashes.xml` 条目（偏移 `0x772300` / 7,807,744，长度 4,308,927），XML 原始行分别 6,935 / 29,831 / 4,815 / 17,146，后段存在重复记录。这只确认标识符，不证明生成 ABI/归属/合法性。
+- FINAL3 动作契约仍有安全缺口：GetMeBase 将 `[ID]` 写入创建上下文后按 Allied/Soviet/Japan 顺序查询并生成；GetUnitData2 用 EAX=hash、ECX=`[game+0x8E6C58]` 调旧 EA `+0x3E4230`；CreateUnit 读取上下文 `+0x10` owner、位置指针与 template ECX，再调用旧 EA `+0x205240`，caller 清栈 `0x14`。位置 helper 读取 `[game+0x8DAEFC]` 的 `+0x3C/+0x40/+0x44`，调用旧 EA `+0x1ED4A0` 做鼠标到地图坐标转换，不是直接屏幕 XY。WeNeedBack 从 `iEnable+24` 取 hash 循环 8 次，并对结果直接调 `SetUnitState`/晋级，缺乏现代边界/有效性/所有权验证；Copy For Me 取旧全局 `0x8E9838` 做模板查询，只创建同模板对象，不复制生命/经验/武器等状态。三者均不能当成已准备好的安全现代参数合同。
+- WBStatic manifest 新证据：未压缩 manifest 的 header 48 字节，LE@12=count=12123，记录每项 48 字节（12 个 LE uint32）；实例 hash 在 field1，name offset 在 field6，source offset 在 field7。name buffer base=48+count*48+header[32]+header[36]=`0xD7D51`，source buffer base=`0x1518E2`，末尾与文件大小 1,566,871 精确一致。记录 10969/11123/11282/11104 独立把 MCV/默认增援 hash 配到 `GameObject:AlliedMCV/JapanMCV/SovietMCV/JapanCommandoTech1` 及 `DATA:allied/units/alliedmcv.xml` / 对应 japan、soviet source。field0=`0x942FFF2D` 是共享 GameObject 资源类型，与旧笔记误称为类型 hash 的字段应区分；不代表每个单位都具有同一个实例 hash。下一步可核对记录 field8/9 与 bin/relo 的累计偏移，但含义尚未证明。
+- request 变换字段已静态确认（1.13，双版本构造器相对调用可配对）：`+14` 是三浮点 Coord3D*，调用 `0x40CFC0`（RET4），写 Body 矩阵平移并同步缓存 `+38/+3C/+40`，随后触发变换通知；`+18` 是单 float* yaw/radians，调用 `0x40C430`（RET4），用 FSINCOS 构造方向矩阵并保留平移；`+1C` 是 12-float/48-byte 完整变换矩阵，调用 `0x3D6A30`（RET4），复制矩阵并从矩阵平移列导出缓存坐标/角度，优先于 `+18`，随后 `+14` 独立覆盖平移。位置契约因此不再是未知，但仍不能从外部安全构造 request，因为 template/owner/context、线程和部分失败生命周期未满足。
+- request 变换 setters 和世界坐标含义双版本确认：1.13 `0x40CFC0` ↔ 1.12 `0x421FE0` 为 Coord3D* setter，写 Body translation matrix `[+0x14,+0x24,+0x34]` 与缓存 `[+0x38,+0x3C,+0x40]`，不是屏幕坐标转换；1.13 `0x40C430` ↔ 1.12 `0x421450` 接收标量 yaw/angle（调用者先解引用 request+18 的 float* 再按值传递），对当前方向矩阵做 FSINCOS；1.13 `0x3D6A30` ↔ 1.12 `0x3EC240` 收 12-float/48B 矩阵指针，从其平移列生成缓存坐标与角度。构造器顺序为 +1C full matrix 优先，若无则 +18 yaw，最后 +14 平移独立覆盖；全部 `thiscall ECX=Body, RET4`。这确认 Request 的变换表示和坐标是 engine-space，但没有说明鼠标 XY→world conversion。
+- request+8 具体是可选 28B blob 指针：构造器在 `0x3EAF3D` 设置 EBP=Body，`0x3EAFD3` 设置 EDI=Body+0x80，`0x3EB456` 取得 request+8 的源指针，非空后 `rep movsd ECX=7` 原样复制到 Body+0x80..+0x9B；不是栈局部 staging。在构造器 `0x3EAF30..0x3EB7C5` 的静态扫描中未发现该区间的后续直接读取，不能排除虚调用/后续初始化或引擎使用；其目的语义尚未标名，不推测。request+0 模板为空会在 constructor 早段被解引用，硬性必需；不要依赖晚期 null test。组件按 ObjectTemplate 记录列表创建，单个 component 创建失败可能留下未完整 Body，未见原子 rollback。
+- factory 1.13 `0x102410` / 1.12 `0x11A210` 的直接 E8 xref 各 55 处，广泛用于资源/对象生命周期，而非专用生成入口。1.13 `0x22E3E0` / 候选配对 1.12 `0x2440F0` 是更像 GameObject spawn 的 wrapper：签名是 caller-cleaned 五参数，模板在栈 `arg2`，owner/context 来自 `arg4`，位置来自 `arg3`（完整栈追踪确认，arg1/arg5 未读取）；内部构造单请求并调用通用 factory，再执行 angle/position setter、算 owner 相关属性和 locomotor/部署类 setup。这个 wrapper 在例 `0x22E451` 中返回 Body/null，但尚未证明足以匹配所有单位类型或可从 WPF 线程外调；失败后发现 Body 的某些 setup 校验失败并无 rollback。旧 FINAL3五参数与此 wrapper 有表面相似性，但参数1/3的真实语义、owner 来源、地图动作线程上下文仍未配对，禁止直接调用。
+- 1.13 factory direct E8 xref 共 55 个，1.12 同样 55 个，大多数是对象/资源生命周期路径；无唯一 safe external spawn entry。
+- 下一轮具体方向：追 factory request `+0` 的 ObjectTemplate 来源与包装类型（不能直接用 XP wrapper 推导即当相同类型）；确认 `0x22E451` 双版本对应函数是否是 GenericObjectCreationNugget 的高层路径；随地建造继续沿网格 caller 向上追建造权限与距离限制，保留碰撞/地图边界检查，不按短分支裸签名强改。
+- BIG 归档离线解析：磁盘 BIG4 索引可直接读取（16 字节 header，条目为 BE offset/size + NUL ASCII 路径），不是加密；上述 XML payload 是直接 UTF-8 BOM 文本。Core `.manifest` 的 `10 FB` + 3-byte BE 解压长度是 EA RefPack/QFS 压缩，不是加密（例 Core12 `static.12.manifest` 压缩 457,537 字节，预期解压 `0x17E8AB`）。进一步 asset manifest/stream 分析可在内存解压后进行；本轮未提取归档文件，也未操作游戏。
+- 离线回归（当前源码）通过：Release build 0 warning/0 error；hook bytes 42/42；selectiontest/actiontest 18/24/24 相应项通过；rank/capture/kill API 双版本解析与篡改拒绝、installer 132、asm 5；Unicorn 套件 197/218/8/60。语义反汇编测试曾因旧断言不识别威胁桩而失败，本轮已按实际指令语义更新并重跑通过。均为磁盘/合成对象验证，不是游戏实效证明。
+
+## v18 研究（2026-10-11 /goal：四新功能依赖攻坚——重大进展但未完成）
+
+### v18c 补充（第三局：机制疑团定位，需下会话收口）
+
+- **同一进程内重开局（離開遭遇戰→再開始）后选中全局 0x8E4BFC 变死数据**：
+  match2/3 的 root=0x4909920（同址、count 恒 0、守其页零事件零读取）——重开局不刷新该全局，
+  真选中根在别处。match1（全新进程启动）时该全局是活的（矿节点点选 count=1 真实生效）。
+  **结论：研究必须全新进程开局，绝不进程内重开局。**
+- **点击选择疑团**：全部三局中，己方单位/建筑的点选从未生效（count=0），
+  唯一中立矿节点可点选（match1 三点全中）。推测 D3D 代理转发的合成点击带某种
+  观战/中立标志。**下会话试验：PostMessage 拖框选择（DOWN→MOVE→UP）走不同代码路径。**
+- **PAGE_GUARD 机制状态**：OS 层生效（保护查询 0x104 ✓、远端写被挡 ✓、游戏不崩），
+  但守"必写页"（选中根页/矿容器页/模板名页）全部零事件——因为 match2/3 里这些页
+  本就是死数据（重开局后遗症）+ 矿量可能仅悬停显示时更新。**机制本身未在活数据上验证过，
+  下会话在全新进程内用矿节点点选+守真选中根页做首次有效验证。**
+- watch_guard.py / watch_spawn.py（WOW64 修正版）就绪；整局 UI 自动化坐标链完备
+  （NOTES v18b）；败局教训（去 AI/先补电）已记录。
+- 名字块 0xFEA8A68 在同进程多局间稳定（地图模板池复用堆分配）；生成不写模板数据页。
+
+### v18b 补充（第二局自动化研究会话，被 AI 推平终止）
+
+- **整局自动化打通**：steam://rungameid/17480 → 遭遇戰 → 開始 → MCV(560,470)选中→展开(1155,620)
+  →反應爐(1165,300 排队→完成后点图标→放置 700,560)→兵營(1165,390→820,560)→征召兵(1165,295)。
+- **败局教训**：电力 50/100 时生产被拖慢（队列堆 8 个不动）；无人防守基地 ~15 分钟被简单 AI
+  推平。**研究局应去掉 AI（大厅删掉电脑玩家）避免败局**，且先补电再生产。
+- **WOW64 实锤**：Wow64SetThreadContext 返回 TRUE 但 DR 回读全 0——**64 位 Python 对 32 位
+  游戏硬件监视点彻底不可用**（系统忽略 DR 写入），非挂起问题。
+- **PAGE_GUARD 替代方案**（watch_guard.py）：VirtualProtectEx+GUARD+TF 单步跨指令恢复。
+  堆页保护成功（RW 页），机制事件链未验证完（守 0xFEA8000 模板名页 40s 零事件——
+  生成不写模板数据页，**活体类型状态对象与模板数据分离**，上局的 wrapper+descriptor
+  结构在本局未再现/未找到）。
+- **本局堆布局差异**：side 对象地址会漂移（0x486FEE0→0x730BB0 两次读取不同），
+  全堆 [+0x418]==side 扫描全为噪声；BFS 也找不到单位——**side 锚点不稳定是本局新问题**
+  （上局稳定）。名字扫描定位征召兵模板数据块成功（0xFEA8A68，Name:/Type:/Desc: 三连）。
+- 下局计划：**无 AI 观战局**（不会败）→ 先建电→兵营→兵；用"双击选同类型"选中征召兵
+  （免去逐个盲点）；guard 选中根页验证机制 → guard 征召兵 tracker/wrapper 页在生成时抓写。
+
+目标功能：随地建造/三阵营基地车/战场增援代码/复制选中。共同依赖 CreateUnit（EA 0x205240 重打包对应）。
+
+### 已验证（活体，PID 49100 对局，游戏已关闭）
+
+- **部队发现（无需点击）**：side=[playerRoot]+0x28 → BFS ≤3 跳（≤0x600/节点，≤4000 节点）
+  → 所有 [obj+0x418]==side 且 +0x3CC 有效的对象=己方全部单位/建筑。实测 523 节点 25 个己方对象。
+- **模板链（真单位验证 ✓）**：body+0x3CC→tracker；tracker+4→wrapper（同类型共享，征召兵×5 共享 0xFE7E6D0）；
+  wrapper+0x14→template。模板前 ~0x300 内有完整定义串：
+  `Name:SovietAntiInfantryInfantry` / `Type:` / `Desc:`（征召兵）、`SovietRefinery`（精炼厂）。
+  **复制选中的模板提取已解决。**
+- **wrapper 结构**（ThingTemplateCountMap）：+0=静态描述符指针（描述符=8 个函数指针+类型名串，
+  征召兵在 0xC58BD0；方法[1]=0x80E640 读 template+0x94 用全局 RVA 0x8E21C0）；
+  +4/+8=类型哈希（0x942FFF2D 等——与模板池条目哈希同族）；+0xC/+0x10=池指针；+0x14=template。
+- **模板池条目**（矿节点样例）：名字串@条目+8（"auto_cp"）、哈希@+0x18、条目体@+0x30、template@体+0x14。
+  → 基地车/增援可运行时扫池按名/哈希取模板（不需 lookup 函数）。
+- **鼠标状态对象**：0x19323A0（int XY，随光标实时更新；光标差分法找到）。持有者未定位
+  （仅 0x5D00744→+1 内部指针），疑为 D3D 代理层输入态。鼠标→世界坐标转换未找到。
+- **分发表分析**（.rdaa RVA 0x7F6808，63×13 槽，281 去重处理器）：跨处理器调用频度 TOP 全是
+  运行时基础设施（0x4169C0=free、0x4CB350=release 等），未暴露 spawn。
+- **硬件监视点追踪器已就绪**（tools/analysis/watch_spawn.py）：附加调试器→58-62 线程设
+  DR 写监视→泵事件→干净脱离（4 次运行零事故）。**关键坑已修：64 位 Python 调试 32 位游戏
+  必须用 Wow64Get/SetThreadContext**（普通版本写的是 64 位上下文，DR 永不生效）。
+  修正后机制验证被游戏退出打断——下轮先盯鼠标 X（0x19323A0，动光标必触发）验证回路，
+  再盯 wrapper 计数字段（候选 +0x2C/+0x34/+0x38/+0x3C 区）+ 排征召兵抓 spawn 写点 →
+  栈内 .text 返回地址即 CreateUnit 调用链。
+
+### 死路（勿重复）
+
+- vtable 0xC57340（单位 body 首 dword）=类型标签非 vtable，构造器不写它。
+- EA CreateUnit 窗口插值（≈0x22F000）扫 cdecl-5arg 调用点：仅 1 命中且是链表遍历。
+- proto_cool_a/b 是 vtable 访问器 thunk，.text 零引用（仅 vtable 挂载）。
+- 磁盘无 EA 原版二进制（Steam 全 1.0-1.13 均重打包）→ 无法提取 EA CreateUnit 字节做 AOB。
+- 字典根全局：.data 两跳可达性搜索 3 候选零代码引用（字典走共享 wrapper，根全局路线放弃）。
+
+### 下轮计划（按优先级）
+
+1. 开对局 → watch_spawn.py（WOW64 修正版）机制验证（鼠标X）→ 盯 wrapper 计数 →
+   排兵触发 → 抓 #DB EIP+调用栈 → 定位 CreateUnit → SpawnDispatcher 第四桥
+   （模板+side+位置，位置先用选中单位坐标，绕开鼠标世界坐标）。
+2. 基地车×3：扫模板池名字（MCV 族：SovietMCV/AlliedMCV/JapanMCV 待确认实际命名）。
+3. 增援代码：UI 输入哈希 → 扫池条目哈希 → 模板 → spawn。
+4. 随地建造：未移植。静态复核 FINAL3 `script_12` 的 `[MustCode+1201]: db EB 0C` / disable `75 0C`，与主脚本 `MustCode+1200` 的 `mov eax,[ra3+E7565]; ret` 配合，较可能是通过该指针把 EA RVA `0xE7565` 的短条件跳转改为无条件跳转；旧注“改自身 MustCode 双字节”不可靠。CE5.5 间接地址语法及该分支的摆放语义仍待确认；即使 EA 语义成立，也不能迁移旧 RVA，必须在重打包 1.12/1.13 的磁盘映像中独立定位并交叉验证摆放限制路径后再考虑实现。
+
+## v17（2026-10-11 /goal 续：实测反馈修复 + 俘虏/摧毁桥 + 矿脉动作化）
+
+- **实测确认**：晋级桥在真实对局中生效（用户报告：提高选中单位经验成功）。
+  v16 矿脉开关也曾实际生效（矿量被回满到 100000 的痕迹在活体调研中观察到）。
+- **修复：框选多单位只升一个**——SubmitBridgeRequests 循环提交全部目标
+  （每目标限 800ms 等资金结算消费，总预算 4s；未消费/拒绝/待续均有计数反馈）。
+- **矿脉动作化**（用户要求"恢复选中的矿脉"）：移除 oremine 钩子与开关，
+  改为动作 oreminerestore。活体验证链：body+0x398→采集状态C，[C+4]→容器O，
+  [O+8]=矿量、[C+0x14]=已采（与 FINAL3 矿量访问器语义一致）。BFS(≤2跳/64节点)
+  清零所有指向该容器的采集状态并回填 100000。
+- **俘虏桥（v17 新）**：CaptureApiResolver 严格校验归属切换函数
+  （1.13 RVA 0x3B5DF0 / 1.12 0x3CBF50；prologue 19B + 双 helper call 0x2FDBC0/0x166340 +
+  playerRoot 全局 + RET8@+0x285 四锚点，双版本 + 篡改拒绝全过）。
+  CaptureDispatcher（块+0x1300，邮箱 0x1840）：认领后校验选中位/互指/属主≠己方/
+  本地 context 链 [[side+AC]+4]→+8==side，然后 game-thread 调用
+  transition(Body, [side+0xAC], 0)；成功判据=属主变为己方。
+- **摧毁桥（v17 新）**：KillApiResolver 校验 HP adjust（1.13 0x38CB30/1.12 0x3A3650，
+  入口 0x24 字节双版本一致 + RET8）。KillDispatcher（块+0x1400，邮箱 0x1880）：
+  调 adjust(hp, -3.4e38f, null) 走完整钳制+死亡通知；成功判据=[hp+4]==0。
+  这是 EA+39EA50（未配对）的现代重推导。
+- 资金桥前 CALL 现在按启用情况串行调用最多三个派发器（rank→capture→kill）。
+  开关：rank-bridge.enable（晋级）/ bridges.enable（俘虏+摧毁），环境变量
+  RA3MT_RANK_BRIDGE / RA3MT_BRIDGES 等效。publish-v17 已带两个标记文件。
+- 工程教训：disp8 装不下 0xAC；FXSAVE 需 16 对齐（垫字节要在 fxsave 之后）；
+  被调函数可打爆所有 GPR——call 后必须从邮箱重载指针（rank 桩原有设计，照抄）。
+- 验证：42/42 站点、bridgetest（3 API×双版本+篡改拒绝+17 邮箱例）、
+  新 test_bridge_dispatchers.py 60 例、其余全套（197/218/8/24/132/…）全绿。
+  发布 publish-v17。**俘虏/摧毁/多目标晋级/矿脉动作均未实战复测。**
+- FINAL3 剩余四功能（随地建造/给基地车×3/战场增援代码/复制选中）依赖未定位：
+  模板字典（EA 0x8E6C58+0x3E4230）、造单位（EA 0x205240）、鼠标地图坐标
+  （EA 0x8DAEFC+0x1ED4A0）。无 EA 二进制可比对，需活体调用链追踪或
+  从已锚定函数的交叉引用推导；三桥模式（严格校验+邮箱+游戏线程）已就绪可复用。
+
+## v16（2026-10-11 /goal 会话：FINAL3 全量对照审计 + 矿脉移植 + 6 站点定位）
+
+- **docs/FINAL3_CROSSREF.md**：FINAL3 全部 22 站点/13 分派动作 ↔ Final2a ↔ RA3MT 的完整对照
+  审计表（验证等级 L1-L4）、7 条误分类校正、不可安全移植清单、未实测清单。
+- 本轮定位（locate_final3_sites.py，唯一命中 + 运行中 1.13 进程字节比对 ✓）：
+  矿脉 EA 0x2D4933 → 1.12 0x312EB3 / 1.13 0x2FDBB3（**勘误：旧 NOTES 此站点误标 fast_build**）；
+  敌方禁产 EA 0x30F530 → 1.12 0x34D920 / 1.13 0x3387D0（[eax+0xC] 属主语义待活体验证再移植）。
+- 无敌/一击必杀：EA 字节序列在重打包中不存在 → 从 HP adjust（1.13 0x38CB30/1.12 0x3A3650，
+  双版本逐指令一致）的血量写点 0x38CB4E/0x3A366E 重设计（写点字节活体确认 F30F114604）；
+  EA OneKillData/Data2 三点捕获链（1.13 0x427B34/0x30B6C3 候选）不再需要。
+- v16 移植矿脉：oremine 桩（持续回满 100000+清已采，flag 0x0F）+ 功能开关 + Unicorn 4 例。
+  站点 44/44，桩执行 201 例，actiontest24/installertest138 全过。发布 publish-v16。
+- 下一步优先级：①用户实战复测（v15/v16 全部未实测功能，晋级桥需 RA3MT_RANK_BRIDGE=1）；
+  ②敌方禁产属主字段活体验证；③无敌/一击必杀在 adjust 写点的重设计桩；
+  ④摧毁函数（EA+39EA50）配对定位；⑤俘虏复用晋级桥模式。
+
+## v15（2026-10-11 接手会话：威胁等级落地 + 晋级桥接入生产）
+
+- 威胁等级完成（sol 半成品收尾）：Ammo 桩条件写入 [分量+8]=50000(threatmax 0x0D)/0(threatzero 0x0E)，
+  同开最大优先；features 21/22/23 → 开关/开关/动作(threatnormal=双关，FINAL3 不保存旧值)。
+  Unicorn ammo 矩阵 6站点×组件×标志 = 48 例，桩执行套件增至 197 例。
+- 晋级桥接入生产：环境变量 RA3MT_RANK_BRIDGE=1 显式开启（TrainerEngine.EnableRankBridge），
+  附加时 RankApiResolver 严格校验（99字节签名+context全局+两个helper call 目标），
+  通过才以 rankApi 构造 MasterCode（装消费桩 0x1200 + 邮箱 0x1800 + 资金桩前 CALL 桥）；
+  校验失败降级默认资金桩并告警。sel_lv 在桥激活时走邮箱路径（EnumerateRankTargets 同
+  消费桩校验门；单未决请求，一次触发提交一个目标，资金结算时游戏线程执行）。
+- test_rank_money_bridge.py 两处断言修正（测试自身 bug，dispatcher 行为与其 218 例套件一致）：
+  ① 认领尝试无条件发生，断言改为 claims==[state]（每次结算恰好一次、观察到提交态）；
+  ② state=1 被校验拒绝的终态是 4 不是原 state。
+- 清理 SelfCheck 死 stackalloc（发布构建 0 警告）。发布 publish-v15（自包含单文件 x86）。
+- 仍然未做：全量实战复测（威胁/缩放方向/速度/生命/弹药/立即就绪/晋级桥——本版全部仅离线验证）；
+  xp999 仍 pending（桥稳定后可由其驱动）；俘虏/摧毁/矿脉未动。
+
 ## FINAL3补充勘误（优先于下文历史）
 
 新主要参考见 docs/FINAL3_ANALYSIS.md 与 artifacts/final3/script_00_0008D05B.cea。
@@ -7,8 +198,13 @@ FINAL3明确定义NormalHP为读取健康组件+10，恢复当前+4与有效上�
 这是撤销生命上限作弊，不是仅治疗，不能将此原版语义误判为字段错误。
 v13恢复NormalHP原意，并新增独立heal动作只回填当前有效+C，保留原上限。
 actiontest现13例分别验证两种写入范围、非法float和禁用动作拒绝。
-FINAL3三参数晋级EA+35C200的重打包对应尚未定位；不以自然经验刷新0x705F60代替。
-该函数RET4，FINAL3调用push0/1/3预期不同签名，必须重新配对后接入游戏线程队列。
+FINAL3三参数晋级对应已配对：1.13 VA0x785600/RVA0x385600，1.12 VA0x79A840/RVA0x39A840。
+99字节函数RET0xC，参数1为正晋级增量次数；原push0/1/3最多尝试3次而非绝对等级3。
+两个helper模拟的Unicorn160例验证配对字节、参数顺序、栈清理与循环提前停止，详见rank_pair.json。
+尚未接入游戏线程请求桥，不以自然经验刷新RET4函数0x705F60代替。
+v14将协议点数由99改为FINAL3的15，速度操作对应500/10/0/恢复；
+备份仅在本会话且模板和最近写入速度仍一致时恢复，游戏已改变值则拒绝覆盖。
+构建0警告/0错误，actiontest24例、现有桩执行161例通过；无实机注入或效果验证。
 
 ## 此前勘误与修复（与上节矛盾时以上节为准）
 
@@ -410,3 +606,25 @@ TrainerEngine附加回滚失败的UI/句柄保留路径仍未以假native端到�
 - 旗标全开：资金 1001 万、电力满格、快速建造、地图全开、scpoints、allproto、instantready
 - 修改器 UI（diag 版）仍挂着但未附着本局——点其「附加进程」会因站点已被 python 钩住而失败
   （无损害）。接管方式：直接玩（旗标持续生效），或让 python 卸载钩子后再用训练师 UI。
+
+### v18d 补充（第四局·无AI单人居，无人自动化路线穷尽）
+
+- 后台 capture_spawn.py 等待真实点击 300s 超时（用户不在机前）。
+- 无人路线全部穷尽：新进程名字块=0xFE3DA68（逐进程漂移）；模板池指针宿主 2368 个
+  在活跃生成 25 秒内**零变化**（生成状态不持模板指针，按哈希/ID 引用）；
+  新分配堆区=零填充预留（分配器复用）；HP 三连浮点假设不成立；资金对象差分定位成功
+  （0x491A268 +5/tick）但 +0x3B0 持有者链断（无任何指针指向资金对象头）。
+- **解锁只差一步用户动作**：游戏窗口前台时用真鼠标点任意一个征召兵（capture_spawn.py
+  自动完成剩余全链：读 wrapper→排兵→守页→抓 EIP+栈）。或批准 UAC 启动修改器
+  （money 桩诊断槽给出玩家上下文锚）。
+- 结论固化：RA3 地图交互只认 Raw Input（合成输入全拒）；选中/生成状态对象按需发现，
+  静态锚点每局漂移，必须靠一次性真实输入或运行时桩建立锚。
+
+### v18e（收尾：矿态→地图对象系统确认；捕获守护进程常驻）
+
+- 运行时矿态（[C+4]→容器、[O+8]=矿量）特征扫描成功（本局 C=0x48C93E8 矿量2404/已采65，
+  双采集者共享容器）；但持有者是**地图对象**（含 "...\Red Alert 3 Data\Maps..." 路径串、
+  共享类型对象 0x4804C90）——矿节点走地图对象系统，与单位 body 系统（+0x33C/+0xF4）不同轨，
+  不能由此学单位 drawable。
+- capture_spawn.py 升级为 30 分钟双通道守护（真实点击 OR 修改器进程任一触发）后台常驻。
+- 全部自主路线确认穷尽；解锁需要用户在场。
