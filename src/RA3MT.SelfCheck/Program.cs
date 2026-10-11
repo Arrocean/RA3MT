@@ -193,6 +193,12 @@ if (args.Length == 1 && args[0] == "installertest")
     return 0;
 }
 
+if (args.Length == 1 && args[0] == "layouttest")
+{
+    RA3MT.SelfCheck.BlockLayoutChecks.Run();
+    return 0;
+}
+
 if (args.Length == 1 && args[0] == "featuretest")
 {
     RA3MT.SelfCheck.FeatureCatalogChecks.Run();

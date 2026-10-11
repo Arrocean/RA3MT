@@ -34,8 +34,8 @@ public sealed class MasterCode
         ["threatzero"] = 0x0E,
             };
 
-    public const uint BlockSize = 0x2000;
-    public const uint StubArea = 0x40;
+    public const uint BlockSize = BlockLayoutCatalog.BlockSize;
+    public const uint StubArea = BlockLayoutCatalog.StubAreaStart;
 
     // ---- 数据区布局 ----
     // [0x00..0x0C) 功能标志；0x0C 选中捕获 armed；[0x10..0x30) 诊断捕获；0x40 起桩代码。
@@ -79,6 +79,7 @@ public sealed class MasterCode
     private readonly Dictionary<string, string> _stubBySite;   // site id -> stub id
     private readonly List<(string hookId, byte[] original, nuint va)> _patched = new();
     private readonly Action<string>? _log;
+    private BlockLayout? _layout;
 
     public MasterCode(IInjectionMemory mem, nuint imageBase, nuint playerRootVa,
         Dictionary<string, HookResolution> sites, IReadOnlyDictionary<string, HookDef> defs, Action<string>? log,
@@ -104,10 +105,9 @@ public sealed class MasterCode
     {
         if (Installed) return;
         if (_patched.Count != 0) throw new InvalidOperationException("残留挂钩尚未恢复，拒绝重新安装");
-        if (StubArea < DiagSelIdx + 4)
-            throw new InvalidOperationException("块内布局冲突：诊断区与桩代码区重叠");
         Block = _mem.Alloc(BlockSize);
         _mem.Write(Block, new byte[BlockSize]); // zero
+        _layout = BlockLayoutCatalog.Create();
 
         var layouts = new List<(string id, byte[] code)>();
         uint off = StubArea;
@@ -116,10 +116,10 @@ public sealed class MasterCode
             if (!_stubBySite.TryGetValue(id, out var stubId) || !StubGen.Handles(stubId)) continue;
             var siteEnd = site.Va + (nuint)site.Displaced.Length;
             var bridgeOffsets = new List<uint>();
-            if (RankBridgeEnabled) bridgeOffsets.Add(RankDispatcher.CodeOffset);
-            if (CaptureBridgeEnabled) bridgeOffsets.Add(CaptureDispatcher.CodeOffset);
-            if (KillBridgeEnabled) bridgeOffsets.Add(KillDispatcher.CodeOffset);
-            if (SpawnBridgeEnabled) bridgeOffsets.Add(SpawnDispatcher.CodeOffset);
+            if (RankBridgeEnabled) bridgeOffsets.Add(_layout.OffsetOf("RankDispatcher"));
+            if (CaptureBridgeEnabled) bridgeOffsets.Add(_layout.OffsetOf("CaptureDispatcher"));
+            if (KillBridgeEnabled) bridgeOffsets.Add(_layout.OffsetOf("KillDispatcher"));
+            if (SpawnBridgeEnabled) bridgeOffsets.Add(_layout.OffsetOf("SpawnDispatcher"));
             // Bridge consumers ride both settlement sites: money_h2 (cash settle)
             // and money_h1 (power settle). With infinite cash enabled the cash
             // settlement can go quiet for long stretches, but the power settle
@@ -137,41 +137,46 @@ public sealed class MasterCode
         if (RankBridgeEnabled)
         {
             if (!_sites.ContainsKey("money_h2")) throw new InvalidOperationException("Rank bridge requires money_h2");
-            var dispatcher = RankDispatcher.Emit(Block + RankDispatcher.CodeOffset, Block, _rankApi, _rootVa);
-            if (RankDispatcher.CodeOffset + (uint)dispatcher.Length > CaptureDispatcher.CodeOffset)
-                throw new InvalidOperationException("Rank dispatcher overlaps capture dispatcher");
-            _mem.Write(Block + RankDispatcher.CodeOffset, dispatcher);
+            var at = BlockLayoutCatalog.DeclareBridge(_layout, "Rank").Offset;
+            var dispatcher = RankDispatcher.Emit(Block + at, Block, _rankApi, _rootVa);
+            _layout.AmendSize("RankDispatcher", dispatcher.Length);
+            _mem.Write(Block + at, dispatcher);
             RankMailbox = new RankRequestMailbox(_mem, Block);
         }
         if (CaptureBridgeEnabled)
         {
             if (!_sites.ContainsKey("money_h2")) throw new InvalidOperationException("Capture bridge requires money_h2");
-            var dispatcher = CaptureDispatcher.Emit(Block + CaptureDispatcher.CodeOffset, Block, _captureApi, _rootVa);
-            if (CaptureDispatcher.CodeOffset + (uint)dispatcher.Length > KillDispatcher.CodeOffset)
-                throw new InvalidOperationException("Capture dispatcher overlaps kill dispatcher");
-            _mem.Write(Block + CaptureDispatcher.CodeOffset, dispatcher);
+            var at = BlockLayoutCatalog.DeclareBridge(_layout, "Capture").Offset;
+            var dispatcher = CaptureDispatcher.Emit(Block + at, Block, _captureApi, _rootVa);
+            _layout.AmendSize("CaptureDispatcher", dispatcher.Length);
+            _mem.Write(Block + at, dispatcher);
             CaptureMailbox = new CaptureRequestMailbox(_mem, Block);
         }
         if (KillBridgeEnabled)
         {
             if (!_sites.ContainsKey("money_h2")) throw new InvalidOperationException("Kill bridge requires money_h2");
-            var dispatcher = KillDispatcher.Emit(Block + KillDispatcher.CodeOffset, Block,
-                _killApi, _killDeathMarkerApi, _rootVa);
-            if (KillDispatcher.CodeOffset + (uint)dispatcher.Length > RankRequestMailbox.Offset)
-                throw new InvalidOperationException("Kill dispatcher overlaps mailboxes");
-            _mem.Write(Block + KillDispatcher.CodeOffset, dispatcher);
+            var at = BlockLayoutCatalog.DeclareBridge(_layout, "Kill").Offset;
+            var dispatcher = KillDispatcher.Emit(Block + at, Block, _killApi, _killDeathMarkerApi, _rootVa);
+            _layout.AmendSize("KillDispatcher", dispatcher.Length);
+            _mem.Write(Block + at, dispatcher);
             KillMailbox = new KillRequestMailbox(_mem, Block);
         }
         if (SpawnBridgeEnabled)
         {
             if (!_sites.ContainsKey("money_h2")) throw new InvalidOperationException("Spawn bridge requires money_h2");
-            var dispatcher = SpawnDispatcher.Emit(Block + SpawnDispatcher.CodeOffset, Block,
+            var at = BlockLayoutCatalog.DeclareBridge(_layout, "Spawn").Offset;
+            var dispatcher = SpawnDispatcher.Emit(Block + at, Block,
                 _spawnWrapperApi, _hashLookupApi, _hashTableGlobalVa, _rootVa);
-            if (SpawnDispatcher.CodeOffset + (uint)dispatcher.Length > RankRequestMailbox.Offset)
-                throw new InvalidOperationException("Spawn dispatcher overlaps mailboxes");
-            _mem.Write(Block + SpawnDispatcher.CodeOffset, dispatcher);
+            _layout.AmendSize("SpawnDispatcher", dispatcher.Length);
+            _mem.Write(Block + at, dispatcher);
             SpawnMailbox = new SpawnRequestMailbox(_mem, Block);
         }
+
+        // Stub arena size is known from the emitted code before anything is
+        // written, so the whole layout is proven before the first byte lands.
+        var stubArenaSize = layouts.Aggregate(0u, (acc, item) => acc + (uint)((item.code.Length + 15) & ~15));
+        _layout.Declare("StubArena", StubArea, stubArenaSize, "stubs");
+        _layout.Validate();
 
         off = StubArea;
         foreach (var (_, code) in layouts)
