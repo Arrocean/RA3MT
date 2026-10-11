@@ -12,6 +12,7 @@ Usage: py tools/analysis/trace_trampoline.py kill|place [seconds] [pid]
   place: target 0x511E00 (placement-grid check), displaced 'sub esp,0x38...'
 """
 import ctypes
+import ctypes.wintypes as wt
 import struct
 import sys
 import time
@@ -46,6 +47,40 @@ def write_mem(h, addr, data):
     ok = k32.WriteProcessMemory(h, ctypes.c_void_p(addr), data, len(data), None)
     k32.VirtualProtectEx(h, ctypes.c_void_p(addr), len(data), old, None)
     return ok
+
+
+def threads_of(pid):
+    class TE(ctypes.Structure):
+        _fields_ = [("dwSize", wt.DWORD), ("cntUsage", wt.DWORD), ("th32ThreadID", wt.DWORD),
+                    ("th32OwnerProcessID", wt.DWORD), ("tpBasePri", ctypes.c_long),
+                    ("tpDeltaPri", ctypes.c_long), ("dwFlags", wt.DWORD)]
+    snap = k32.CreateToolhelp32Snapshot(0x4, pid)
+    te = TE()
+    te.dwSize = ctypes.sizeof(TE)
+    out = []
+    ok = k32.Thread32First(snap, ctypes.byref(te))
+    while ok:
+        if te.th32OwnerProcessID == pid:
+            out.append(te.th32ThreadID)
+        ok = k32.Thread32Next(snap, ctypes.byref(te))
+    k32.CloseHandle(snap)
+    return out
+
+
+def suspend_all(pid):
+    handles = []
+    for tid in threads_of(pid):
+        th = k32.OpenThread(0x0002 | 0x0004 | 0x0001, False, tid)  # SUSPEND_RESUME
+        if th:
+            k32.SuspendThread(th)
+            handles.append(th)
+    return handles
+
+
+def resume_all(handles):
+    for th in handles:
+        k32.ResumeThread(th)
+        k32.CloseHandle(th)
 
 
 def find_game():
@@ -134,16 +169,23 @@ def main():
     if not write_mem(h, data, b'\x00' * 0x1000):
         raise SystemExit('zero data page failed')
 
-    # Atomic E9 patch for a high-frequency site: write the rel32 bytes first
-    # (every intermediate state stays a legal 'cmp byte [esp+4], imm8'
-    # variant), then the E9 opcode last as one atomic byte flip.
-    rel = struct.pack('<i', tramp - (site + 5))
-    for i in (4, 3, 2, 1):
-        if not write_mem(h, site + i, rel[i - 1:i]):
-            raise SystemExit('patch disp byte failed')
-    if not write_mem(h, site, b'\xE9'):
-        raise SystemExit('patch opcode failed')
-    print('detour installed - play normally...', flush=True)
+    # Site patch — the ONLY safe way for a 5-byte instruction at a hot site:
+    # freeze every thread, give the async suspends time to park them all in
+    # the kernel, write the 5 bytes in one shot, verify, then resume. Byte-by-
+    # byte patching is NOT safe: the intermediate opcode/modrm/SIB states
+    # decode into instructions like 'or byte [ebx], imm8' that corrupt game
+    # data (two crashes, same garbage EIP 0x74467401 — deterministic, not a
+    # race).
+    frozen = suspend_all(pid)
+    time.sleep(0.08)   # let every async suspend reach its park point
+    patch = b'\xE9' + struct.pack('<i', tramp - (site + 5))
+    ok = write_mem(h, site, patch)
+    verify = read_mem(h, site, 5) == patch if ok else False
+    resume_all(frozen)
+    if not ok or not verify:
+        write_mem(h, site, displaced)
+        raise SystemExit('patch failed or verify mismatch')
+    print('detour installed (frozen-write, verified) - play normally...', flush=True)
 
     try:
         t0 = time.time()
@@ -170,10 +212,12 @@ def main():
             if seen >= MAX_SAMPLES:
                 break
     finally:
-        # undo the E9 first (one atomic byte back to the cmp opcode), then
-        # restore the operand bytes
-        write_mem(h, site, displaced[0:1])
-        write_mem(h, site + 1, displaced[1:])
+        # same freeze-write discipline for the restore (single shot; displaced
+        # is at most 5 bytes for the current sites)
+        frozen2 = suspend_all(pid)
+        time.sleep(0.08)
+        write_mem(h, site, displaced)
+        resume_all(frozen2)
         time.sleep(0.1)
         k32.VirtualFreeEx(h, tramp, 0, 0x8000)
         k32.VirtualFreeEx(h, data, 0, 0x8000)
