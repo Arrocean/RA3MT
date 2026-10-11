@@ -104,7 +104,7 @@ public sealed class TrainerEngine : IDisposable
                     Log?.Invoke($"晋级桥：校验失败，已保持默认资金桩（{ex.Message}）");
                 }
             }
-            nuint captureApi = 0, killApi = 0;
+            nuint captureApi = 0, killApi = 0, killDeathMarkerApi = 0;
             if (EnableCaptureKillBridges)
             {
                 try
@@ -119,9 +119,11 @@ public sealed class TrainerEngine : IDisposable
                 }
                 try
                 {
-                    killApi = Target.KillApiResolver.Resolve(found.version, baseAddr,
+                    var (adjust, marker) = Target.KillApiResolver.Resolve(found.version, baseAddr,
                         (rva, len) => mem.Read(baseAddr + rva, len));
-                    Log?.Invoke($"摧毁桥：HP 调整函数校验通过 0x{killApi:X}");
+                    killApi = adjust;
+                    killDeathMarkerApi = marker;
+                    Log?.Invoke($"摧毁桥：HP 调整 0x{adjust:X}，死亡标记 0x{marker:X}");
                 }
                 catch (Exception ex)
                 {
@@ -151,7 +153,8 @@ public sealed class TrainerEngine : IDisposable
             }
 
             var mc = new MasterCode(mem, baseAddr, baseAddr + rootRva, sites, _data.Hooks, Log,
-                rankApi, captureApi, killApi, spawnWrapperApi, hashLookupApi, hashTableGlobalVa);
+                rankApi, captureApi, killApi, killDeathMarkerApi,
+                spawnWrapperApi, hashLookupApi, hashTableGlobalVa);
             pendingMaster = mc;
             mc.Install();
 

@@ -63,12 +63,13 @@ public sealed class MasterCode
     private readonly nuint _rankApi;
     private readonly nuint _captureApi;
     private readonly nuint _killApi;
+    private readonly nuint _killDeathMarkerApi;
     private readonly nuint _spawnWrapperApi;
     private readonly nuint _hashLookupApi;
     private readonly nuint _hashTableGlobalVa;
     public bool RankBridgeEnabled => _rankApi != 0;
     public bool CaptureBridgeEnabled => _captureApi != 0;
-    public bool KillBridgeEnabled => _killApi != 0;
+    public bool KillBridgeEnabled => _killApi != 0 && _killDeathMarkerApi != 0;
     public bool SpawnBridgeEnabled => _spawnWrapperApi != 0 && _hashLookupApi != 0 && _hashTableGlobalVa != 0;
     public RankRequestMailbox? RankMailbox { get; private set; }
     public CaptureRequestMailbox? CaptureMailbox { get; private set; }
@@ -83,12 +84,14 @@ public sealed class MasterCode
     public MasterCode(IInjectionMemory mem, nuint imageBase, nuint playerRootVa,
         Dictionary<string, HookResolution> sites, IReadOnlyDictionary<string, HookDef> defs, Action<string>? log,
         nuint rankApi = 0, nuint captureApi = 0, nuint killApi = 0,
+        nuint killDeathMarkerApi = 0,
         nuint spawnWrapperApi = 0, nuint hashLookupApi = 0, nuint hashTableGlobalVa = 0)
     {
         _mem = mem;
         _rankApi = rankApi;
         _captureApi = captureApi;
         _killApi = killApi;
+        _killDeathMarkerApi = killDeathMarkerApi;
         _spawnWrapperApi = spawnWrapperApi;
         _hashLookupApi = hashLookupApi;
         _hashTableGlobalVa = hashTableGlobalVa;
@@ -153,7 +156,8 @@ public sealed class MasterCode
         if (KillBridgeEnabled)
         {
             if (!_sites.ContainsKey("money_h2")) throw new InvalidOperationException("Kill bridge requires money_h2");
-            var dispatcher = KillDispatcher.Emit(Block + KillDispatcher.CodeOffset, Block, _killApi, _rootVa);
+            var dispatcher = KillDispatcher.Emit(Block + KillDispatcher.CodeOffset, Block,
+                _killApi, _killDeathMarkerApi, _rootVa);
             if (KillDispatcher.CodeOffset + (uint)dispatcher.Length > RankRequestMailbox.Offset)
                 throw new InvalidOperationException("Kill dispatcher overlaps mailboxes");
             _mem.Write(Block + KillDispatcher.CodeOffset, dispatcher);

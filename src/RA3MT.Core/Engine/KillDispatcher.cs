@@ -29,10 +29,10 @@ public static class KillDispatcher
 
     private const uint LethalDelta = 0xFF7FFFFF; // float -3.4028234e38
 
-    public static byte[] Emit(nuint stubVA, nuint blockVA, nuint adjustVA, nuint rootVA)
+    public static byte[] Emit(nuint stubVA, nuint blockVA, nuint adjustVA, nuint deathMarkerVA, nuint rootVA)
     {
         uint start = checked((uint)stubVA), block = checked((uint)blockVA);
-        uint api = checked((uint)adjustVA), root = checked((uint)rootVA);
+        uint api = checked((uint)adjustVA), marker = checked((uint)deathMarkerVA), root = checked((uint)rootVA);
         uint Slot(uint offset) => checked(block + offset);
         var a = new Asm();
         var labels = new Dictionary<int, int>();
@@ -79,6 +79,26 @@ public static class KillDispatcher
         a.Db(0xE8);                                     // CALL rel32
         int callDisp = a.Length; a.Db(0, 0, 0, 0);
         a.Db(0x83, 0xC4, 0x04);                         // add esp,4: undo pad, esp back at FX base
+
+        // Death sequence — mirror the game's Die executor (1.13 0x417D10 /
+        // 1.12 0x42E5B0, byte-identical): kick [body+0x374]->vt[0x270] (the
+        // death-animation/slow-death dispatch the plain HP adjust never runs),
+        // then the idempotent death marker. Without this the body dies but the
+        // model stays and no death event fires (live-captured issue).
+        a.MovRegAbs(R.Ebx, Slot(BodyOffset));           // reload body after adjust clobbered all
+        a.MovRegRegDisp32(R.Eax, R.Ebx, 0x374);         // eax = [body+0x374]
+        a.TestRegReg(R.Eax, R.Eax);
+        a.JeShort(2);
+        a.Db(0x8B, Asm.Modrm(0, R.Edx, R.Eax));         // mov edx,[eax] : vtable
+        a.Db(0x8B, Asm.Modrm(3, R.Ecx, R.Eax));         // mov ecx,eax : this = [body+0x374]
+        a.Db(0x8B, Asm.Modrm(2, R.Eax, R.Edx)); a.Db(BitConverter.GetBytes(0x270u)); // eax = vt[0x270]
+        a.Db(0xFF, 0xD0);                               // call eax (thiscall, no stack args)
+        a.Label(2);
+        a.MovRegAbs(R.Ecx, Slot(BodyOffset));           // this = body
+        a.Push8(1);                                     // arg: dead = true
+        a.Db(0xE8);                                     // CALL rel32 (ret 4: callee cleans)
+        int markerDisp = a.Length; a.Db(0, 0, 0, 0);
+
         a.MovRegAbs(R.Ebx, Slot(HpOffset));              // reload after callee clobber
         a.CmpM32RegDisp8Imm32(R.Ebx, 0x04, 0);          // current hp == 0 ?
         a.JneShort(5);
@@ -97,6 +117,8 @@ public static class KillDispatcher
         var bytes = a.Build(start);
         BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(callDisp, 4),
             unchecked((int)(api - (start + (uint)(callDisp + 4)))));
+        BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(markerDisp, 4),
+            unchecked((int)(marker - (start + (uint)(markerDisp + 4)))));
         foreach (var (position, label) in patches)
             BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(position, 4),
                 checked(labels[label] - (position + 4)));

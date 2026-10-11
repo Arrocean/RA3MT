@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BLOCK, GLOBAL = 0x40000000, 0x400000
 STACK, DATA = 0x200000, 0x300000
 CAPTURE, KILL, CAPTURE_API, KILL_API = BLOCK + 0x1280, BLOCK + 0x1400, 0x7B5DF0, 0x78CB30
+MARKER_API, DEATH_SEQ_OBJ, DEATH_SEQ_VT = 0x7513F0, DATA + 0x18000, DATA + 0x19000
 CALLER = GLOBAL + 0x800
 BODY, DRAWABLE, CONTROLLER, SIDE, CTX, HP = (DATA, DATA + 0x1000, DATA + 0x2000,
                                              DATA + 0x3000, DATA + 0x4000, DATA + 0x5000)
@@ -42,7 +43,8 @@ def fx_image(vm):
 def base_machine(align):
     vm = Uc(UC_ARCH_X86, UC_MODE_32)
     for addr, size in [(BLOCK, 0x2000), (GLOBAL, 0x1000), (DATA, 0x20000),
-                       (STACK, 0x10000), (CAPTURE_API & ~0xfff, 0x1000), (KILL_API & ~0xfff, 0x1000)]:
+                       (STACK, 0x10000), (CAPTURE_API & ~0xfff, 0x1000), (KILL_API & ~0xfff, 0x1000),
+                       (MARKER_API & ~0xfff, 0x1000), (0x7DD000, 0x1000)]:
         vm.mem_map(addr, size)
     vm.mem_write(CALLER, b'\xE8' + struct.pack('<i', 0) + b'\x90')  # patched per dispatcher
     vm.mem_write(GLOBAL + 0xa00, bytes.fromhex('db e3 d9 e8 d9 eb'))
@@ -68,6 +70,10 @@ def shared_entries(vm, own=False):
     put(vm, BODY + 0xF4, DRAWABLE)
     put(vm, DRAWABLE + 0x138, BODY)
     put(vm, BODY + 0x33C, HP)
+    put(vm, BODY + 0x374, DEATH_SEQ_OBJ)          # die-executor component
+    put(vm, DEATH_SEQ_OBJ, DEATH_SEQ_VT)          # its vtable
+    put(vm, DEATH_SEQ_VT + 0x270, 0x7DDD00)       # vt[0x270] death-seq kick
+    vm.mem_write(0x7DDD00, bytes([0xC3]))    # death-seq stub: plain ret (page mapped in base_machine)
     vm.mem_write(DRAWABLE + 0x13D, b'\x40')
     put(vm, GLOBAL, CONTROLLER)
     put(vm, CONTROLLER + 0x28, SIDE)
@@ -139,11 +145,30 @@ def run_kill(blob, align=0, state=1, mutation=None, api_zeroes=True):
         for i, reg in enumerate(REGS[:-2]):
             machine.reg_write(reg, 0x55550000 + i)
     vm.hook_add(UC_HOOK_CODE, fake_api, begin=KILL_API, end=KILL_API + 1)
+    marker_calls = []
+    seq_calls = []
+    def fake_marker(machine, address, size, _):
+        sp = machine.reg_read(UC_X86_REG_ESP)
+        assert machine.reg_read(UC_X86_REG_ECX) == BODY, 'marker this must be the body'
+        assert get(machine, sp + 4) == 1, 'marker arg must be dead=1'
+        marker_calls.append(address)
+        machine.reg_write(UC_X86_REG_ESP, sp + 8)
+        machine.reg_write(UC_X86_REG_EIP, get(machine, sp))
+    def fake_seq(machine, address, size, _):
+        assert machine.reg_read(UC_X86_REG_ECX) == DEATH_SEQ_OBJ, 'death-seq this wrong'
+        seq_calls.append(address)
+    vm.hook_add(UC_HOOK_CODE, fake_marker, begin=MARKER_API, end=MARKER_API + 1)
+    vm.hook_add(UC_HOOK_CODE, fake_seq, begin=0x7DDD00, end=0x7DDD01)
     vm.emu_start(CALLER, CALLER + 5, count=10000)
     assert all(vm.reg_read(r) == v for r, v in regs_before.items()), 'GPR/ESP/EFLAGS changed'
     assert fx_image(vm) == fx_before, 'FX image changed'
     assert bytes(vm.mem_read(MAILK + 4, 12)) == payload, 'payload mutated'
     assert len(calls) == (1 if state == 1 and not mutation else 0)
+    if state == 1 and not mutation:
+        assert len(seq_calls) == 1, 'death-sequence kick missing'
+        assert len(marker_calls) == 1, 'death marker call missing'
+    else:
+        assert not seq_calls and not marker_calls, 'death sequence ran without a claim'
     if state == 1 and not mutation:
         assert get(vm, MAILK) == (3 if api_zeroes else 4)
     elif state != 1:

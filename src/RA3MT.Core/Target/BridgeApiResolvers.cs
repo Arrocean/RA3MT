@@ -51,7 +51,13 @@ public static class KillApiResolver
         "8B 44 24 08 85 C0 F3 0F 10 4C 24 04 56 8B F1 F3 0F 10 46 04 " +
         "F3 0F 11 46 08 F3 0F 58 C1 57 F3 0F 11 46 04 74";
 
-    public static nuint Resolve(string version, nuint imageBase, Func<uint, int, byte[]> readRva)
+    // Death marker (thiscall Body, push al; ret 4) — identical prologue in both
+    // versions; captured live as the terminal call of the natural-death path.
+    private const string DeathMarkerEntry = "80 7C 24 04 00 56 8B F1 8A 86 71 04 00 00";
+
+    /// <summary>Resolve the HP adjust function and the death marker; never invokes game code.</summary>
+    public static (nuint adjust, nuint deathMarker) Resolve(string version, nuint imageBase,
+        Func<uint, int, byte[]> readRva)
     {
         var entry = version switch
         {
@@ -65,6 +71,17 @@ public static class KillApiResolver
         var tail = readRva(entry + 0xC6, 3);
         if (tail.Length != 3 || tail[0] != 0xC2 || tail[1] != 0x08 || tail[2] != 0x00)
             throw new InvalidOperationException("HP adjust RET8 mismatch");
-        return imageBase + entry;
+
+        var marker = version switch
+        {
+            "1.12" => 0x365C90u,
+            "1.13" => 0x3513F0u,
+            _ => throw new InvalidOperationException("Unsupported death marker version"),
+        };
+        var markerLen = DeathMarkerEntry.Replace(" ", "").Length / 2;
+        var markerCode = readRva(marker, markerLen);
+        if (markerCode.Length != markerLen || !Pattern.Parse(DeathMarkerEntry).Matches(markerCode, 0))
+            throw new InvalidOperationException("Death marker entry contract mismatch");
+        return (imageBase + entry, imageBase + marker);
     }
 }
