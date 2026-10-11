@@ -250,12 +250,12 @@
       },
       "note": "鼠标地面交点 float3：+0=x, +4=z, +8=地面高度 y——UI 每帧更新的 .data 静态副本，任意时刻跟随鼠标（放置/悬停/命令共用），活体差分验证。1.12 对应待活体扫描（无静态引用，运行时指针访问）。"
     },
-    "placementDistance": {
+    "buildAnywherePatch": {
       "rva": {
-        "1.12": "0x8ee98c",
-        "1.13": "0x8f2cac"
+        "1.12": "0x128df5",
+        "1.13": "0x111955"
       },
-      "note": "建筑放置距离全局：[rva]→GameData 对象，[obj+0x0C]=BuildingPlacementDistance（默认 90.0）。该值是候选格搜索半径，不是许可半径——改 300 只是扩圈，改 100000 全图逐格扫描会卡死（实测）。放置链（地址全为 RVA，+0x400000=VA；2026-10-11 静态复核，v18m 深栈活体证实）：顶层 0x647300(唯一caller 0x6A891C)→验证器 0x642450(0xA42457 mov edx,[0xCF2CAC]; fld [edx+0xC] 载入距离)→worker 0x120780(ThePlacementGrid 逐格收集)→followup 0x641510→percell 0x62A1E0 逐格评估：gridquery 0x1065A0 格→世界坐标，[0xCF2410 放置manager] vt+0x38 返回包围盒，4×comiss AABB 测试，出盒→0x62A283 剔除候选。第二阶段 0x6424E0(hash 0x9590538A)。1.12 对称：顶层 0x642840/验证器 0x63D8E0/worker 0x138250/followup 0x62C9A0/percell 0x6252E0(FAIL 0x65383/PASS 0x653A6)/manager 0x8EE0F0，逐指令同构且 AABB rel8 与 1.13 完全相同。真随地建造候选=patch percell AABB（1.13 0xA2A25E 76 23→EB 46 跳过包围盒测试，1.12 0xA2535E 同改），待 placehunt 活体分支频率证实后实施。注意：v18m 笔记里这条链全按 RVA 记录（PLACEHUNT 标签同风格），曾两轮被误当 VA 反汇编得出'死装置/非指令边界'错误结论——引用时先加基址。"
+      "note": "随地建造 v3 补丁点（VA：1.13 0x511955 / 1.12 0x528DF5，磁盘字节验证）：放置 gate 函数尾部 'test bl,bl; jne +0xC; mov eax,2'（全部候选失败→返回失败码2=超出可建造范围）的 jne 分支。开=EB 0C（jmp，永不返回2，范围外照常通过），关=还原 75 0C。FINAL3 同款（EA 原版 0x4E7565，盗版1.12磁盘实锤+三版逐指令同构验证，2026-10-12 Steam 1.13 实测放置成功）。gate 为玩家放置与 AI 选址共用层（紧邻 AI worker 0x511980）。效果=灰色格子可直接点击建造（与 FINAL3 一致，不改变格子颜色）。旧数值方案（[0x8F2CAC]+0xC 距离 90→300）已废弃：该值是 AI/收集层搜索半径，与放置范围语义无关。"
     }
   },
   "features": [
@@ -679,8 +679,8 @@
       "kind": "toggle",
       "hotkey": "Alt+B",
       "hooks": [],
-      "desc": "过渡方案：放置搜索半径 90→300（扩圈，改写游戏自己的 BuildingPlacementDistance；关=还原；对局切换后需重开）。全图随地建造 v3=patch percell 0x62A1E0 的 AABB 剔除分支（等价 FINAL3 75 0C→EB 0C），待活体分支频率证实后实现",
-      "src": "orig FINAL3 随地建造（活体链 0x647300→0x642450→0x120780→0x641510→0x62A1E0，全 RVA 记录；AABB gate 静态定位 2026-10-11）"
+      "desc": "解除建筑放置的范围限制（FINAL3 同款 2 字节分支 patch）：有效范围外的灰色格子也可直接点击建造；地形/占用/碰撞检查保留。对局中随时开关，切换对局不需重开，修改器脱离时自动还原",
+      "src": "orig FINAL3 随地建造（放置 gate '范围外返回失败码2' 分支 jne→jmp；EA 0x4E7565 ↔ 1.13 0x511955 ↔ 1.12 0x528DF5，三版同字节；2026-10-12 Steam 1.13 实测放置成功）"
     }
   ],
   "references": {

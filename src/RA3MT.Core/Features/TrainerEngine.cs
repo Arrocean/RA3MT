@@ -205,21 +205,17 @@ public sealed class TrainerEngine : IDisposable
             Log?.Invoke("卸载失败，功能已禁用；请重试脱离或重启游戏: " + ex.Message);
             return;
         }
-        // restore the placement distance if the toggle was left on
-        if (float.IsFinite(_savedPlacementDistance) && _mem != null && Version != null)
+        // restore the free-build branch patch if the toggle was left on
+        if (_buildAnywhereOn && _mem != null && Version != null)
         {
             try
             {
-                var g = _data.Globals.PlacementDistance;
+                var g = _data.Globals.BuildAnywherePatch;
                 if (g != null && g.Rva.TryGetValue(Version, out var rvaStr))
-                {
-                    var obj = _mem.ReadU32(Base + Convert.ToUInt32(rvaStr, 16));
-                    if (obj >= 0x10000)
-                        _mem.WriteF32(obj + 0xC, _savedPlacementDistance);
-                }
+                    _mem.Write(Base + Convert.ToUInt32(rvaStr, 16), new byte[] { 0x75, 0x0C });
             }
             catch { /* best-effort restore on detach */ }
-            _savedPlacementDistance = float.NaN;
+            _buildAnywhereOn = false;
         }
         _mem?.Dispose();
         _mem = null;
@@ -240,10 +236,10 @@ public sealed class TrainerEngine : IDisposable
         if (f?.Kind != "toggle") return (false, "功能尚未可用或非开关型功能");
         try
         {
-            // 随地建造 = 数值切换（改写游戏自己的放置距离 90→100000/还原），非代码桩
+            // 随地建造 = FINAL3 同款 2 字节分支 patch（放置 gate 的"范围外返回 2"路径）
             if (f.Id == "build_anywhere")
             {
-                var (vok, vmsg) = SetPlacementDistance(on);
+                var (vok, vmsg) = SetBuildAnywherePatch(on);
                 if (!vok) return (vok, vmsg);
                 _toggleState[featureId] = on;
                 Log?.Invoke($"{f.Name} = {(on ? "开" : "关")}{(vmsg.Length > 0 ? $"（{vmsg}）" : "")}");
@@ -263,41 +259,33 @@ public sealed class TrainerEngine : IDisposable
         }
     }
 
-    private float _savedPlacementDistance = float.NaN;
+    private bool _buildAnywhereOn;
 
-    /// <summary>随地建造：改写 [placementDistance 全局]+0xC 的
-    /// BuildingPlacementDistance（活体实测默认 90.0）。开=100000（全图距离），
-    /// 关=还原保存值。对局切换会重建 GameData（值回默认），需重新开关。</summary>
-    private (bool, string) SetPlacementDistance(bool on)
+    /// <summary>随地建造 v3：FINAL3 同款 2 字节分支 patch（2026-10-12 实测验证）。
+    /// 放置 gate 函数尾部的"全部候选失败 → 返回失败码 2（超出可建造范围）"分支：
+    /// 75 0C (jne) ↔ EB 0C (jmp)——jmp 后永不返回 2，范围外照常通过。
+    /// 效果与 FINAL3（EA 原版 0x4E7565）完全一致：格子仍显示灰色但可直接点击建造。
+    /// 补丁点（VA）：1.13 0x511955 / 1.12 0x528DF5，磁盘字节级验证；该 gate 为
+    /// 玩家放置与 AI 选址共用层。纯代码字节切换，对局切换不重置；脱离进程自动还原。</summary>
+    private (bool, string) SetBuildAnywherePatch(bool on)
     {
-        var global = _data.Globals.PlacementDistance;
+        var global = _data.Globals.BuildAnywherePatch;
         if (global is null || !global.Rva.TryGetValue(Version!, out var rvaStr))
-            return (false, "本版本暂不支持（全局未注册）");
-        var addr = Base + Convert.ToUInt32(rvaStr, 16);
-        var obj = _mem!.ReadU32(addr);
-        if (obj < 0x10000) return (false, "放置距离对象不可用（主菜单？进对局后使用）");
-        var slot = obj + 0xC;
-        if (on)
-        {
-            var current = _mem.ReadF32(slot);
-            if (float.IsFinite(current) && current is > 1f and < 5000f)
-            {
-                _savedPlacementDistance = current;
-                // moderate widening: this value is the grid-search radius, so a
-                // huge number makes the per-frame placement sweep walk the whole
-                // map (user-reported freeze). 300 covers a wide build area while
-                // keeping the per-frame cell count sane.
-                _mem.WriteF32(slot, 300f);
-                return (true, $"距离 {current:F0}→300（搜索半径，过大全图扫描会卡）");
-            }
-            return (false, $"当前距离值异常（{current}），拒绝改写");
-        }
-        if (float.IsFinite(_savedPlacementDistance))
-        {
-            _mem.WriteF32(slot, _savedPlacementDistance);
-            return (true, $"距离还原 {_savedPlacementDistance:F0}");
-        }
-        return (true, "无保存值（未曾开启）");
+            return (false, "本版本暂不支持（补丁点未注册）");
+        var site = Base + Convert.ToUInt32(rvaStr, 16);
+        byte[] jne = { 0x75, 0x0C }, jmp = { 0xEB, 0x0C };
+        var cur = _mem!.Read(site, 2);
+        if (on && cur.SequenceEqual(jmp))
+        { _buildAnywhereOn = true; return (true, "已在开启状态"); }
+        if (!on && cur.SequenceEqual(jne))
+        { _buildAnywhereOn = false; return (true, "已在关闭状态"); }
+        if (!cur.SequenceEqual(jne) && !cur.SequenceEqual(jmp))
+            return (false, $"补丁点字节异常（{Convert.ToHexString(cur)}），拒绝改写");
+        _mem.Write(site, on ? jmp : jne);
+        if (!_mem.Read(site, 2).SequenceEqual(on ? jmp : jne))
+            return (false, "写入校验失败");
+        _buildAnywhereOn = on;
+        return (true, on ? "放置范围限制已解除" : "放置范围限制已恢复");
     }
 
     public (bool ok, string msg) ExecuteAction(string featureId, string? arg = null)

@@ -1,5 +1,49 @@
 # 逆向笔记（重打包版 1.12/1.13）
 
+## v19（★随地建造正式落地：实测成功 → 修改器开关实现，publish-v19）
+
+- **用户实测成功（2026-10-12，Steam 1.13）**：patchtest 0x511955 `75 0C→EB 0C` 后灰色格子直接点击放置成功——v18s 的 patch 点定案无误，FINAL3 随地建造语义完整复刻。
+- **build_anywhere v3 实装（TrainerEngine.SetBuildAnywherePatch）**：纯 2 字节分支 toggle（75 0C↔EB 0C），开关幂等（重复开/关安全）、字节异常拒绝改写、写入校验、**脱离进程自动还原**（Detach 段）；对局切换不重置（.text 补丁，比旧数值方案稳）。补丁点经 features.json globals.buildAnywherePatch（RVA 1.13 0x111955 / 1.12 0x128DF5）注入。**旧数值方案全链删除**（SetPlacementDistance/placementDistance 全局/_savedPlacementDistance——该值是 AI/收集层搜索半径，与放置范围无关）。
+- **版本规则切换（用户拍板）**：UI 关于栏 v2.0→v19，发布目录纯数字 publish-v19 起（不再 v18m 字母后缀）。
+- SelfCheck 42/42 通过（无回归），Release build 0 警告 0 错误。**publish-v19 已发布**。
+- 剩余待办：①v19 实测（建议顺带验热键 Alt+B、对局中开关、切对局不重开、修改器脱离自动还原）②摧毁死亡管线深抓（差一次 60s kill 采样）③1.12 侧 patch 点 0x528DF5 实测（磁盘已验证，未实机）。
+- 复盘要点（v18n→v19 全程）：三次方向反转的根因都是**信息不全时过早收敛**——v18m 把 RVA 当 VA（链错位）、v18q 把"未变绿"当失败（判读标准错）、v18p 怀疑 AI 链（归因不完整）。终局解法是用户提议的"找参照系实测"（盗版 1.12+FINAL3 磁盘对照），一次拿到 ground truth。**以后凡有可运行的参照实现，先对照再推理。**
+
+## v18s（★破案：FINAL3 随地建造全链路定案，Steam 双版 patch 点字节级确认）
+
+- **用户盗版 1.12 实验**：FINAL3 在 Steam 重打包 1.12 无效且闪退——直接写 0x4E7565（Steam 版那里是 fstp 指令中间）→ 执行乱码崩溃。确认 FINAL3 为直接地址写入（无 AOB 保护）、EA 原版布局专用。盗版 1.12 磁盘验证 **0x4E7565 = `75 0C` 实锤**——MustCode+1201 imm32 常量表解读成立。
+- **用户关键洞察**：FINAL3 的随地建造效果=**灰色格子也能建造**（"在目前有效范围外正常建造"），不是把格子变绿——v18q patchtest 的"没变绿=失败"判读标准本身错了（当时没测点击）。0xB322EA 格状态 patch 可能本来就有效但未验证（保留为备选，不作数）。
+- **EA gate 函数全解（盗版=EA 原版 1.12 的 0x4E74B0..0x4E7580，ret 0x10 thiscall+4 栈参）**：开头 test edx,0x10000 早退返回 0 / `shr edx,0xB; and bl,1`（bl 初值=参数 bit11）/ 空容器直落 test bl,bl / 主循环遍历容器（[eax+8] 链表项）：预筛（[esi+0xC]≠0→标记找到、[esi+0x20]、test edx,0x8000、edi、[esi+8]）→ playerRoot（EA 全局 0xCE8C9C）+ 查询 0x838F60/0x4DFF50 → "找到"标志 [esp+0x13] → **主判定 0x4E4120（bl==0 才调用，任一成功锁定 bl=1）** → 循环到容器尾。尾：`test bl,bl; jne +0xC`——bl 全败 → **mov eax,2（失败码）**；否则 setne [esp+7] 返回 bool。**FINAL3 patch：jne→jmp = 永不返回 2 = 范围外照常通过**。
+- **★ Steam 双版对应函数定位（三特征唯一定案）**：EA 函数体的 `test edx,0x8000`（F7 C2 00 80 00 00）在两版 .text 各**唯一命中**，且 `test al,al; sete al; test al,al` 三连与 `mov eax,2; pop ebx; add esp,0xC; ret 0x10` 失败码尾巴聚集同一函数，逐指令同构验证：
+  - **Steam 1.13：gate 函数 0x511870（主判定 callee 0x50E140，查询 0x862350/0x509C70，playerRoot 0xCF214C）→ patch 点 0x511955：`75 0C`→`EB 0C`**（磁盘验证 ✓）
+  - **Steam 1.12：gate 函数 ≈0x528770 → patch 点 0x528DF5：`75 0C`→`EB 0C`**（磁盘验证 ✓）
+  - 三版（EA 0x4E7565 / Steam 0x528DF5 / Steam 0x511955）**完全相同的 2 字节 patch**。
+- **gate 函数与 AI 的关系（修正 v18f）**：gate 紧邻 v18f 分析的 AI 选址 worker（1.13 VA 0x511980，GetAIStructurePlacementLocation 路径）——**玩家放置与 AI 选址共用此 gate**（AI worker 是其调用者之一），这解释了 FINAL3 patch 单点全效（预览+提交+AI 三路）。v18f"该区域=AI 专用、不能当玩家 permission"的结论不准确——它是共用判定层。此前 placehunt 链（validator 0xA42450→worker 0x520780→percell 0xA2A1E0）是另一条更上层的放置准备链（候选收集/足迹），与本 gate 是上下游关系。
+- **patchtest_buildanywhere.py v2**：双版本自动检测（进程名/tasklist；显式 PID 时按补丁点字节探测版本），patch 点按版本选择，提示文案改为"灰格直接点击"判读。待用户实测：放下成功=v3 定案（改造成 StubGen toggle 或纯字节 toggle 开关）；仍被拒=提交层另有检查（追 gate 的调用者中非 AI 的那条）。
+
+## v18r（patchtest 阴性 + FINAL3 script_12 语义定案 + 分层模型修正 → 1.12 实况 diff 实验）
+
+- **patchtest 阴性（0xB322EA 75 05→EB 05 空格返回 1）：虚影没变绿**。格状态（buildability 覆盖）层不是绿色判定层。
+- **FINAL3 script_12（Free Build）原文只有 4 行**：`[MustCode+1201]: db eb 0c` / disable 还原 `75 0c`。结合 script_00 的 `MustCode+1200: mov eax,[Ra3_1.12.game+e7565]; ret`——**MustCode+1201 处躺的 4 字节正是该 mov 的 imm32=0x004E7565**，FINAL3 用"mov 桩 imm32"当补丁目标常量表（`[label]`=解引用语义）。**随地建造 = EA 1.12 模块 RVA 0xE7565 处 `75 0C`（jne +0xC）→ `EB 0C`（jmp）**。v18f 的 hypothesis 精确化成立。
+- **FINAL3 全部地址在 Steam 重打包 1.12 上对不上**（实测：RVA 0xE7565→VA 0x4E7565 是 `fstp [eax]` 指令中间；CreateUnit RVA 0x205240→0x605240 是 `mov eax,edx; shr` 非 cdecl 入口；变换 0x1ED4A0 亦非独立函数）——FINAL3 是 EA 原版/3DM 1.12 布局专用（来源 3DMGAME-Com1.12 包），只能映射语义不能映射地址。
+- **分层模型修正（解释阴性结果）**：worker 0x520780 在 **PlacementGrid（[0xCE21CC]，0xB281E0 访问器，0x28 字节/项数组）**上收集候选格——**候选集合=虚影绿色的来源**；followup/percell 查的是**另一个网格**（[0xCEC450]+0x28→0xB336E0，[ecx+0x44] 基址 0x34 字节/项）=buildability 覆盖层（第二阶段/提交用）。patch buildability 层不影响颜色 ✓ 与实测吻合。**两个网格系统是不同数组**（0x28/项 vs 0x34/项）。下一站=worker 内部的收集谓词（0x51A9E0→0x5149F0，worker 有 3 处调 0x51A9E0：0x5208C9/0x5209DB/0x520AB4），EA 0xE7565 的 jne 对应物应在其中——dump_worker_full.py 已备（未跑完）。
+- **vf48 在两局扫图中全程零命中**（placehunt 挂了但 hits=0）——UI 谓词 0x707880→vf48 路径在放置预览中未被调用，v18g 的"UI 谓词两层检查"模型对预览颜色不成立（至少不经 vf48）。
+- **★ 下一步实验（用户提议，正确路线）：1.12 + FINAL3 实况 diff**。放弃在 1.13 硬猜 EA 地址的语义对应，改为：游戏切 1.12 → 先开 `tools/analysis/watch_text_diff.py`（基线快照+每 3s 对比 .text，任何字节改动实时打印 VA/旧/新，含还原检测）→ 运行 FINAL3 开随地建造 → 监控直接打印它 patch 的真实地址和字节。三种结果都有定案价值：①Steam 1.12 上 FINAL3 有效 → 拿到真实 patch 点 → 反汇编语义 → 1.13 对称复刻；②FINAL3 无效但监控显示它写了某处 → 看写哪了（可能崩游戏，崩溃也无妨）；③FINAL3 无效且什么都没写（如 AOB 扫描失败拒绝 patch）→ 确认 EA 原版专用，转 worker 收集谓词静态路线。FINAL3 本体=C:\Users\14560\Downloads\3DMGAME-Com1.12.ken22265.160913\RedAlert3_Trainer_1.12_FINAL3.exe（无游戏本体，实验用 Steam 1.12）。
+- 操作顺序铁律：**先开监控再开 FINAL3**（基线必须干净）。
+
+## v18q（两局活体实验定案：玩家预览路径实锤 + 格状态 gate 确认 + 2 字节 patch 点定案）
+
+- **两局 placehunt 数据（tools/txt/hai.txt 有AI / noai.txt 无AI，各 90s 扫图）全部定案**：
+  1. **链归属=玩家预览路径实锤**：无 AI 局整条链照样高频活跃（validator +15/0.5s=30/s=逻辑帧率、percell/格状态 +900/0.5s=1800/s），鼠标扫图即触发无需点击。v18p 的"可能是 AI 选址链"质疑被数据否定——两局频率几乎一致，若为 AI 链无 AI 局应归零。
+  2. **AABB=世界包围盒死刑**：两局扫图全程 [mgr] allowed-zone records 恒为 1 条 (0,0,500,560)（全图），粗筛-FAIL 仅开场一次性 60 次。EB 46 预案正式废弃。
+  3. **格状态=真 gate**：无 AI 局样本 eax 全 1（扫图起点=自己基地旁，格子有建造许可覆盖）；有 AI 局样本 eax 全 0（起点无覆盖）。格记录地址两局不同区（0x656xxxx vs 0x5CAxxxx）。
+  4. **频率结构：30fps × ~60 格/帧**——候选格围绕建筑虚影（不是围绕基地的 90 半径圈），patch 后构造成本有界（≤60 足迹对象/帧）✓；**距离 90 不限制"建多远"，数值线正式关闭**（v18j 的 300 数值开关退休）。
+  5. **采样注意**：中部桩（函数内地址如 0xA2A2A6/0xA2A2C5）样本的"ret"字段是栈内数据（保存的 ebx，显示 0x7DB7C20/0x7259CD0=两局 manager 堆地址）不是调用者；eax 观测仍有效。样本 cap=8 冻结太早，只覆盖扫图最初 8 格——若需全程分布须让 widx 周期清零。
+- **格状态机 0xB322D0 完整逻辑（含 0xB322F1 尾段）**：byte[rec+0x32]≠0→3(阻止，保留)；word[rec+idx*2+4]==0→0(无覆盖=THE gate)；0xB322F1: cmp ax,0xFFFF / mov eax,1 / jne ret → 0xFFFF 时改取全局默认 [0xD233DC]，其余返回 1(被许可圆覆盖)。idx=[side+0x20]（放置类型，≤19；每格 0x34B 含 ~20 个 16 位状态槽）。
+- **★ patch 点定案：0xB322EA `75 05`→`EB 05`**（jne→jmp）：无覆盖格(word==0)不再走 xor eax,eax 返回 0，改走 ax≠0 路径→cmp 0xFFFF 不等→mov eax,1→返回"已覆盖"。阻止态(3)与真覆盖(1)语义不变，地形/占用全保留。**FINAL3 `75 0C→EB 0C` 的精确等价物（连 jne→jmp rel8 指令形式都一致）**。影响面：0xB322D0 仅 2 个直接 caller（0xB3373D=0xB336E0 内部、0xB32B9B 待查），0xB34740 thunk 有 22 caller 共享此查询（含 AI 选址——单机可接受：AI 也会全图选址）。
+- **tools/analysis/patchtest_buildanywhere.py 就绪**：120 秒临时 patch 实验（冻结整写 EB 05→倒计时→try/finally 自动还原 75 05+还原校验）。判读：虚影远处变绿可放=v3 定案（走 StubGen 通道做成正式开关）；仍被拒=提交层另有验证（追 0xA424E0/0xAA891C 上游）。
+- 版本号规则（用户拍板）：v19 起纯数字递增；UI 关于栏已从 v2.0 改 v19；find_game() 重写为 tasklist 解析（Process32First 在本机 Python 3.14 x64 报 ERROR_BAD_LENGTH，线程快照正常进程快照不行——勿用 toolhelp 枚举进程）。
+
 ## v18p（SDK/RA1 源码调研核实：格状态机定案 + 链归属质疑——0xA42450 链可能是 AI 选址链）
 
 - **DeepSeek 的 SDK 引用全部属实**（SDK 位于 `D:\RiderProject\CnC_Modding_Support\Red Alert 3\`）：`Xml\Allied\Structures\AlliedConstructionYard.xml:632` 确有 `ProjectedBuildabilityInfo`（ConYard Radius=600，第二处带 HeightVariation）；schema `AssetTypeGameObject.xsd:365-371`（Radius/RadiusY 椭圆/BuildPlacementTypes/注释"In RA3 no structures provide buildability until fully unpacked"）；**`BuildingPlacementDistance` 全 SDK 只出现在 `Xml\SkirmishAI\AITargetHeuristicLibrary.xml:1072-1076`，值为 200/500/1000/3000/7000**——没有任何地方是 90。机制模型：建筑落成后向周围投射 Radius=600 的可建造圆，写进格状态位；"只能建在基地附近"= 圆并集。
