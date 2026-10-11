@@ -68,6 +68,35 @@ public partial class MainWindow : Window
 
     private void OnClearLog(object sender, MouseButtonEventArgs e) => _vm.LogLines.Clear();
 
+    private void OnCopyAllLogs(object sender, RoutedEventArgs e)
+    {
+        if (_vm.LogLines.Count == 0) return;
+        Clipboard.SetText(string.Join(Environment.NewLine, _vm.LogLines));
+        _vm.Log($"已复制 {_vm.LogLines.Count} 行日志到剪贴板");
+    }
+
+    private void OnCopyLogLine(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Parent: ContextMenu menu } && menu.PlacementTarget is TextBlock line)
+        {
+            Clipboard.SetText(line.Text);
+            _vm.Log("已复制该行日志");
+        }
+    }
+
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        // Ctrl+C copies the selected log line (unless a text box owns the clipboard copy)
+        if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.Control &&
+            Keyboard.FocusedElement is not TextBox &&
+            LogList.SelectedItem is string selected)
+        {
+            Clipboard.SetText(selected);
+            e.Handled = true;
+        }
+        base.OnPreviewKeyDown(e);
+    }
+
     private void OnDiagClick(object sender, MouseButtonEventArgs e)
     {
         if (!_vm.Attached)

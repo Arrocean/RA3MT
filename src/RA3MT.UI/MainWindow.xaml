@@ -192,6 +192,7 @@
         <Grid.RowDefinitions>
           <RowDefinition Height="*" />
           <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="26,22,26,10">
@@ -296,7 +297,6 @@
           <Grid Margin="14,8,14,8">
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto" />
-              <RowDefinition Height="Auto" />
               <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <DockPanel>
@@ -306,18 +306,27 @@
                            Cursor="Hand" MouseLeftButtonUp="OnDiagClick" />
                 <TextBlock Text="    清空" FontSize="11" Foreground="{StaticResource Txt2}"
                            Cursor="Hand" MouseLeftButtonUp="OnClearLog" />
+                <TextBlock Text="    复制全部" FontSize="11" Foreground="{StaticResource Txt2}"
+                           Cursor="Hand" MouseLeftButtonUp="OnCopyAllLogs" />
               </StackPanel>
               <TextBlock Text="收起 ▾" FontSize="11" Foreground="{StaticResource Txt3}"
                          HorizontalAlignment="Right" Cursor="Hand" MouseLeftButtonUp="OnToggleLog" />
             </DockPanel>
             <ListBox x:Name="LogList" Grid.Row="1" ItemsSource="{Binding LogLines}"
                      Background="Transparent" BorderThickness="0" Margin="0,6,0,0"
-                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
                      VirtualizingPanel.ScrollUnit="Pixel">
               <ListBox.ItemTemplate>
                 <DataTemplate>
                   <TextBlock Text="{Binding}" FontFamily="Cascadia Code,Consolas" FontSize="11"
-                             Foreground="#9fb0c8" Padding="0,1" />
+                             Foreground="#9fb0c8" Padding="0,1" TextWrapping="Wrap">
+                    <TextBlock.ContextMenu>
+                      <ContextMenu>
+                        <MenuItem Header="复制此行" Click="OnCopyLogLine" />
+                        <MenuItem Header="复制全部日志" Click="OnCopyAllLogs" />
+                      </ContextMenu>
+                    </TextBlock.ContextMenu>
+                  </TextBlock>
                 </DataTemplate>
               </ListBox.ItemTemplate>
             </ListBox>
