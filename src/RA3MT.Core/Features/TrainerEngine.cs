@@ -103,6 +103,77 @@ public sealed class TrainerEngine : IDisposable
         }
     }
 
+    /// <summary>API addresses a bridge needs, or 0 when the capability was not
+    /// requested or its contract did not verify. A zero address means "bridge off",
+    /// which is exactly how <see cref="MasterCode"/> decides what to install.</summary>
+    private readonly record struct BridgeApis(
+        nuint Rank, nuint Capture, nuint Kill, nuint KillDeathMarker,
+        nuint SpawnWrapper, nuint HashLookup, nuint HashTableGlobal);
+
+    /// <summary>Resolve every optional bridge capability. Each resolver is
+    /// individually fenced: a contract mismatch downgrades that one bridge and is
+    /// reported, instead of aborting the whole attach or installing something
+    /// unverified. The feature switches only decide whether we bother resolving.</summary>
+    private BridgeApis ResolveBridgeApis(string version, nuint imageBase, Target.IImageReader image)
+    {
+        nuint rank = 0, capture = 0, kill = 0, marker = 0;
+        nuint spawnWrapper = 0, hashLookup = 0, hashTableGlobal = 0;
+
+        if (EnableRankBridge)
+        {
+            Target.ApiResolverCatalog.TryResolve("晋级桥",
+                () => Target.RankApiResolver.Resolve(version, imageBase, image),
+                resolved => rank = resolved.Value,
+                reason => Log?.Invoke($"晋级桥：{reason}"));
+        }
+
+        if (EnableCaptureKillBridges)
+        {
+            Target.ApiResolverCatalog.TryResolve("俘虏桥",
+                () => Target.CaptureApiResolver.Resolve(version, imageBase, image),
+                resolved => capture = resolved.Value,
+                reason => Log?.Invoke($"俘虏桥：{reason}，功能不可用"));
+            Target.ApiResolverCatalog.TryResolve("摧毁桥",
+                () => Target.KillApiResolver.Resolve(version, imageBase, image),
+                resolved =>
+                {
+                    kill = resolved.adjust;
+                    marker = resolved.deathMarker;
+                },
+                reason => Log?.Invoke($"摧毁桥：{reason}，功能不可用"));
+        }
+
+        if (EnableSpawnBridge)
+        {
+            Target.ApiResolverCatalog.TryResolve("生成桥",
+                () =>
+                {
+                    var wrapper = Target.SpawnApiResolver.Resolve(version, imageBase, image);
+                    var support = Target.SpawnSupportApiResolver.Resolve(version, imageBase, image);
+                    return (wrapper, support.TemplateHashLookup, support.HashTableOwnerGlobal);
+                },
+                resolved =>
+                {
+                    spawnWrapper = resolved.wrapper;
+                    hashLookup = resolved.TemplateHashLookup;
+                    hashTableGlobal = resolved.HashTableOwnerGlobal;
+                },
+                reason => Log?.Invoke($"生成桥：{reason}，功能不可用"));
+        }
+
+        if (rank != 0)
+            Log?.Invoke($"晋级桥：晋级函数校验通过 0x{rank:X}（资金结算线程将安全调用）");
+        if (capture != 0)
+            Log?.Invoke($"俘虏桥：归属切换函数校验通过 0x{capture:X}");
+        if (kill != 0)
+            Log?.Invoke($"摧毁桥：HP 调整 0x{kill:X}，死亡标记 0x{marker:X}");
+        if (spawnWrapper != 0)
+            Log?.Invoke($"生成桥：生成 wrapper 校验通过 0x{spawnWrapper:X}，" +
+                        $"哈希查找 0x{hashLookup:X}，模板表全局 0x{hashTableGlobal:X}");
+
+        return new BridgeApis(rank, capture, kill, marker, spawnWrapper, hashLookup, hashTableGlobal);
+    }
+
     public void Attach()
     {
         if (Attached) throw new InvalidOperationException("已附加");
@@ -118,10 +189,11 @@ public sealed class TrainerEngine : IDisposable
             var baseAddr = (nuint)main.BaseAddress;
 
             Log?.Invoke($"附加 {Path.GetFileName(found.modulePath)} (PID {found.pid}) 基址 0x{baseAddr:X}");
+            var image = new Target.DelegateImageReader((rva, len) => mem.Read(baseAddr + rva, len));
             var text = mem.Read(baseAddr + 0x1000, 0x7D0000);
             var sites = HookResolver.ResolveAll(
                 _data, found.version,
-                readRva: (rva, len) => mem.Read(baseAddr + rva, len),
+                readRva: image.Read,
                 text,
                 gameBase: baseAddr,
                 log: Log);
@@ -130,74 +202,11 @@ public sealed class TrainerEngine : IDisposable
                 throw new InvalidOperationException($"挂钩点校验不完整（{sites.Count}/{_data.Hooks.Count}），拒绝部分附加；请确认游戏版本且没有其他修改器挂钩");
 
             var rootRva = _data.Globals.PlayerRoot.RvaFor(found.version);
-
-            // 游戏线程桥：显式开启且各 API 严格校验通过才接入；
-            // 校验失败只降级为普通资金桩并告警，绝不带病安装消费桩。
-            nuint rankApi = 0;
-            if (EnableRankBridge)
-            {
-                try
-                {
-                    rankApi = Target.RankApiResolver.Resolve(found.version, baseAddr,
-                        (rva, len) => mem.Read(baseAddr + rva, len));
-                    Log?.Invoke($"晋级桥：晋级函数校验通过 0x{rankApi:X}（资金结算线程将安全调用）");
-                }
-                catch (Exception ex)
-                {
-                    Log?.Invoke($"晋级桥：校验失败，已保持默认资金桩（{ex.Message}）");
-                }
-            }
-            nuint captureApi = 0, killApi = 0, killDeathMarkerApi = 0;
-            if (EnableCaptureKillBridges)
-            {
-                try
-                {
-                    captureApi = Target.CaptureApiResolver.Resolve(found.version, baseAddr,
-                        (rva, len) => mem.Read(baseAddr + rva, len));
-                    Log?.Invoke($"俘虏桥：归属切换函数校验通过 0x{captureApi:X}");
-                }
-                catch (Exception ex)
-                {
-                    Log?.Invoke($"俘虏桥：校验失败，功能不可用（{ex.Message}）");
-                }
-                try
-                {
-                    var (adjust, marker) = Target.KillApiResolver.Resolve(found.version, baseAddr,
-                        (rva, len) => mem.Read(baseAddr + rva, len));
-                    killApi = adjust;
-                    killDeathMarkerApi = marker;
-                    Log?.Invoke($"摧毁桥：HP 调整 0x{adjust:X}，死亡标记 0x{marker:X}");
-                }
-                catch (Exception ex)
-                {
-                    Log?.Invoke($"摧毁桥：校验失败，功能不可用（{ex.Message}）");
-                }
-            }
-
-            nuint spawnWrapperApi = 0, hashLookupApi = 0, hashTableGlobalVa = 0;
-            if (EnableSpawnBridge)
-            {
-                try
-                {
-                    spawnWrapperApi = Target.SpawnApiResolver.Resolve(found.version, baseAddr,
-                        (rva, len) => mem.Read(baseAddr + rva, len));
-                    var support = Target.SpawnSupportApiResolver.Resolve(found.version, baseAddr,
-                        (rva, len) => mem.Read(baseAddr + rva, len));
-                    hashLookupApi = support.TemplateHashLookup;
-                    hashTableGlobalVa = support.HashTableOwnerGlobal;
-                    Log?.Invoke($"生成桥：生成 wrapper 校验通过 0x{spawnWrapperApi:X}，" +
-                                $"哈希查找 0x{hashLookupApi:X}，模板表全局 0x{hashTableGlobalVa:X}");
-                }
-                catch (Exception ex)
-                {
-                    spawnWrapperApi = hashLookupApi = hashTableGlobalVa = 0;
-                    Log?.Invoke($"生成桥：校验失败，功能不可用（{ex.Message}）");
-                }
-            }
+            var bridges = ResolveBridgeApis(found.version, baseAddr, image);
 
             var mc = new MasterCode(mem, baseAddr, baseAddr + rootRva, sites, _data.Hooks, Log,
-                rankApi, captureApi, killApi, killDeathMarkerApi,
-                spawnWrapperApi, hashLookupApi, hashTableGlobalVa);
+                bridges.Rank, bridges.Capture, bridges.Kill, bridges.KillDeathMarker,
+                bridges.SpawnWrapper, bridges.HashLookup, bridges.HashTableGlobal);
             pendingMaster = mc;
             mc.Install();
 

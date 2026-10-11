@@ -52,11 +52,16 @@ public static class SpawnSupportApiResolver
     private static readonly byte[] OwnerPredicateCanonical = Convert.FromHexString(
         "8B814801000083F807741283F806740D83F808740883F805740332C0C3B001C3");
 
+    public const string Id = "spawn-support";
+
     /// <summary>Validate all static helper identities and return their 32-bit addresses.</summary>
     public static SpawnSupportApis Resolve(string version, nuint imageBase,
-        Func<uint, int, byte[]> readRva)
+        Func<uint, int, byte[]> readRva) =>
+        Resolve(version, imageBase, new DelegateImageReader(readRva));
+
+    public static SpawnSupportApis Resolve(string version, nuint imageBase, IImageReader image)
     {
-        ArgumentNullException.ThrowIfNull(readRva);
+        ArgumentNullException.ThrowIfNull(image);
         var layout = Layouts.FirstOrDefault(item => item.Version == version)
             ?? throw new InvalidOperationException("Unsupported spawn support API version");
         if (imageBase == 0 || imageBase > uint.MaxValue)
@@ -64,15 +69,15 @@ public static class SpawnSupportApiResolver
 
         var lookup = WithRelativeCall(HashLookupCanonical, 0x13,
             layout.HashFind - checked(layout.HashLookup + 0x18));
-        Verify(readRva, layout.HashLookup, lookup, "template hash lookup");
-        Verify(readRva, layout.HashFind, HashMapFindCanonical, "hash map finder");
-        VerifyHashTableGlobal(readRva, layout, (uint)imageBase);
+        Verify(image, layout.HashLookup, lookup, "template hash lookup");
+        Verify(image, layout.HashFind, HashMapFindCanonical, "hash map finder");
+        VerifyHashTableGlobal(image, layout, (uint)imageBase);
 
         var owner = WithRelativeCall(OwnerCanonical, 9,
             layout.OwnerPredicate - checked(layout.OwnerResolver + 14));
         BitConverter.GetBytes(checked((uint)imageBase + layout.OwnerKindGlobalRva)).CopyTo(owner, 5);
-        Verify(readRva, layout.OwnerResolver, owner, "owner resolver");
-        Verify(readRva, layout.OwnerPredicate, OwnerPredicateCanonical, "owner-kind predicate");
+        Verify(image, layout.OwnerResolver, owner, "owner resolver");
+        Verify(image, layout.OwnerPredicate, OwnerPredicateCanonical, "owner-kind predicate");
 
         return new SpawnSupportApis(
             imageBase + layout.HashLookup,
@@ -94,7 +99,7 @@ public static class SpawnSupportApiResolver
 
     /// <summary>Anchor the hash-table owner global to the map-start caller's
     /// mov ecx,[global]; push edx; call TemplateHashLookup sequence.</summary>
-    private static void VerifyHashTableGlobal(Func<uint, int, byte[]> readRva, Layout layout, uint imageBase)
+    private static void VerifyHashTableGlobal(IImageReader image, Layout layout, uint imageBase)
     {
         var site = checked(layout.SpawnWrapperEntry + (uint)CallerSiteOffset);
         var expected = new byte[12];
@@ -105,7 +110,7 @@ public static class SpawnSupportApiResolver
         expected[7] = 0xE8;
         var callSite = site + 12;
         BitConverter.GetBytes(checked((int)((long)layout.HashLookup - callSite))).CopyTo(expected, 8);
-        var actual = readRva(site, expected.Length);
+        var actual = image.Read(site, expected.Length);
         if (actual.Length != expected.Length)
             throw new InvalidOperationException("hash table caller site read length mismatch");
         var mismatch = actual.AsSpan().SequenceEqual(expected) ? -1 :
@@ -115,10 +120,10 @@ public static class SpawnSupportApiResolver
                 $"expected {expected[mismatch]:X2}, read {actual[mismatch]:X2}");
     }
 
-    private static void Verify(Func<uint, int, byte[]> readRva, uint rva,
+    private static void Verify(IImageReader image, uint rva,
         byte[] expected, string name)
     {
-        var actual = readRva(rva, expected.Length);
+        var actual = image.Read(rva, expected.Length);
         if (actual.Length != expected.Length)
             throw new InvalidOperationException($"{name} read length mismatch");
         var mismatch = actual.AsSpan().SequenceEqual(expected) ? -1 :

@@ -40,10 +40,15 @@ public static class SpawnApiResolver
         ("1.12", 0x2440F0, 0x8EDA98, 1),
     ];
 
+    public const string Id = "spawn";
+
     /// <summary>Resolve the verified wrapper address; never invokes game code.</summary>
-    public static nuint Resolve(string version, nuint imageBase, Func<uint, int, byte[]> readRva)
+    public static nuint Resolve(string version, nuint imageBase, Func<uint, int, byte[]> readRva) =>
+        Resolve(version, imageBase, new DelegateImageReader(readRva));
+
+    public static nuint Resolve(string version, nuint imageBase, IImageReader image)
     {
-        ArgumentNullException.ThrowIfNull(readRva);
+        ArgumentNullException.ThrowIfNull(image);
         var layout = Layouts.FirstOrDefault(item => item.Version == version);
         if (layout.Version is null)
             throw new InvalidOperationException("Unsupported spawn wrapper version");
@@ -63,7 +68,7 @@ public static class SpawnApiResolver
 
         var managerVa = checked((uint)imageBase + layout.ManagerRva);
         BitConverter.GetBytes(managerVa).CopyTo(expected, 0xDA);
-        var actual = readRva(layout.Entry, expected.Length);
+        var actual = image.Read(layout.Entry, expected.Length);
         if (actual.Length != expected.Length)
             throw new InvalidOperationException("Spawn wrapper read length mismatch");
         var mismatch = actual.AsSpan().SequenceEqual(expected) ? -1 :
