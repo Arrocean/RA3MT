@@ -135,22 +135,27 @@ def resume_all(handles):
 
 
 def find_game():
-    class PE(ctypes.Structure):
-        _fields_ = [('dwSize', ctypes.c_ulong), ('cntUsage', ctypes.c_ulong),
-                    ('th32ProcessID', ctypes.c_ulong), ('th32ModuleID', ctypes.c_ulong),
-                    ('cntThreads', ctypes.c_ulong), ('th32ParentProcessID', ctypes.c_ulong),
-                    ('pcPriClassBase', ctypes.c_long), ('dwFlags', ctypes.c_ulong),
-                    ('szExeFile', ctypes.c_char * 260)]
-    procs = []
-    lppe = PE()
-    lppe.dwSize = ctypes.sizeof(PE)
-    snap = k32.CreateToolhelp32Snapshot(0x2, 0)
-    if k32.Process32First(snap, ctypes.byref(lppe)):
-        while k32.Process32Next(snap, ctypes.byref(lppe)):
-            if lppe.szExeFile.decode().startswith('ra3_1.1'):
-                procs.append(lppe.th32ProcessID)
-    k32.CloseHandle(snap)
-    return procs[0] if procs else None
+    """Find the ra3_1.1x.game PID.
+
+    Toolhelp Process32First fails with ERROR_BAD_LENGTH on this box
+    (Python 3.14 x64 / Win11 26300: thread snapshots work, process snapshots
+    don't), so shell out to tasklist instead — same thing Task Manager uses.
+    Returns the PID as int, or None."""
+    import subprocess
+    for name in ('ra3_1.13.game', 'ra3_1.12.game'):
+        try:
+            out = subprocess.run(['tasklist', '/FI', f'IMAGENAME eq {name}',
+                                  '/FO', 'CSV', '/NH'],
+                                 capture_output=True, timeout=10).stdout
+        except Exception:
+            continue
+        for line in out.splitlines():
+            if line.lower().startswith(b'"ra3_'):
+                try:
+                    return int(line.split(b'","')[1])
+                except (ValueError, IndexError):
+                    pass
+    return None
 
 
 def build_trampoline(tramp_va, data_va, site, displaced, max_samples=None):
@@ -315,7 +320,9 @@ def main():
     duration = int(sys.argv[2]) if len(sys.argv) > 2 else 60
     pid = int(sys.argv[3], 0) if len(sys.argv) > 3 else find_game()
     if not pid:
-        raise SystemExit('game not running')
+        raise SystemExit('未找到游戏进程——红警3要开到主菜单或对局里（启动器窗口不算）。\n'
+                         '如果游戏确实开着，请带 PID 运行：placehunt 90 <PID>\n'
+                         '（PID 查法：任务管理器 → 详细信息 → 找 ra3_1.13.game 那行的第二列数字）')
     if mode == 'placehunt':
         return run_placehunt(pid, duration)
     site, displaced = SITES[mode]
