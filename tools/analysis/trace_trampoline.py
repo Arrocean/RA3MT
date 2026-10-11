@@ -25,7 +25,21 @@ TEXT_LO, TEXT_HI = 0x401000, 0xBD0000
 SITES = {
     'kill': (0x7513F0, bytes.fromhex('807C240400')),           # cmp byte [esp+4],0
     'place': (0x511E00, bytes.fromhex('83EC0C8B442410F30F1010')),  # sub esp,0C; mov eax,[esp+10]; movss xmm2,[eax]
+    'placeui': (0x707880, bytes.fromhex('56578B7C240C8BF1')),      # push esi; push edi; mov edi,[esp+0C]; mov esi,ecx (UI can-place predicate)
 }
+
+# Multi-target placement hunt: every remaining player-side candidate at once.
+# Each site gets its own 0x200 slice of the data page (own count) and 6 samples.
+PLACEHUNT = [
+    (0x64C970, bytes.fromhex('83ec785355'),   'PlacementGrid reader 0x24C970'),
+    (0x86F310, bytes.fromhex('83ec2833c0'),   'PlacementGrid reader 0x46F310'),
+    (0x818A00, bytes.fromhex('8b0de0d2ce00'), 'PlacementGrid reader 0x418A00'),
+    (0x82B890, bytes.fromhex('83ec2c5355'),   'PlacementGrid reader 0x42B890'),
+    (0xA3AAB0, bytes.fromhex('83ec08568bf1'), 'PlacementGrid reader 0x63AAB0'),
+    (0x5F0930, bytes.fromhex('83ec18833df030cf0000'), 'region-check vf48 0x1F0930'),
+]
+HUNT_SLICE = 0x200
+HUNT_SAMPLES = 6
 
 # Stack-read depth: 12 dwords above the entry esp (48 bytes). Deeper reads
 # could cross the top of a shallow thread stack into unmapped memory; 48
@@ -105,9 +119,9 @@ def find_game():
     return procs[0] if procs else None
 
 
-def build_trampoline(tramp_va, data_va, site, displaced):
+def build_trampoline(tramp_va, data_va, site, displaced, max_samples=None):
     """Hand-assembled x86. Sample = 8 pushad dwords (EDI,ESI,EBP,ESP,EBX,EDX,ECX,EAX)
-    + 16 dwords of the raw stack at entry (return address, args, deeper frames)."""
+    + 12 dwords of the raw stack at entry (return address, args, deeper frames)."""
     code = bytearray()
     code += b'\x9C'                                    # pushfd
     code += b'\x60'                                    # pushad
@@ -116,7 +130,7 @@ def build_trampoline(tramp_va, data_va, site, displaced):
     code += b'\xBF' + struct.pack('<I', data_va)       # mov edi, imm32
     # eax = [edi] = sample count
     code += b'\x8B\x07'                                # mov eax,[edi]
-    code += b'\x3D' + struct.pack('<I', MAX_SAMPLES)   # cmp eax, MAX
+    code += b'\x3D' + struct.pack('<I', max_samples or MAX_SAMPLES)   # cmp eax, cap
     skip_fixup = len(code)
     code += b'\x0F\x8D\x00\x00\x00\x00'                # jge skip (patched)
     # edi = data + 4 + count*SAMPLE_BYTES
@@ -142,12 +156,106 @@ def build_trampoline(tramp_va, data_va, site, displaced):
     return bytes(code)
 
 
+def run_placehunt(pid, duration):
+    """Install one trampoline per candidate site; each has its own data slice.
+    One placement attempt by the user tells us which candidate is really on
+    the player's placement path, with its full call chain."""
+    h = k32.OpenProcess(0x1F0FFF, False, pid)
+    if not h:
+        raise SystemExit('OpenProcess failed (admin?)')
+    if 4 + HUNT_SAMPLES * SAMPLE_BYTES > HUNT_SLICE:
+        raise SystemExit('hunt slice too small')
+
+    # pre-verify every site still has its original bytes
+    for va, displaced, label in PLACEHUNT:
+        cur = read_mem(h, va, len(displaced))
+        if cur != displaced:
+            raise SystemExit(f'{label}: site bytes mismatch: {cur.hex() if cur else None}')
+
+    data_size = len(PLACEHUNT) * HUNT_SLICE + 0x100
+    data = k32.VirtualAllocEx(h, None, data_size, 0x3000, 0x40)
+    if not data:
+        raise SystemExit('VirtualAllocEx data failed')
+    write_mem(h, data, b'\x00' * data_size)
+
+    installs = []   # (va, displaced, label, tramp_va)
+    tramp_page_end = None
+    page = k32.VirtualAllocEx(h, None, 0x1000, 0x3000, 0x40)
+    if not page:
+        raise SystemExit('VirtualAllocEx tramp failed')
+    tramp_page_end = page + 0x1000
+    cursor = page
+    try:
+        for idx, (va, displaced, label) in enumerate(PLACEHUNT):
+            code = build_trampoline(cursor, data + idx * HUNT_SLICE, va, displaced, HUNT_SAMPLES)
+            if cursor + len(code) > tramp_page_end:
+                raise SystemExit('trampoline page overflow')
+            if not write_mem(h, cursor, code):
+                raise SystemExit(f'write trampoline failed for {label}')
+            installs.append((va, displaced, label, cursor))
+            cursor += (len(code) + 15) & ~15
+        # freeze once, patch every site, verify, resume
+        frozen = suspend_all(pid)
+        time.sleep(0.08)
+        ok_all = True
+        for va, displaced, label, tva in installs:
+            patch = b'\xE9' + struct.pack('<i', tva - (va + 5))
+            ok = write_mem(h, va, patch)
+            if not ok or read_mem(h, va, 5) != patch:
+                ok_all = False
+                print(f'!! patch failed: {label}', flush=True)
+        resume_all(frozen)
+        if not ok_all:
+            raise SystemExit('a patch failed; aborting')
+        print(f'placehunt: {len(installs)} detours installed - do ONE placement now', flush=True)
+
+        t0 = time.time()
+        while time.time() - t0 < duration:
+            time.sleep(0.5)
+            for idx, (va, displaced, label, tva) in enumerate(installs):
+                base = data + idx * HUNT_SLICE
+                raw = read_mem(h, base, 4 + HUNT_SAMPLES * SAMPLE_BYTES)
+                if not raw:
+                    continue
+                count = struct.unpack_from('<I', raw, 0)[0]
+                if count == 0xFFFFFFFF:   # already reported
+                    continue
+                count = min(count, HUNT_SAMPLES)
+                if count == 0:
+                    continue
+                print(f'=== {label}: {count} samples ===', flush=True)
+                for i in range(count):
+                    off = 4 + i * SAMPLE_BYTES
+                    regs = struct.unpack_from('<8I', raw, off)
+                    edi, esi, ebp, esp_pad, ebx, edx, ecx, eax = regs
+                    stack = struct.unpack_from(f'<{SAMPLE_DWORDS - 8}I', raw, off + 32)
+                    rets = [v for v in stack[1:] if TEXT_LO <= v < TEXT_HI]
+                    print(f'  #{i} eax=0x{eax:X} ecx=0x{ecx:X} esi=0x{esi:X} '
+                          f'ret=0x{stack[1]:X} arg1=0x{stack[2]:X}', flush=True)
+                    print('    rets: ' + ' '.join(hex(r) for r in rets), flush=True)
+                # done with this slice; zero its count so we don't re-report
+                write_mem(h, base, b'\xFF\xFF\xFF\xFF')   # mark as reported
+        return 0
+    finally:
+        frozen2 = suspend_all(pid)
+        time.sleep(0.08)
+        for va, displaced, label, tva in installs:
+            write_mem(h, va, displaced)
+        resume_all(frozen2)
+        time.sleep(0.1)
+        k32.VirtualFreeEx(h, page, 0, 0x8000)
+        k32.VirtualFreeEx(h, data, 0, 0x8000)
+        print('placehunt restored', flush=True)
+
+
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else 'kill'
     duration = int(sys.argv[2]) if len(sys.argv) > 2 else 60
     pid = int(sys.argv[3], 0) if len(sys.argv) > 3 else find_game()
     if not pid:
         raise SystemExit('game not running')
+    if mode == 'placehunt':
+        return run_placehunt(pid, duration)
     site, displaced = SITES[mode]
     print(f'PID {pid} mode {mode}: site 0x{site:X} displaced {displaced.hex()}', flush=True)
 
@@ -212,7 +320,7 @@ def main():
                 off = 4 + seen * SAMPLE_BYTES
                 regs = struct.unpack_from('<8I', raw, off)
                 edi, esi, ebp, esp_pad, ebx, edx, ecx, eax = regs
-                stack = struct.unpack_from('<16I', raw, off + 32)
+                stack = struct.unpack_from(f'<{SAMPLE_DWORDS - 8}I', raw, off + 32)
                 rets = [v for v in stack[1:] if TEXT_LO <= v < TEXT_HI]
                 print(f'* #{seen} eax=0x{eax:X} ecx=0x{ecx:X} edx=0x{edx:X} '
                       f'esi=0x{esi:X} edi=0x{edi:X} eflags=0x{stack[0]:X} '

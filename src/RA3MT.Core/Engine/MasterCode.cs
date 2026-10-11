@@ -682,12 +682,12 @@ public static class StubGen
         return c.Fin();
     }
 
-    // 随地建造 — buildanywhere: 区域连线检查函数头（thiscall ret 8）
-    // 目标函数唯一被 UI 放置谓词的 vf+0x48 调用（双版本各仅 1 个 xref），
-    // 语义 = "A/B 两点（Bresenham 采样连线）是否同属一个可建造区域"。
-    // 开 → 直接 al=1 返回（任意两点视为同区域，FINAL3 同语义）；
+    // 随地建造 — buildanywhere: 锚点查找函数头（cdecl 4 参，caller 清栈）
+    // 目标函数唯一被放置命令处理器（1.13 0x642524 / 1.12 对称）调用：遍历己方建筑，
+    // PlacementRestriction + 距离双检查通过才算找到锚，全失败 → 服务器拒绝放置。
+    // 开 → 恒"找到锚"（建筑仍在鼠标位置生成——锚只决定许可，不决定位置）；
     // 关 → 逐字节重放 displaced 原指令后跳回（两版指令均无位置相关性）。
-    // 地形/占用/碰撞由谓词第二层 ThePlacementGrid 验证保留，不会把建筑放进山里。
+    // 地形/占用/碰撞由下游网格处理（0x641510 循环）保留，不会把建筑放进山里。
     private static byte[] BuildAnywhere(nuint stubVa, nuint siteEnd, nuint block, byte[]? replay)
     {
         if (replay is null || replay.Length < 5)
@@ -699,7 +699,7 @@ public static class StubGen
         a.JneShort(1);
         a.Popfd();
         a.Db(0xB0, 0x01);                               // mov al,1
-        a.Db(0xC2, 0x08, 0x00);                         // ret 8 (thiscall, two args)
+        a.Ret();                                        // cdecl: caller cleans the four args
         a.Label(1);
         a.Popfd();
         a.Db(replay);                                   // original position-independent prologue

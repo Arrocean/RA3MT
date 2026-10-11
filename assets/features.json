@@ -230,15 +230,15 @@
     },
     "buildanywhere": {
       "rva": {
-        "1.12": "0x5247d0",
-        "1.13": "0x50fd60"
+        "1.12": "0x3bbdd0",
+        "1.13": "0x3a14b0"
       },
-      "displacedLen": 12,
-      "asm": "sub esp,60; mov eax,[ecx+14]; test eax,eax; mov [esp+38],ecx",
-      "pattern": "83 EC 60 8B 41 14 85 C0 89 4C 24 38 75 08 32 C0 83 C4 60 C2 08 00 8B 48 2C",
+      "displacedLen": 11,
+      "asm": "mov eax,[esp+8]; mov ecx,[esp+4]; sub esp,0C",
+      "pattern": "8B 44 24 08 8B 4C 24 04 83 EC 0C 53 55 56 57",
       "patternSiteOffset": 0,
-      "note": "区域连线检查（thiscall ret8）：UI 放置谓词 vf+0x48 的唯一 callee。Bresenham 采样 A/B 两点连线，逐格区域查询后 sete 判定'同可建造区域'（1.13 sete@0x50FEBC / 1.12 @0x52492E；唯一 xref：1.13 0x1F098E / 1.12 0x206BAE）。两版 displaced 字节一致。区域查询本体 0x488C80（88 xrefs）不动。",
-      "displaced": "83EC608B411485C0894C2438"
+      "note": "锚点查找（cdecl 4 参，唯一调用者=放置命令处理器 0x642524）：遍历己方建筑，PlacementRestriction(0x30FB20) + 距离判定(0x38C3B0) 双检查通过才算找到锚，全部失败→放置被拒。活体捕获：放置操作链 0x6424E0(命令处理器)→0x3A14B0→0x641510(网格循环)→0x63AAB0(cell 查询)。开→恒'找到锚'（建筑仍在鼠标位置生成，锚只决定许可）；关→逐字节重放。1.12 对称 0x3BBDD0 同签名。旧挂点 0x50FD60（区域连线检查）实测不在玩家路径，废弃。",
+      "displaced": "8B4424088B4C240483EC0C"
     }
   },
   "globals": {
@@ -681,8 +681,8 @@
         "buildanywhere"
       ],
       "flag": "buildanywhere",
-      "desc": "建筑放置不再要求与基地同区域（保留地形/占用/碰撞检查）。开关经重放原指令完全可逆",
-      "src": "orig FINAL3 随地建造（EA 0xE7565 一字节跳转的重推导：区域连线检查恒真）"
+      "desc": "建筑放置不再要求邻近己方建筑（服务器侧锚点检查恒过；地形/占用/碰撞保留）。开关经重放原指令完全可逆",
+      "src": "orig FINAL3 随地建造（重推导：锚点查找函数 0x3A14B0 恒真，活体调用链定位）"
     }
   ],
   "references": {
