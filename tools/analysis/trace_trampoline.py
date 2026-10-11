@@ -156,18 +156,25 @@ def main():
     if original != displaced:
         raise SystemExit(f'site bytes mismatch: {original.hex() if original else None}')
 
-    # allocate: trampoline page + data page
+    # allocate: trampoline page + data pages sized for the FULL ring buffer.
+    # Root cause of crashes #6/#7: the data page was 0x1000 but the ring
+    # buffer needs 4 + MAX_SAMPLES*SAMPLE_BYTES = 9220 bytes; in combat the
+    # marker fires dozens of times per second, so the writer crossed the page
+    # into unmapped memory long before the first 0.5s poll.
+    data_size = 0x4000
+    if 4 + MAX_SAMPLES * SAMPLE_BYTES > data_size - 0x100:
+        raise SystemExit('ring buffer exceeds data allocation')
     tramp = k32.VirtualAllocEx(h, None, 0x1000, 0x3000, 0x40)
-    data = k32.VirtualAllocEx(h, None, 0x1000, 0x3000, 0x40)
+    data = k32.VirtualAllocEx(h, None, data_size, 0x3000, 0x40)
     if not tramp or not data:
         raise SystemExit('VirtualAllocEx failed')
-    print(f'trampoline 0x{tramp:X} data 0x{data:X}', flush=True)
+    print(f'trampoline 0x{tramp:X} data 0x{data:X} ({data_size:#x})', flush=True)
 
     code = build_trampoline(tramp, data, site, displaced)
     if not write_mem(h, tramp, code):
         raise SystemExit('write trampoline failed')
-    if not write_mem(h, data, b'\x00' * 0x1000):
-        raise SystemExit('zero data page failed')
+    if not write_mem(h, data, b'\x00' * data_size):
+        raise SystemExit('zero data pages failed')
 
     # Site patch — the ONLY safe way for a 5-byte instruction at a hot site:
     # freeze every thread, give the async suspends time to park them all in
