@@ -56,10 +56,37 @@ public sealed class FeatureDef
     [JsonPropertyName("desc")] public string Desc { get; set; } = "";
     [JsonPropertyName("src")] public string? Src { get; set; }
 
+    /// <summary>Card icon. Keeps the presentation table out of the view model.</summary>
+    [JsonPropertyName("icon")] public string Icon { get; set; } = "";
+
+    /// <summary>How the UI should collect this action's argument, if it has one.</summary>
+    [JsonPropertyName("arg")] public FeatureArg? Arg { get; set; }
+
     /// <summary>Addresses this feature owns, e.g. a code-patch site. Keeping them
     /// here instead of in <c>globals</c> stops single-feature data from leaking
     /// into the shared game-address model.</summary>
     [JsonPropertyName("private")] public Dictionary<string, string> Private { get; set; } = new();
+}
+
+/// <summary>UI contract for an action that takes an argument. Replaces the
+/// per-feature-id switches the view model used to carry.</summary>
+public sealed class FeatureArg
+{
+    /// <summary>"code" (free text, validated by the feature) or "choice" (fixed value).</summary>
+    [JsonPropertyName("kind")] public string Kind { get; set; } = "none";
+
+    [JsonPropertyName("label")] public string Label { get; set; } = "";
+
+    [JsonPropertyName("placeholder")] public string Placeholder { get; set; } = "";
+
+    /// <summary>Fixed argument for <c>choice</c> kinds.</summary>
+    [JsonPropertyName("value")] public string Value { get; set; } = "";
+
+    /// <summary>Where the value comes from: "text" (inline box) or "fixed".</summary>
+    [JsonPropertyName("bind")] public string Bind { get; set; } = "fixed";
+
+    /// <summary>True when the user must type the argument.</summary>
+    public bool NeedsText => Kind == "code" || Bind == "text";
 }
 
 public sealed class FeaturesData
@@ -86,7 +113,6 @@ public sealed class FeaturesData
         GameGlobalId.SelectionList => Globals.SelectionList,
         GameGlobalId.PlayerRoot => Globals.PlayerRoot,
         GameGlobalId.MouseGround => Globals.MouseGround,
-        GameGlobalId.BuildAnywherePatch => Globals.BuildAnywherePatch,
         _ => null,
     };
 }
@@ -133,8 +159,6 @@ public enum GameGlobalId
     /// <summary>Mouse ground intersection float3 (x, z, ground y).</summary>
     MouseGround,
 
-    /// <summary>Building-placement branch patch site (build-anywhere).</summary>
-    BuildAnywherePatch,
 }
 
 public sealed class GameInfo
@@ -149,5 +173,4 @@ public sealed class Globals
     [JsonPropertyName("selectionList")] public GlobalDef SelectionList { get; set; } = new();
     [JsonPropertyName("playerRoot")] public GlobalDef PlayerRoot { get; set; } = new();
     [JsonPropertyName("mouseGround")] public GlobalDef? MouseGround { get; set; }
-    [JsonPropertyName("buildAnywherePatch")] public GlobalDef? BuildAnywherePatch { get; set; }
 }

@@ -336,17 +336,24 @@ public sealed class TrainerEngine : IDisposable
             Log?.Invoke("卸载失败，功能已禁用；请重试脱离或重启游戏: " + ex.Message);
             return;
         }
-        // restore the free-build branch patch if the toggle was left on
-        if (_buildAnywhereOn && _mem != null && Version != null)
+        // Restore the build-anywhere branch patch if its toggle is still on. The
+        // patch belongs to the feature, so ask the feature state for both the
+        // "is it on" question and the restore; the raw address is only a fallback
+        // for when no state exists.
+        if (_featureStates.TryGetValue(Patches.BuildAnywhereFeature.FeatureId, out var ba)
+            && ba.IsOn && _mem != null && Version != null)
         {
             try
             {
-                var g = _data.Globals.BuildAnywherePatch;
-                if (g != null && g.Rva.TryGetValue(Version, out var rvaStr))
-                    _mem.Write(Base + Convert.ToUInt32(rvaStr, 16), new byte[] { 0x75, 0x0C });
+                if (!ba.SetOn(false).Ok)
+                {
+                    var siteRva = PrivateOffsets.RvaFor(_data, Version,
+                        Patches.BuildAnywhereFeature.FeatureId, "site");
+                    if (siteRva != 0)
+                        _mem.Write(Base + siteRva, new byte[] { 0x75, 0x0C });
+                }
             }
             catch { /* best-effort restore on detach */ }
-            _buildAnywhereOn = false;
         }
         _mem?.Dispose();
         _mem = null;
@@ -396,63 +403,12 @@ public sealed class TrainerEngine : IDisposable
     // code-patch toggle is left here.
     // ---------------------------------------------------------------------
 
-    internal (bool ok, string msg) SetFeatureToggle(string featureId, bool on)
-    {
-        if (_mc is null) return (false, "修改器未初始化");
-        var f = _data.Features.FirstOrDefault(x => x.Id == featureId);
-        if (f?.Kind != "toggle") return (false, "功能尚未可用或非开关型功能");
-        try
-        {
-            // 随地建造 = FINAL3 同款 2 字节分支 patch（放置 gate 的"范围外返回 2"路径）
-            if (f.Id == "build_anywhere")
-            {
-                var (vok, vmsg) = SetBuildAnywherePatch(on);
-                if (!vok) return (vok, vmsg);
-                Log?.Invoke($"{f.Name} = {(on ? "开" : "关")}{(vmsg.Length > 0 ? $"（{vmsg}）" : "")}");
-                StateChanged?.Invoke();
-                return (true, "");
-            }
-            return (false, "功能无开关标志");
-        }
-        catch (Exception ex)
-        {
-            return (false, ex.Message);
-        }
-    }
+    /// <summary>Fallback toggle dispatch. Every toggle is a catalog feature, so this
+    /// only runs for an id with no implementation (typo or stale UI). Nothing may be
+    /// added here — new toggles become features.</summary>
+    internal (bool ok, string msg) SetFeatureToggle(string featureId, bool on) =>
+        (false, $"功能 {featureId} 没有实现（catalog 未注册）");
 
-    private bool _buildAnywhereOn;
-
-    /// <summary>随地建造 v3：FINAL3 同款 2 字节分支 patch（2026-10-12 实测验证）。
-    /// 放置 gate 函数尾部的"全部候选失败 → 返回失败码 2（超出可建造范围）"分支：
-    /// 75 0C (jne) ↔ EB 0C (jmp)——jmp 后永不返回 2，范围外照常通过。
-    /// 效果与 FINAL3（EA 原版 0x4E7565）完全一致：格子仍显示灰色但可直接点击建造。
-    /// 补丁点（VA）：1.13 0x511955 / 1.12 0x528DF5，磁盘字节级验证；该 gate 为
-    /// 玩家放置与 AI 选址共用层。纯代码字节切换，对局切换不重置；脱离进程自动还原。</summary>
-    private (bool, string) SetBuildAnywherePatch(bool on)
-    {
-        var global = _data.Globals.BuildAnywherePatch;
-        if (global is null || !global.Rva.TryGetValue(Version!, out var rvaStr))
-            return (false, "本版本暂不支持（补丁点未注册）");
-        var site = Base + Convert.ToUInt32(rvaStr, 16);
-        byte[] jne = { 0x75, 0x0C }, jmp = { 0xEB, 0x0C };
-        var cur = _mem!.Read(site, 2);
-        if (on && cur.SequenceEqual(jmp))
-        { _buildAnywhereOn = true; return (true, "已在开启状态"); }
-        if (!on && cur.SequenceEqual(jne))
-        { _buildAnywhereOn = false; return (true, "已在关闭状态"); }
-        if (!cur.SequenceEqual(jne) && !cur.SequenceEqual(jmp))
-            return (false, $"补丁点字节异常（{Convert.ToHexString(cur)}），拒绝改写");
-        _mem.Write(site, on ? jmp : jne);
-        if (!_mem.Read(site, 2).SequenceEqual(on ? jmp : jne))
-            return (false, "写入校验失败");
-        _buildAnywhereOn = on;
-        return (true, on ? "放置范围限制已解除" : "放置范围限制已恢复");
-    }
-
-    /// <summary>Last-resort action dispatch. The catalog covers every declared
-    /// feature, so this only runs for an id that has no implementation (a typo or a
-    /// stale UI). It is deliberately tiny: nothing may be added here — new actions
-    /// become features.</summary>
     internal (bool ok, string msg) RunFeatureAction(string featureId, string? arg = null)
     {
         if (RecoveryRequired) return (false, "挂钩恢复未完成，禁止执行动作");

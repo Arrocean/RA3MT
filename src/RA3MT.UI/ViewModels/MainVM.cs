@@ -41,8 +41,12 @@ public sealed class FeatureVM : ObservableObject
         }
     }
 
-    /// <summary>战场增援代码输入（仅 reinforce_code 卡片显示输入框）。</summary>
-    public bool NeedsCode => Def.Id == "reinforce_code";
+    /// <summary>Argument input shown for features that declare one. Everything the
+    /// card needs comes from the feature definition, so the view model has no
+    /// per-feature knowledge.</summary>
+    public bool NeedsCode => Def.Arg?.NeedsText == true;
+    public string ArgLabel => Def.Arg?.Label ?? "";
+    public string ArgPlaceholder => Def.Arg?.Placeholder ?? "";
     private string _codeText = "";
     public string CodeText
     {
@@ -56,63 +60,27 @@ public sealed class FeatureVM : ObservableObject
     {
         Def = def;
         _main = main;
-        Icon = IconFor(def);
+        Icon = string.IsNullOrEmpty(def.Icon) ? "🔧" : def.Icon;
         Execute = new RelayCommand(_ =>
         {
-            var arg = Def.Id switch
-            {
-                "reinforce_code" => CodeText,
-                "mcv_allied" => "allied",
-                "mcv_soviet" => "soviet",
-                "mcv_japan" => "japan",
-                _ => "",
-            };
-            var (ok, msg) = _main.Engine.ExecuteAction(Def.Id, arg);
+            var (ok, msg) = _main.Engine.ExecuteAction(Def.Id, ResolveArgument());
             _main.Log(ok
                 ? $"✓ {Def.Name} 已执行"
                 : $"⚠ {Def.Name}: {(msg.Length > 0 ? msg : "执行失败")}");
         }, _ => _main.Attached && IsEnabled);
     }
 
+    /// <summary>The action argument: typed text for a "code" argument, the declared
+    /// fixed value for a "choice", empty otherwise.</summary>
+    private string ResolveArgument() => Def.Arg switch
+    {
+        null => "",
+        { NeedsText: true } => CodeText,
+        var arg => arg.Value,
+    };
+
     public void SyncFromEngine() => Set(ref _isOn, _main.Engine.IsOn(Def.Id), nameof(IsOn));
 
-    private static string IconFor(FeatureDef d) => d.Id switch
-    {
-        "money" => "💰",
-        "power" => "⚡",
-        "scpoints" => "🎖",
-        "allproto" => "🔓",
-        "fastbuild" => "🏗",
-        "instantready" => "❄",
-        "freezeenemy" => "🚫",
-        "cooldown" => "⏱",
-        "revealmap" => "🗺",
-        "zoomlimit" => "🔍",
-        "xp999" => "⭐",
-        "ammo" => "💣",
-        "instadone" => "⏩",
-        "sel_lv" => "🌟",
-        "sel_speed" => "🏃",
-        "sel_speed2" => "🏃‍♀️",
-        "sel_freeze" => "🧊",
-        "sel_freeze2" => "🧊",
-        "sel_hpmax" => "❤️",
-        "sel_hpmin" => "💀",
-        "sel_hpnormal" => "🩹",
-        "sel_capture" => "🏹",
-        "sel_destroy" => "☠️",
-        "threat_max" => "🔺",
-        "threat_zero" => "🔻",
-        "threat_normal" => "↩️",
-        "oremine" => "⛏",
-        "build_anywhere" => "🏗",
-        "sel_copy" => "📋",
-        "mcv_allied" => "🛻",
-        "mcv_soviet" => "🚚",
-        "mcv_japan" => "🚛",
-        "reinforce_code" => "📡",
-        _ => "🔧",
-    };
 }
 
 public sealed class FeatureGroupVM

@@ -259,6 +259,7 @@
       "group": "资源",
       "kind": "toggle",
       "hotkey": "Ctrl+F1",
+      "icon": "💰",
       "hooks": [
         "money_h2"
       ],
@@ -273,6 +274,7 @@
       "group": "资源",
       "kind": "toggle",
       "hotkey": "Ctrl+F2",
+      "icon": "⚡",
       "hooks": [
         "money_h1"
       ],
@@ -287,6 +289,7 @@
       "group": "资源",
       "kind": "toggle",
       "hotkey": "Ctrl+F3",
+      "icon": "🎖",
       "hooks": [
         "money_h3"
       ],
@@ -301,6 +304,7 @@
       "group": "资源",
       "kind": "toggle",
       "hotkey": "Ctrl+F4",
+      "icon": "🔓",
       "hooks": [
         "money_h4"
       ],
@@ -315,6 +319,7 @@
       "group": "建造",
       "kind": "toggle",
       "hotkey": "Ctrl+F5",
+      "icon": "🏗",
       "hooks": [
         "proto_cool_a",
         "proto_cool_b",
@@ -331,6 +336,7 @@
       "group": "建造",
       "kind": "toggle",
       "hotkey": "Ctrl+F6",
+      "icon": "❄",
       "hooks": [
         "build_power",
         "build_hp_a"
@@ -346,6 +352,7 @@
       "group": "建造",
       "kind": "toggle",
       "hotkey": "Ctrl+F7",
+      "icon": "🚫",
       "hooks": [
         "build_power",
         "build_hp_a",
@@ -363,6 +370,7 @@
       "group": "建造",
       "kind": "toggle",
       "hotkey": "Ctrl+F8",
+      "icon": "🔍",
       "hooks": [
         "power_cool"
       ],
@@ -377,6 +385,7 @@
       "group": "视野",
       "kind": "toggle",
       "hotkey": "Ctrl+F9",
+      "icon": "🗺",
       "hooks": [
         "unit_lv"
       ],
@@ -391,6 +400,7 @@
       "group": "选中单位",
       "kind": "pending",
       "hotkey": "Ctrl+P",
+      "icon": "⭐",
       "hooks": [
         "zoom_unit_xp"
       ],
@@ -405,6 +415,7 @@
       "group": "选中单位",
       "kind": "toggle",
       "hotkey": "Ctrl+;",
+      "icon": "💣",
       "hooks": [
         "weapon_clip"
       ],
@@ -419,6 +430,7 @@
       "group": "选中单位",
       "kind": "action",
       "hotkey": "Alt+P",
+      "icon": "🌟",
       "action": "lv",
       "desc": "现代替代动作：经验值设为 999999，星级待后续刷新；不等同FINAL3直接晋级",
       "src": "orig[10]"
@@ -430,6 +442,7 @@
       "group": "选中单位",
       "kind": "action",
       "hotkey": "Alt+-",
+      "icon": "🏃",
       "action": "speed1",
       "desc": "当前移动模式基础速度设为 500；保留游戏减速与速度上限",
       "src": "orig[11]"
@@ -441,6 +454,7 @@
       "group": "选中单位",
       "kind": "action",
       "hotkey": "Alt+=",
+      "icon": "🏃‍♀️",
       "action": "speed2",
       "desc": "当前移动模式基础速度设为 10；FINAL3低速意图，保留原速度以便恢复",
       "src": "orig[12] FINAL3 slow"
@@ -452,6 +466,7 @@
       "group": "选中单位",
       "kind": "action",
       "hotkey": "Alt+PgUp",
+      "icon": "🧊",
       "action": "freeze1",
       "desc": "当前模式基础速度置 0；编队速度覆盖可能影响效果，待实战复测",
       "src": "orig[13]"
@@ -463,6 +478,7 @@
       "group": "选中单位",
       "kind": "action",
       "hotkey": "Alt+PgDn",
+      "icon": "🧊",
       "action": "speedrestore",
       "desc": "仅恢复本会话记录、且Locomotor实例未重建的原始速度",
       "src": "orig[14] FINAL3 restore"
@@ -474,6 +490,7 @@
       "group": "选中单位",
       "kind": "action",
       "hotkey": "Alt+[",
+      "icon": "❤️",
       "action": "hpmax",
       "desc": "[+33C]→[+4]=[+C]=999999",
       "src": "orig[15]"
@@ -485,6 +502,7 @@
       "group": "选中单位",
       "kind": "action",
       "hotkey": "Alt+]",
+      "icon": "💀",
       "action": "hpmin",
       "desc": "[+4]=1（濒死）",
       "src": "orig[16]"
@@ -496,6 +514,7 @@
       "group": "选中单位",
       "kind": "action",
       "hotkey": "Alt+\\",
+      "icon": "🩹",
       "action": "hpnormal",
       "desc": "恢复基准生命上限并治疗，撤销生命上限修改（FINAL3同款）",
       "src": "orig[17]"
@@ -507,6 +526,7 @@
       "group": "选中单位",
       "kind": "action",
       "hotkey": "Alt+H",
+      "icon": "🏥",
       "action": "heal",
       "desc": "治疗至当前有效上限，保留生命上限修改",
       "src": "modern"
@@ -518,6 +538,7 @@
       "group": "选中单位",
       "kind": "action",
       "hotkey": "Alt+O",
+      "icon": "🏹",
       "action": "capture",
       "desc": "经游戏线程调用完整归属切换函数俘虏目标（需 bridges.enable；仅非己方目标）",
       "src": "orig[19] FINAL3 ChangeID（完整流程版）"
@@ -529,6 +550,7 @@
       "group": "选中单位",
       "kind": "action",
       "hotkey": "Alt+Del",
+      "icon": "☠️",
       "action": "destroy",
       "desc": "经游戏线程用 HP 调整函数施加致死伤害（完整死亡流程+通知；需 bridges.enable）",
       "src": "orig[20] FINAL3 KillSelectUnit（adjust 重推导）"
@@ -540,6 +562,7 @@
       "group": "其他",
       "kind": "toggle",
       "hotkey": "Alt+T",
+      "icon": "🔺",
       "hooks": [
         "ammo",
         "ammo_2",
@@ -559,6 +582,7 @@
       "group": "其他",
       "kind": "toggle",
       "hotkey": "Alt+Shift+T",
+      "icon": "🔻",
       "hooks": [
         "ammo",
         "ammo_2",
@@ -578,6 +602,7 @@
       "group": "其他",
       "kind": "action",
       "hotkey": "Alt+N",
+      "icon": "↩️",
       "action": "threatnormal",
       "desc": "关闭最大/归零覆盖，威胁等级交还游戏自然重算（FINAL3 同款：不保存旧值）",
       "src": "orig[23] FINAL3 Danger Normal"
@@ -589,10 +614,11 @@
       "group": "其他",
       "kind": "action",
       "hotkey": "Alt+M",
+      "icon": "⛏",
       "hooks": [],
+      "action": "oreminerestore",
       "desc": "恢复选中的矿脉至 100000 并清零已采量（活体验证链 body+0x398→状态→容器+8）",
-      "src": "orig[24] FINAL3 RestoreOreMine（选中版）",
-      "action": "oreminerestore"
+      "src": "orig[24] FINAL3 RestoreOreMine（选中版）"
     },
     {
       "id": "diag",
@@ -601,6 +627,7 @@
       "group": "其他",
       "kind": "action",
       "hotkey": "",
+      "icon": "🩺",
       "action": "diag",
       "desc": "采集钩子运行时寄存器到日志（开发用，对局中点击有效）"
     },
@@ -611,8 +638,9 @@
       "group": "选中单位",
       "kind": "action",
       "hotkey": "Alt+C",
-      "action": "selcopy",
+      "icon": "📋",
       "hooks": [],
+      "action": "selcopy",
       "desc": "经游戏线程生成 wrapper 在鼠标位置为玩家复制每个选中单位/建筑（需 spawn-bridge.enable；模板取自选中链）",
       "src": "orig[21] FINAL3 CopySelectUnit（map-start spawn wrapper 重配对）"
     },
@@ -623,8 +651,14 @@
       "group": "战场增援",
       "kind": "action",
       "hotkey": "Alt+F1",
-      "action": "spawnhash",
+      "icon": "🛻",
+      "arg": {
+        "kind": "choice",
+        "label": "阵营",
+        "value": "allied"
+      },
       "hooks": [],
+      "action": "spawnhash",
       "desc": "在鼠标位置生成一辆盟军基地车（需 spawn-bridge.enable；哈希 0x28DA574E 取自游戏字符串哈希表）",
       "src": "orig FINAL3 Base（hash=AlliedMCV）"
     },
@@ -635,8 +669,14 @@
       "group": "战场增援",
       "kind": "action",
       "hotkey": "Alt+F2",
-      "action": "spawnhash",
+      "icon": "🚚",
+      "arg": {
+        "kind": "choice",
+        "label": "阵营",
+        "value": "soviet"
+      },
       "hooks": [],
+      "action": "spawnhash",
       "desc": "在鼠标位置生成一辆苏军基地车（需 spawn-bridge.enable；哈希 0xAF4C0DA5）",
       "src": "orig FINAL3 Base（hash=SovietMCV）"
     },
@@ -647,8 +687,14 @@
       "group": "战场增援",
       "kind": "action",
       "hotkey": "Alt+F3",
-      "action": "spawnhash",
+      "icon": "🚛",
+      "arg": {
+        "kind": "choice",
+        "label": "阵营",
+        "value": "japan"
+      },
       "hooks": [],
+      "action": "spawnhash",
       "desc": "在鼠标位置生成一辆升阳帝国基地车（需 spawn-bridge.enable；哈希 0x1C2EF767）",
       "src": "orig FINAL3 Base（hash=JapanMCV）"
     },
@@ -659,8 +705,15 @@
       "group": "战场增援",
       "kind": "action",
       "hotkey": "Alt+R",
-      "action": "spawnhash",
+      "icon": "📡",
+      "arg": {
+        "kind": "code",
+        "label": "增援代码",
+        "placeholder": "例如 6586A5A0",
+        "bind": "text"
+      },
       "hooks": [],
+      "action": "spawnhash",
       "desc": "输入 8 位十六进制增援代码（如 6586A5A0）在鼠标位置生成对应单位（热键 Alt+R 用当前输入框内容；需 spawn-bridge.enable）",
       "src": "orig[22] FINAL3 WeNeedBack（WB 字符串哈希 → 静态模板表 → 生成 wrapper）"
     },
@@ -671,12 +724,13 @@
       "group": "战场增援",
       "kind": "toggle",
       "hotkey": "Alt+B",
+      "icon": "🏗",
       "hooks": [],
-      "desc": "解除建筑放置的范围限制（FINAL3 同款 2 字节分支 patch）：有效范围外的灰色格子也可直接点击建造；地形/占用/碰撞检查保留。对局中随时开关，切换对局不需重开，修改器脱离时自动还原",
-      "src": "orig FINAL3 随地建造（放置 gate '范围外返回失败码2' 分支 jne→jmp；EA 0x4E7565 ↔ 1.13 0x511955 ↔ 1.12 0x528DF5，三版同字节；2026-10-12 Steam 1.13 实测放置成功）",
       "private": {
         "site": "1.12=0x128df5;1.13=0x111955"
-      }
+      },
+      "desc": "解除建筑放置的范围限制（FINAL3 同款 2 字节分支 patch）：有效范围外的灰色格子也可直接点击建造；地形/占用/碰撞检查保留。对局中随时开关，切换对局不需重开，修改器脱离时自动还原",
+      "src": "orig FINAL3 随地建造（放置 gate '范围外返回失败码2' 分支 jne→jmp；EA 0x4E7565 ↔ 1.13 0x511955 ↔ 1.12 0x528DF5，三版同字节；2026-10-12 Steam 1.13 实测放置成功）"
     }
   ],
   "references": {

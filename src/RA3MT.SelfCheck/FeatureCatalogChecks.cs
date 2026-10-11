@@ -103,6 +103,23 @@ public static class FeatureCatalogChecks
                                 string.Join(", ", stillDelegating));
         cases++;
 
+        // 7) UI contract: every card has an icon and any declared argument is
+        //    well formed. The view model no longer knows about any feature id, so
+        //    this is the only place that can catch a broken card.
+        foreach (var f in data.Features)
+        {
+            if (string.IsNullOrWhiteSpace(f.Icon))
+                throw new Exception($"feature '{f.Id}' has no icon (the card would render blank)");
+            if (f.Arg is null) continue;
+            if (f.Arg.Kind is not ("code" or "choice"))
+                throw new Exception($"feature '{f.Id}' declares unknown arg kind '{f.Arg.Kind}'");
+            if (f.Arg.Kind == "choice" && string.IsNullOrEmpty(f.Arg.Value))
+                throw new Exception($"feature '{f.Id}' declares a choice argument with no value");
+            if (f.Arg.Kind == "code" && string.IsNullOrEmpty(f.Arg.Label))
+                throw new Exception($"feature '{f.Id}' declares a text argument with no label");
+            cases++;
+        }
+
         Console.WriteLine($"PASS {cases} feature catalog cases " +
                           $"({data.Features.Count} features, {data.Hooks.Count} hooks, ids unique, unbound states fail closed)");
     }

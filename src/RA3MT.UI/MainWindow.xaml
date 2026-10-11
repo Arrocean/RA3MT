@@ -47,7 +47,7 @@
                      FontFamily="Cascadia Code,Consolas" FontSize="11.5"
                      Background="#10151f" BorderBrush="#2a3550" BorderThickness="1" Foreground="#dfe6f5"
                      Padding="6,4" MaxLength="10" VerticalAlignment="Center"
-                     ToolTip="增援代码：8 位十六进制，如 6586A5A0"
+                     ToolTip="{Binding ArgPlaceholder}"
                      Text="{Binding CodeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                      Visibility="{Binding NeedsCode, Converter={StaticResource BoolToVisibility}}" />
             <Grid Grid.Column="1">
