@@ -97,7 +97,7 @@ public static class SpawnDispatcher
         a.Db(0x0F, 0xAE, 0x04, 0x24);                   // fxsave [esp]
         a.Db(0xFC);                                     // CLD
         a.Db(0x83, 0xEC, 0x08);                         // pad: 5 args + ret = 24 → wrapper entry esp%16 == 0
-        a.Push8(0);                                     // arg5 (ignored)
+        a.Push8(0);                                     // arg5: wrapper ignores it (FINAL3 passes [side+0x10])
         a.Push(R.Ebp);                                  // arg4 = owner side
         a.Db(0x68); a.Db(BitConverter.GetBytes(Slot(PosXOffset))); // arg3 = float3 in mailbox
         a.Push(R.Edi);                                  // arg2 = template holder
