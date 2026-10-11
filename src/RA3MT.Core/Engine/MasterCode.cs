@@ -62,12 +62,17 @@ public sealed class MasterCode
     private readonly nuint _rankApi;
     private readonly nuint _captureApi;
     private readonly nuint _killApi;
+    private readonly nuint _spawnWrapperApi;
+    private readonly nuint _hashLookupApi;
+    private readonly nuint _hashTableGlobalVa;
     public bool RankBridgeEnabled => _rankApi != 0;
     public bool CaptureBridgeEnabled => _captureApi != 0;
     public bool KillBridgeEnabled => _killApi != 0;
+    public bool SpawnBridgeEnabled => _spawnWrapperApi != 0 && _hashLookupApi != 0 && _hashTableGlobalVa != 0;
     public RankRequestMailbox? RankMailbox { get; private set; }
     public CaptureRequestMailbox? CaptureMailbox { get; private set; }
     public KillRequestMailbox? KillMailbox { get; private set; }
+    public SpawnRequestMailbox? SpawnMailbox { get; private set; }
     private readonly nuint _rootVa;             // player-context root global
     private readonly Dictionary<string, HookResolution> _sites;
     private readonly Dictionary<string, string> _stubBySite;   // site id -> stub id
@@ -76,12 +81,16 @@ public sealed class MasterCode
 
     public MasterCode(IInjectionMemory mem, nuint imageBase, nuint playerRootVa,
         Dictionary<string, HookResolution> sites, IReadOnlyDictionary<string, HookDef> defs, Action<string>? log,
-        nuint rankApi = 0, nuint captureApi = 0, nuint killApi = 0)
+        nuint rankApi = 0, nuint captureApi = 0, nuint killApi = 0,
+        nuint spawnWrapperApi = 0, nuint hashLookupApi = 0, nuint hashTableGlobalVa = 0)
     {
         _mem = mem;
         _rankApi = rankApi;
         _captureApi = captureApi;
         _killApi = killApi;
+        _spawnWrapperApi = spawnWrapperApi;
+        _hashLookupApi = hashLookupApi;
+        _hashTableGlobalVa = hashTableGlobalVa;
         _rootVa = playerRootVa;
         _sites = sites;
         _stubBySite = defs.ToDictionary(kv => kv.Key, kv => kv.Value.Stub ?? kv.Key);
@@ -107,6 +116,7 @@ public sealed class MasterCode
             if (RankBridgeEnabled) bridgeOffsets.Add(RankDispatcher.CodeOffset);
             if (CaptureBridgeEnabled) bridgeOffsets.Add(CaptureDispatcher.CodeOffset);
             if (KillBridgeEnabled) bridgeOffsets.Add(KillDispatcher.CodeOffset);
+            if (SpawnBridgeEnabled) bridgeOffsets.Add(SpawnDispatcher.CodeOffset);
             var code = bridgeOffsets.Count != 0 && stubId == "money_h2"
                 ? RankDispatcher.EmitMoneyBridge(Block + off, siteEnd, Block, _rootVa, bridgeOffsets.ToArray())
                 : StubGen.Emit(stubId, Block + off, siteEnd, Block, _rootVa);
@@ -143,6 +153,16 @@ public sealed class MasterCode
                 throw new InvalidOperationException("Kill dispatcher overlaps mailboxes");
             _mem.Write(Block + KillDispatcher.CodeOffset, dispatcher);
             KillMailbox = new KillRequestMailbox(_mem, Block);
+        }
+        if (SpawnBridgeEnabled)
+        {
+            if (!_sites.ContainsKey("money_h2")) throw new InvalidOperationException("Spawn bridge requires money_h2");
+            var dispatcher = SpawnDispatcher.Emit(Block + SpawnDispatcher.CodeOffset, Block,
+                _spawnWrapperApi, _hashLookupApi, _hashTableGlobalVa, _rootVa);
+            if (SpawnDispatcher.CodeOffset + (uint)dispatcher.Length > RankRequestMailbox.Offset)
+                throw new InvalidOperationException("Spawn dispatcher overlaps mailboxes");
+            _mem.Write(Block + SpawnDispatcher.CodeOffset, dispatcher);
+            SpawnMailbox = new SpawnRequestMailbox(_mem, Block);
         }
 
         off = StubArea;

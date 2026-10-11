@@ -36,6 +36,15 @@ public sealed class TrainerEngine : IDisposable
 
     public bool CaptureBridgeActive => Attached && _mc is { CaptureBridgeEnabled: true, CaptureMailbox: not null };
     public bool KillBridgeActive => Attached && _mc is { KillBridgeEnabled: true, KillMailbox: not null };
+
+    /// <summary>生成桥显式开关：环境变量 RA3MT_SPAWN=1/true，或 exe 旁存在
+    /// spawn-bridge.enable 标记文件。需要生成 wrapper、哈希查找、哈希表全局
+    /// 三项全部严格校验通过才安装消费桩（复制选中/三阵营基地车/战场增援）。</summary>
+    public bool EnableSpawnBridge { get; set; } =
+        Environment.GetEnvironmentVariable("RA3MT_SPAWN") is "1" or "true"
+        || File.Exists(Path.Combine(AppContext.BaseDirectory, "spawn-bridge.enable"));
+
+    public bool SpawnBridgeActive => Attached && _mc is { SpawnBridgeEnabled: true, SpawnMailbox: not null };
     public string Version { get; private set; } = "";
     public int Pid { get; private set; }
     public string ProcessPath { get; private set; } = "";
@@ -120,8 +129,29 @@ public sealed class TrainerEngine : IDisposable
                 }
             }
 
+            nuint spawnWrapperApi = 0, hashLookupApi = 0, hashTableGlobalVa = 0;
+            if (EnableSpawnBridge)
+            {
+                try
+                {
+                    spawnWrapperApi = Target.SpawnApiResolver.Resolve(found.version, baseAddr,
+                        (rva, len) => mem.Read(baseAddr + rva, len));
+                    var support = Target.SpawnSupportApiResolver.Resolve(found.version, baseAddr,
+                        (rva, len) => mem.Read(baseAddr + rva, len));
+                    hashLookupApi = support.TemplateHashLookup;
+                    hashTableGlobalVa = support.HashTableOwnerGlobal;
+                    Log?.Invoke($"生成桥：生成 wrapper 校验通过 0x{spawnWrapperApi:X}，" +
+                                $"哈希查找 0x{hashLookupApi:X}，模板表全局 0x{hashTableGlobalVa:X}");
+                }
+                catch (Exception ex)
+                {
+                    spawnWrapperApi = hashLookupApi = hashTableGlobalVa = 0;
+                    Log?.Invoke($"生成桥：校验失败，功能不可用（{ex.Message}）");
+                }
+            }
+
             var mc = new MasterCode(mem, baseAddr, baseAddr + rootRva, sites, _data.Hooks, Log,
-                rankApi, captureApi, killApi);
+                rankApi, captureApi, killApi, spawnWrapperApi, hashLookupApi, hashTableGlobalVa);
             pendingMaster = mc;
             mc.Install();
 
@@ -203,7 +233,7 @@ public sealed class TrainerEngine : IDisposable
         }
     }
 
-    public (bool ok, string msg) ExecuteAction(string featureId)
+    public (bool ok, string msg) ExecuteAction(string featureId, string? arg = null)
     {
         if (RecoveryRequired) return (false, "挂钩恢复未完成，禁止执行动作");
         if (!Attached || _mem == null) return (false, "未附加");
@@ -240,6 +270,38 @@ public sealed class TrainerEngine : IDisposable
             {
                 if (KillBridgeActive) return SubmitBridgeRequests(f.Name, BridgeKind.Kill);
                 return (false, "需要 bridges.enable 启用摧毁桥并通过校验（直接清血量绕过死亡流程，已禁用）");
+            }
+
+            // 生成桥路径：复制选中（直接模板持有者）/ 基地车 / 战场增援代码（哈希）
+            if (f.Action == "selcopy")
+            {
+                if (!SpawnBridgeActive)
+                    return (false, "需要 spawn-bridge.enable 启用生成桥并通过校验");
+                var targets = SpawnActions.EnumerateCopyTargets(_mem, _data, Version!, Base);
+                if (targets.Count == 0)
+                    return (false, "没有可复制的选中目标（未选中或目标缺少模板链）");
+                return SubmitSpawnRequests(f.Name,
+                    targets.Select(t => (0u, t.holder, t.x, t.y, t.z)).ToList());
+            }
+            if (f.Action == "spawnhash")
+            {
+                if (!SpawnBridgeActive)
+                    return (false, "需要 spawn-bridge.enable 启用生成桥并通过校验");
+                uint hash;
+                if (arg is "allied" or "soviet" or "japan")
+                {
+                    if (!SpawnActions.McvHashes.TryGetValue(arg, out hash))
+                        return (false, "未知阵营");
+                }
+                else if (!SpawnActions.TryParseHash(arg ?? "", out hash) || hash == 0)
+                {
+                    return (false, "无效的增援代码（应为 8 位十六进制，如 6586A5A0）");
+                }
+                var anchor = SpawnActions.GetSelectionAnchor(_mem, _data, Version!, Base);
+                if (anchor == null)
+                    return (false, "请先选中自己的一个单位作为生成位置锚点");
+                var (x, y, z) = anchor.Value;
+                return SubmitSpawnRequests(f.Name, [(hash, 0u, x, y, z)]);
             }
 
             var n = SelectionActions.Apply(_mem, _data, Version!, f.Action, Base, _actionState);
@@ -341,6 +403,72 @@ public sealed class TrainerEngine : IDisposable
         Log?.Invoke($"{featureName}: {msg}");
         StateChanged?.Invoke();
         return (applied > 0, applied > 0 ? "" : msg);
+    }
+
+    /// <summary>向生成桥逐个提交请求（每次等待游戏线程消费后再提交下一个）。
+    /// owner 传 0：消费桩在游戏线程用 playerRoot 全局补齐本地阵营。</summary>
+    private (bool, string) SubmitSpawnRequests(string featureName,
+        List<(uint hash, uint holder, float x, float y, float z)> requests)
+    {
+        var mailbox = _mc!.SpawnMailbox!;
+        const int perTargetTimeoutMs = 1500;
+        const int totalBudgetMs = 6000;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var spawned = 0;
+        var rejected = 0;
+        var outstanding = 0;
+        for (var i = 0; i < requests.Count; i++)
+        {
+            var (hash, holder, x, y, z) = requests[i];
+            try
+            {
+                mailbox.Submit(hash, holder, x, y, z, 0);
+            }
+            catch (InvalidOperationException ex)
+            {
+                Log?.Invoke($"{featureName}: 第 {i + 1} 个未提交（邮箱状态 {mailbox.State}: {ex.Message}）");
+                outstanding += requests.Count - i;
+                break;
+            }
+            var deadline = System.Diagnostics.Stopwatch.StartNew();
+            (uint state, uint body, uint resolved) result;
+            while (true)
+            {
+                result = mailbox.ReadResult();
+                if (result.state is 3 or 4) break;
+                if (deadline.ElapsedMilliseconds > perTargetTimeoutMs ||
+                    sw.ElapsedMilliseconds > totalBudgetMs) break;
+                Thread.Sleep(25);
+            }
+            if (result.state == 3)
+            {
+                spawned++;
+                var describe = hash != 0
+                    ? $"哈希 0x{hash:X8}（解析模板 0x{result.resolved:X}）"
+                    : $"模板 0x{holder:X}";
+                Log?.Invoke($"{featureName}: 已生成 {describe} → 新单位 0x{result.body:X}");
+            }
+            else if (result.state == 4)
+            {
+                rejected++;
+                var reason = hash != 0 ? $"哈希 0x{hash:X8} 不在模板表" : $"模板 0x{holder:X} 校验失败";
+                Log?.Invoke($"{featureName}: {reason}，被拒绝");
+            }
+            else outstanding++;
+            if (sw.ElapsedMilliseconds > totalBudgetMs)
+            {
+                outstanding += requests.Count - i - 1;
+                break;
+            }
+        }
+        var msg = spawned > 0
+            ? $"已生成 {spawned}/{requests.Count} 个单位"
+            : "游戏线程未消费生成请求（资金未结算？稍后重试）";
+        if (rejected > 0) msg += $"，{rejected} 个被校验拒绝";
+        if (outstanding > 0) msg += $"，{outstanding} 个待处理（再次触发继续）";
+        Log?.Invoke($"{featureName}: {msg}");
+        StateChanged?.Invoke();
+        return (spawned > 0, spawned > 0 ? "" : msg);
     }
 
     private (bool, string) DiagDump()

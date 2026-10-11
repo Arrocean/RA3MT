@@ -127,3 +127,24 @@ state +0x00、Body +0x04、Drawable +0x08、Tracker +0x0C、rankBefore/+After +0
 3. 重新定义速度恢复、正常生命恢复、威胁等级及矿脉动作，保留已经有独立证据的字段定位。
 4. 继续使用完整归属切换路径，而非FINAL3的直接属主写入。
 5. 执行单机受控复测再声称功能生效；现有离线用例只能证明代码合成输入契约。
+
+## 生成桥（v18f）：复制选中 / 三阵营基地车 / 战场增援代码
+
+FINAL3 的 Copy/Base/WeNeedBack 在重打包版的对应链路已完全闭环并接入生产：
+
+- **生成 wrapper**（sol 定位，本次接入）：地图开局生成函数 1.13 RVA 0x22E3E0 / 1.12 0x2440F0，
+  304 字节全字节契约（12 个相对 CALL 边 + manager 全局 1.13 0x8F1DB8）。
+  cdecl(忽略, 模板持有者, float3* 位置, 属主side, 忽略) → eax=新 Body，null 安全。
+  内部序列：OwnerResolver → Body 工厂（分配+构造+组件初始化）→ 朝向 → 位置 → 初值 →
+  激活 → 注册 manager——与游戏开局生成同一路径。
+- **模板哈希查找**：`mov ecx,[静态表宿主全局]; push hash; call TemplateHashLookup`
+  （1.13 0x40D5B0 / 1.12 0x422510，thiscall ret4）。表宿主全局 1.13 0x8F0108 / 1.12 0x8EBDE8，
+  由 wrapper+0x1CA 调用现场字节锚定（本次修复 sol 的 +0x05 契约写入 bug）。
+- **增援代码 = WB 字符串哈希**（verify_spawn_hashes.py，游戏自带 WBStringHashes.big）：
+  AlliedMCV=0x28DA574E、SovietMCV=0xAF4C0DA5、JapanMCV=0x1C2EF767；
+  FINAL3 示例 0x6586A5A0=JapanCommandoTech1。
+- **单位坐标**：body+0x38/0x3C/0x40（position-set 镜像写入），复制选中/锚点直接读取。
+- **接入**：SpawnDispatcher 第四桥（邮箱 0x18C0，消费桩 0x1500），spawn-bridge.enable 显式
+  开启；Unicorn 20 用例 + 邮箱 30 用例离线验证。效果待实机。
+
+未完成：随地建造（placement 限制检查点未定位）。

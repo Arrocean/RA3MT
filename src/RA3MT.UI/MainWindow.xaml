@@ -39,18 +39,31 @@
                        Margin="0,3,0,0" TextWrapping="Wrap" MaxHeight="30" />
           </StackPanel>
           <Grid Grid.Column="2" VerticalAlignment="Center">
-            <ToggleButton Style="{StaticResource Switch}"
-                          IsChecked="{Binding IsOn, Mode=TwoWay}"
-                          IsEnabled="{Binding IsEnabled}"
-                          Visibility="{Binding IsToggle, Converter={StaticResource BoolToVisibility}}" />
-            <Button Style="{StaticResource BtnExec}" Content="执行"
-                    Command="{Binding Execute}"
-                    Visibility="{Binding IsAction, Converter={StaticResource BoolToVisibility}}" />
-            <Border Background="#1a2233" BorderBrush="{StaticResource Line}" BorderThickness="1"
-                    CornerRadius="8" Padding="10,6"
-                    Visibility="{Binding IsPending, Converter={StaticResource BoolToVisibility}}">
-              <TextBlock Text="待逆向" FontSize="10" Foreground="{StaticResource Txt3}" />
-            </Border>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0" Width="112" Margin="0,0,8,0" VerticalContentAlignment="Center"
+                     FontFamily="Cascadia Code,Consolas" FontSize="11.5"
+                     Background="#10151f" BorderBrush="#2a3550" BorderThickness="1" Foreground="#dfe6f5"
+                     Padding="6,4" MaxLength="10" VerticalAlignment="Center"
+                     ToolTip="增援代码：8 位十六进制，如 6586A5A0"
+                     Text="{Binding CodeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     Visibility="{Binding NeedsCode, Converter={StaticResource BoolToVisibility}}" />
+            <Grid Grid.Column="1">
+              <ToggleButton Style="{StaticResource Switch}"
+                            IsChecked="{Binding IsOn, Mode=TwoWay}"
+                            IsEnabled="{Binding IsEnabled}"
+                            Visibility="{Binding IsToggle, Converter={StaticResource BoolToVisibility}}" />
+              <Button Style="{StaticResource BtnExec}" Content="执行"
+                      Command="{Binding Execute}"
+                      Visibility="{Binding IsAction, Converter={StaticResource BoolToVisibility}}" />
+              <Border Background="#1a2233" BorderBrush="{StaticResource Line}" BorderThickness="1"
+                      CornerRadius="8" Padding="10,6"
+                      Visibility="{Binding IsPending, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="待逆向" FontSize="10" Foreground="{StaticResource Txt3}" />
+              </Border>
+            </Grid>
           </Grid>
         </Grid>
       </Border>

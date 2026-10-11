@@ -86,6 +86,67 @@ public static class BridgeMailboxChecks
             if (!refused || memory.Writes.Count != 0) throw new Exception("Invalid kill object published");
             cases++;
         }
-        Console.WriteLine($"PASS {cases} capture/kill mailbox lifecycle and publish-order cases");
+
+        // spawn mailbox @0x18C0: state transitions and publish-last ordering
+        foreach (var state in new uint[] { 0, 1, 2, 3, 4, 55 })
+        {
+            var memory = new Memory();
+            memory.State(block + SpawnDispatcher.StateOffset, state);
+            memory.Writes.Clear();
+            var refused = false;
+            try { new SpawnRequestMailbox(memory, block).Submit(0xAF4C0DA5, 0, 100f, -50f, 25f, 0); }
+            catch (InvalidOperationException) { refused = true; }
+            var allowed = state is 0 or 3 or 4;
+            if (refused == allowed) throw new Exception("Invalid spawn mailbox transition");
+            if (allowed)
+            {
+                var expectedOrder = new List<nuint>();
+                for (var slot = 4; slot <= 0x20; slot += 4)
+                    expectedOrder.Add(block + SpawnDispatcher.MailboxOffset + (nuint)slot);
+                expectedOrder.Add(block + SpawnDispatcher.StateOffset);
+                if (!memory.Writes.SequenceEqual(expectedOrder))
+                    throw new Exception("Spawn request not published last");
+                if (new SpawnRequestMailbox(memory, block).State != 1) throw new Exception("Bad spawn publish");
+            }
+            else if (memory.Writes.Count != 0) throw new Exception("Outstanding spawn request overwritten");
+            cases++;
+        }
+        // spawn validation: no template at all, low owner, non-finite position
+        foreach (var bad in new (uint hash, uint holder, float x, float y, float z, uint owner)[]
+                 {
+                     (0, 0, 1, 1, 1, 0),                       // neither hash nor holder
+                     (0, 0x20000, 1, 1, 1, 0x100),             // low owner
+                     (0, 0x20000, float.NaN, 1, 1, 0),         // NaN x
+                     (0, 0x20000, 1, float.NegativeInfinity, 1, 0),
+                     (0, 0x20000, 1, 1, float.PositiveInfinity, 0),
+                 })
+        {
+            var memory = new Memory();
+            var refused = false;
+            try { new SpawnRequestMailbox(memory, block).Submit(bad.hash, bad.holder, bad.x, bad.y, bad.z, bad.owner); }
+            catch (ArgumentException) { refused = true; }
+            if (!refused || memory.Writes.Count != 0) throw new Exception("Invalid spawn request published");
+            cases++;
+        }
+        // spawn result read: only terminal states return payloads, must be stable
+        {
+            var memory = new Memory();
+            memory.State(block + SpawnDispatcher.StateOffset, 3);
+            var mailbox = new SpawnRequestMailbox(memory, block);
+            memory.Write(block + SpawnDispatcher.ResultBodyOffset, BitConverter.GetBytes(0x60FF00u));
+            memory.Write(block + SpawnDispatcher.ResolvedHolderOffset, BitConverter.GetBytes(0x70000u));
+            var (state, body, resolved) = mailbox.ReadResult();
+            if (state != 3 || body != 0x60FF00 || resolved != 0x70000)
+                throw new Exception("Spawn terminal result not read back");
+            cases++;
+        }
+        {
+            var memory = new Memory();
+            memory.State(block + SpawnDispatcher.StateOffset, 1);
+            var (state, _, _) = new SpawnRequestMailbox(memory, block).ReadResult();
+            if (state != 1) throw new Exception("Spawn non-terminal state leaked a payload");
+            cases++;
+        }
+        Console.WriteLine($"PASS {cases} capture/kill/spawn mailbox lifecycle and publish-order cases");
     }
 }

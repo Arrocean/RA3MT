@@ -628,3 +628,51 @@ TrainerEngine附加回滚失败的UI/句柄保留路径仍未以假native端到�
   不能由此学单位 drawable。
 - capture_spawn.py 升级为 30 分钟双通道守护（真实点击 OR 修改器进程任一触发）后台常驻。
 - 全部自主路线确认穷尽；解锁需要用户在场。
+
+### v18f（接手 sol：第四桥"生成桥"完成——复制选中/三阵营基地车/战场增援代码）
+
+**sol 阶段成果（commit 76165d2 + 本次修复）**：
+- `SpawnApiResolver`：重打包地图开局生成 wrapper 全字节契约（304B，1.13 RVA 0x22E3E0 /
+  1.12 0x2440F0，12 个 CALL 边 + manager global 1.13 0x8F1DB8）。cdecl(忽略, 模板持有者,
+  float3* 位置, 属主side, 忽略) → eax=新 body；mock ABI 验证（null 模板/null body 安全早退）。
+- `SpawnSupportApiResolver`：模板哈希查找 TemplateHashLookup（1.13 0x40D5B0/1.12 0x422510，
+  thiscall ret4：ecx=表宿主, 栈参=哈希）+ OwnerResolver + 调用锚。
+- `verify_spawn_hashes.py`：增援代码=WB 字符串哈希，从游戏自带 WBStringHashes.big 的
+  stringhashes.xml 证实：AlliedMCV=0x28DA574E、SovietMCV=0xAF4C0DA5、JapanMCV=0x1C2EF767、
+  0x6586A5A0=JapanCommandoTech1（FINAL3 增援示例代码）。
+- **本次修复 sol 的 bug**：SpawnSupportApiResolver 把表宿主 VA 错误写进 HashLookup 契约
+  +0x05（该函数是 thiscall 无 imm32 全局，+0x05 是 lea esi,[ecx+0x28] 中段）→ spawntest
+  1.12 崩。改为用**wrapper+0x1CA 调用现场**锚定表宿主全局（两版完全对称：
+  `8B 0D <表宿主VA> 52 E8 <→lookup>`；1.13 现场 0x22E5AA / 1.12 0x2442BA）。
+
+**离线逆向补充（本次新增证据）**：
+- map-start caller（1.13 0x22E510，紧邻 wrapper 之后）完整闭环确认：
+  `mov ecx,[0xCF0108]; push hash; call 0x40D5B0`（哈希→模板持有者）→
+  读出生点坐标 → `push arg5; push owner; push pos; push holder; push arg1; call wrapper` →
+  `add esp,0x14`（cdecl）→ eax=新 body。wrapper 的 wrapper+0x1CA 处即该调用序列。
+- **单位坐标**：position-set（1.13 0x40CFC0/1.12 0x421FE0，wrapper 内部第 4 个 CALL）
+  把 float3 写入 body+0x38/0x3C/0x40（整数镜像）与 +0x14/0x24/0x34（float 副本）。
+  复制选中的生成位置直接读选中单位 body+0x38 三连。
+- 选中链与 wrapper 参数完全同构：tracker+4 的"wrapper"对象就是 wrapper 的 arg2 模板持有者
+  （+0x14→descriptor，+0x64 yaw）——复制选中无需任何新链。
+
+**第四桥架构（SpawnDispatcher @0x1500，邮箱 @0x18C0）**：
+- 邮箱：state/+4 hash(0=直接持有者)/+8 holder/+C..+14 float3/+18 owner(0=playerRoot补齐)/
+  +1C resultBody/+20 resolvedHolder。
+- 消费桩：cmpxchg 领取 → hash≠0 时游戏线程查表（ecx=[表宿主全局]; push hash; call lookup，
+  ret4 thiscall）→ 直接路径门禁 holder≥0x10000 且 [holder+0x14]≥0x10000（wrapper 必读）→
+  owner 补齐 [playerRoot]+0x28 → cdecl 调 wrapper（5 参 + FXSAVE + pad8 入口对齐 esp%16==0，
+  callee-cleans=false caller add esp,0x14）→ eax≠0 → state 3 + resultBody。
+- TrainerEngine：`spawn-bridge.enable` 标记/RA3MT_SPAWN 环境变量显式开启，附加时
+  SpawnApiResolver+SpawnSupportApiResolver 全过才装桩；`ExecuteAction(id, arg)` 新签名。
+- 功能：selcopy（复制选中，每目标自身坐标+散布偏移）/ mcv_allied|soviet|japan（哈希常量）/
+  reinforce_code（UI 输入 8 位十六进制 → 哈希路径；无选中单位时提示先选中锚点单位）。
+
+**验证**：Unicorn 20 用例（领取门禁/哈希路径/直接路径/owner 补齐/5 参 ABI/入口栈对齐
+esp%16==0/全 GPR+XMM+EFLAGS clobber 恢复/FX 保存/全拒绝门禁/4 种 caller 对齐/payload 不突变）；
+C# 邮箱 30 用例（生命周期/发布顺序/非法参数/结果回读）。SelfCheck 9 模式全过、
+Unicorn 6 套件全过（197+semantic+60+218+8+20）。publish-v18（含三个 .enable 标记）。
+
+**遗留**：生成 wrapper 运行中调用的线程/生命周期风险由桥缓解（资金结算=游戏线程），
+效果待实机验证；wrapper 可选分支（locomotor 初始化 calls[9..11]）未在 mock 覆盖。
+随地建造未开始。

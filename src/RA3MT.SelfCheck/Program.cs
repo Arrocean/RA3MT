@@ -33,6 +33,12 @@ if (args.Length == 2 && args[0] == "stubdump")
         CaptureDispatcher.Emit(0x40001300, 0x40000000, 0x7B5DF0, 0x400000));
     File.WriteAllBytes(Path.Combine(args[1], "kill_dispatcher.bin"),
         KillDispatcher.Emit(0x40001400, 0x40000000, 0x78CB30, 0x400000));
+    File.WriteAllBytes(Path.Combine(args[1], "spawn_dispatcher.bin"),
+        SpawnDispatcher.Emit(0x40001500, 0x40000000, 0x62E3E0, 0x80D5B0, 0xCF0108, 0x400000));
+    File.WriteAllBytes(Path.Combine(args[1], "money_h2_spawn_bridge.bin"),
+        RankDispatcher.EmitMoneyBridge(0x40000040, 0x452105, 0x40000000, 0x400000,
+            RankDispatcher.CodeOffset, CaptureDispatcher.CodeOffset, KillDispatcher.CodeOffset,
+            SpawnDispatcher.CodeOffset));
     return 0;
 }
 
@@ -89,6 +95,7 @@ if (args.Length == 1 && args[0] == "spawntest")
                      version == "1.12" ? 0x422510u : 0x40D5B0u,
                      version == "1.12" ? 0x4793B0u : 0x4647A0u,
                      version == "1.12" ? 0x1175D0u : 0xFF4A0u,
+                     version == "1.12" ? 0x2442BAu : 0x22E5AAu, // caller-site anchor
                  })
         {
             var refused = false;

@@ -41,6 +41,15 @@ public sealed class FeatureVM : ObservableObject
         }
     }
 
+    /// <summary>战场增援代码输入（仅 reinforce_code 卡片显示输入框）。</summary>
+    public bool NeedsCode => Def.Id == "reinforce_code";
+    private string _codeText = "";
+    public string CodeText
+    {
+        get => _codeText;
+        set => Set(ref _codeText, value);
+    }
+
     public ICommand Execute { get; }
 
     public FeatureVM(FeatureDef def, MainVM main)
@@ -50,7 +59,15 @@ public sealed class FeatureVM : ObservableObject
         Icon = IconFor(def);
         Execute = new RelayCommand(_ =>
         {
-            var (ok, msg) = _main.Engine.ExecuteAction(Def.Id);
+            var arg = Def.Id switch
+            {
+                "reinforce_code" => CodeText,
+                "mcv_allied" => "allied",
+                "mcv_soviet" => "soviet",
+                "mcv_japan" => "japan",
+                _ => "",
+            };
+            var (ok, msg) = _main.Engine.ExecuteAction(Def.Id, arg);
             _main.Log(ok
                 ? $"✓ {Def.Name} 已执行"
                 : $"⚠ {Def.Name}: {(msg.Length > 0 ? msg : "执行失败")}");
@@ -88,6 +105,11 @@ public sealed class FeatureVM : ObservableObject
         "threat_zero" => "🔻",
         "threat_normal" => "↩️",
         "oremine" => "⛏",
+        "sel_copy" => "📋",
+        "mcv_allied" => "🛻",
+        "mcv_soviet" => "🚚",
+        "mcv_japan" => "🚛",
+        "reinforce_code" => "📡",
         _ => "🔧",
     };
 }

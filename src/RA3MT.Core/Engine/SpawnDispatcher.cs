@@ -1,0 +1,194 @@
+using System.Buffers.Binary;
+using RA3MT.Core.Memory;
+
+namespace RA3MT.Core.Engine;
+
+/// <summary>Game-thread spawn consumer: resolves a unit template either directly
+/// (copy-selected path, holder already known from the selection chain) or by the
+/// game's static WB-string hash table (reinforcement-code / MCV path), then calls
+/// the re-packed map-start spawn wrapper — the same factory/position/activate/
+/// register sequence the game itself runs at map start. The wrapper is cdecl
+/// (ignored, templateHolder, float3* pos, ownerSide, ignored) → eax = new Body,
+/// null-safe on failure, per the mocked-ABI verification.</summary>
+public static class SpawnDispatcher
+{
+    public const uint MailboxOffset = 0x18C0;
+    public const uint StateOffset = MailboxOffset;
+    public const uint HashOffset = MailboxOffset + 4;            // 0 = direct holder
+    public const uint HolderOffset = MailboxOffset + 8;          // used when hash == 0
+    public const uint PosXOffset = MailboxOffset + 0xC;          // float3, read by wrapper
+    public const uint PosYOffset = MailboxOffset + 0x10;
+    public const uint PosZOffset = MailboxOffset + 0x14;
+    public const uint OwnerOffset = MailboxOffset + 0x18;        // 0 = local side via playerRoot
+    public const uint ResultBodyOffset = MailboxOffset + 0x1C;   // wrapper return value
+    public const uint ResolvedHolderOffset = MailboxOffset + 0x20;
+    public const uint Idle = 0, Pending = 1, Executing = 2, Success = 3, Reject = 4;
+
+    public const uint CodeOffset = 0x1500;
+
+    public static byte[] Emit(nuint stubVA, nuint blockVA, nuint spawnWrapperVA,
+        nuint hashLookupVA, nuint hashTableGlobalVA, nuint rootVA)
+    {
+        uint start = checked((uint)stubVA), block = checked((uint)blockVA);
+        uint wrapper = checked((uint)spawnWrapperVA), lookup = checked((uint)hashLookupVA);
+        uint tableGlobal = checked((uint)hashTableGlobalVA), root = checked((uint)rootVA);
+        uint Slot(uint offset) => checked(block + offset);
+        var a = new Asm();
+        var labels = new Dictionary<int, int>();
+        var patches = new List<(int position, int label)>();
+        const int Exit = 1, Rejected = 2, Direct = 3, HaveTemplate = 4,
+            HaveOwner = 5, FxReject = 6, FxDone = 7;
+        void Mark(int id) { a.Label(id); labels.Add(id, a.Length); }
+        void Branch(byte condition, int label)
+        {
+            a.Db(0x0F, condition); patches.Add((a.Length, label)); a.Db(0, 0, 0, 0);
+        }
+        void Jump(int label)
+        {
+            a.Db(0xE9); patches.Add((a.Length, label)); a.Db(0, 0, 0, 0);
+        }
+        void NonNull(R reg) { a.CmpR32Imm32(reg, 0x10000); Branch(0x82, Rejected); }
+
+        a.Pushfd(); a.Pushad();
+        a.Db(0xB8, 1, 0, 0, 0);                         // expected Pending
+        a.Db(0xBA, 2, 0, 0, 0);                         // desired Executing
+        a.Db(0xF0, 0x0F, 0xB1, 0x15); a.Db(BitConverter.GetBytes(Slot(StateOffset)));
+        Branch(0x85, Exit);                             // failed claim: no payload access
+
+        // ---- template resolution ----
+        a.MovRegAbs(R.Esi, Slot(HashOffset));
+        a.TestRegReg(R.Esi, R.Esi);
+        a.JeShort(Direct);
+        // Hash path: ecx = [hash table owner global]; push hash; call TemplateHashLookup.
+        // The table is a startup-static registry; reading it on the game thread is the
+        // same pattern the game's own map-start caller uses. Callee is thiscall ret 4.
+        a.MovRegAbs(R.Ecx, tableGlobal); NonNull(R.Ecx);
+        a.Push(R.Esi);
+        a.Db(0xE8);                                     // CALL rel32
+        int lookupDisp = a.Length; a.Db(0, 0, 0, 0);
+        a.MovM32AbsReg(R.Eax, Slot(ResolvedHolderOffset));
+        a.TestRegReg(R.Eax, R.Eax);
+        Branch(0x84, Rejected);                        // jz rel32: target is beyond rel8 range
+        a.Db(0x8B, Asm.Modrm(3, R.Edi, R.Eax));         // edi = resolved holder
+        a.JmpShort(HaveTemplate);
+        Mark(Direct);
+        a.MovRegAbs(R.Edi, Slot(HolderOffset));
+        NonNull(R.Edi);
+        // The wrapper dereferences [holder+0x14] (descriptor) unconditionally;
+        // gate it before the call so a stale holder rejects instead of crashing.
+        a.MovRegRegDisp32(R.Eax, R.Edi, 0x14);
+        NonNull(R.Eax);
+        Mark(HaveTemplate);
+
+        // ---- owner ----
+        a.MovRegAbs(R.Ebp, Slot(OwnerOffset));
+        a.TestRegReg(R.Ebp, R.Ebp);
+        a.JneShort(HaveOwner);
+        a.MovRegAbs(R.Eax, root); NonNull(R.Eax);
+        a.MovRegRegDisp8(R.Eax, R.Eax, 0x28); NonNull(R.Eax);
+        a.Db(0x8B, Asm.Modrm(3, R.Ebp, R.Eax));         // ebp = local side
+        Mark(HaveOwner);
+
+        // ---- wrapper call: cdecl(0, edi, &mailbox.pos, ebp, 0) ----
+        a.Db(0x89, 0xE0);                               // old pushad ESP
+        a.Db(0x81, 0xEC, 0x14, 0x02, 0, 0);             // reserve FX area + saved ESP
+        a.Db(0x83, 0xE4, 0xF0);                         // stack alignment
+        a.Db(0x89, 0x84, 0x24, 0, 0x02, 0, 0);          // [esp+200] = old ESP
+        a.Db(0x0F, 0xAE, 0x04, 0x24);                   // fxsave [esp]
+        a.Db(0xFC);                                     // CLD
+        a.Db(0x83, 0xEC, 0x08);                         // pad: 5 args + ret = 24 → wrapper entry esp%16 == 0
+        a.Push8(0);                                     // arg5 (ignored)
+        a.Push(R.Ebp);                                  // arg4 = owner side
+        a.Db(0x68); a.Db(BitConverter.GetBytes(Slot(PosXOffset))); // arg3 = float3 in mailbox
+        a.Push(R.Edi);                                  // arg2 = template holder
+        a.Push8(0);                                     // arg1 (ignored)
+        a.Db(0xE8);                                     // CALL rel32
+        int callDisp = a.Length; a.Db(0, 0, 0, 0);
+        a.Db(0x83, 0xC4, 0x08);                         // undo pad
+        a.Db(0x81, 0xC4, 0x14, 0x00, 0x00, 0x00);       // cdecl caller-cleans 5 args
+        a.MovM32AbsReg(R.Eax, Slot(ResultBodyOffset)); // eax = new body (or 0)
+        a.TestRegReg(R.Eax, R.Eax);
+        a.JeShort(FxReject);
+        a.MovM32Abs(Slot(StateOffset), Success);
+        a.JmpShort(FxDone);
+        Mark(FxReject);
+        a.MovM32Abs(Slot(StateOffset), Reject);
+        Mark(FxDone);
+        a.Db(0x0F, 0xAE, 0x0C, 0x24);                   // fxrstor [esp]
+        a.Db(0x8B, 0xA4, 0x24, 0, 0x02, 0, 0);          // restore old pushad ESP
+        Jump(Exit);
+        Mark(Rejected);
+        a.MovM32Abs(Slot(StateOffset), Reject);
+        Mark(Exit);
+        a.Popad(); a.Popfd(); a.Ret();
+
+        var bytes = a.Build(start);
+        BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(lookupDisp, 4),
+            unchecked((int)(lookup - (start + (uint)(lookupDisp + 4)))));
+        BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(callDisp, 4),
+            unchecked((int)(wrapper - (start + (uint)(callDisp + 4)))));
+        foreach (var (position, label) in patches)
+            BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(position, 4),
+                checked(labels[label] - (position + 4)));
+        return bytes;
+    }
+}
+
+/// <summary>Single outstanding spawn request. Publishes the payload before the
+/// state byte; template may be given directly (holder path) or as a WB-string
+/// hash resolved on the game thread through the game's static template table.</summary>
+public sealed class SpawnRequestMailbox
+{
+    public const uint Offset = SpawnDispatcher.MailboxOffset;
+    private readonly IInjectionMemory _memory;
+    private readonly nuint _address;
+    private readonly object _gate = new();
+
+    public SpawnRequestMailbox(IInjectionMemory memory, nuint block)
+    {
+        _memory = memory;
+        _address = block + Offset;
+    }
+
+    public uint State => _memory.ReadU32(_address);
+
+    public void Submit(uint hash, uint holder, float x, float y, float z, uint owner)
+    {
+        if (hash == 0 && holder < 0x10000)
+            throw new ArgumentException("Spawn request needs a hash or a template holder");
+        if (owner != 0 && owner < 0x10000)
+            throw new ArgumentException("Invalid spawn owner");
+        if (!float.IsFinite(x) || !float.IsFinite(y) || !float.IsFinite(z))
+            throw new ArgumentException("Spawn position must be finite");
+        lock (_gate)
+        {
+            var state = State;
+            if (state is not (0 or 3 or 4))
+                throw new InvalidOperationException("Spawn request still pending or mailbox invalid");
+            _memory.Write(_address + 4, BitConverter.GetBytes(hash));
+            _memory.Write(_address + 8, BitConverter.GetBytes(holder));
+            _memory.Write(_address + 0xC, BitConverter.GetBytes(x));
+            _memory.Write(_address + 0x10, BitConverter.GetBytes(y));
+            _memory.Write(_address + 0x14, BitConverter.GetBytes(z));
+            _memory.Write(_address + 0x18, BitConverter.GetBytes(owner));
+            _memory.Write(_address + 0x1C, BitConverter.GetBytes(0u));
+            _memory.Write(_address + 0x20, BitConverter.GetBytes(0u));
+            _memory.Write(_address, BitConverter.GetBytes(1u)); // publish last
+        }
+    }
+
+    public (uint state, uint resultBody, uint resolvedHolder) ReadResult()
+    {
+        lock (_gate)
+        {
+            var state = State;
+            if (state is not (3 or 4))
+                return (state, 0, 0);
+            var result = _memory.ReadU32(_address + 0x1C);
+            var resolved = _memory.ReadU32(_address + 0x20);
+            if (State != state)
+                throw new InvalidOperationException("Spawn result changed while reading");
+            return (state, result, resolved);
+        }
+    }
+}

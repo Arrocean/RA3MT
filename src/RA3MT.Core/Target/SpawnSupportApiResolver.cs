@@ -22,13 +22,19 @@ public static class SpawnSupportApiResolver
         uint OwnerResolver,
         uint OwnerPredicate,
         uint HashTableGlobalRva,
-        uint OwnerKindGlobalRva);
+        uint OwnerKindGlobalRva,
+        uint SpawnWrapperEntry);
 
     private static readonly Layout[] Layouts =
     [
-        new("1.13", 0x40D5B0, 0x40D2C0, 0x4647A0, 0xFF4A0, 0x8F0108, 0x8E21A4),
-        new("1.12", 0x422510, 0x11F110, 0x4793B0, 0x1175D0, 0x8EBDE8, 0x8DDE84),
+        new("1.13", 0x40D5B0, 0x40D2C0, 0x4647A0, 0xFF4A0, 0x8F0108, 0x8E21A4, 0x22E3E0),
+        new("1.12", 0x422510, 0x11F110, 0x4793B0, 0x1175D0, 0x8EBDE8, 0x8DDE84, 0x2440F0),
     ];
+
+    // The map-start caller directly above the spawn wrapper loads the static hash
+    // table and calls the lookup at the same relative offset in both versions:
+    // mov ecx,[hashTableGlobal]; push edx; call TemplateHashLookup.
+    private const int CallerSiteOffset = 0x1CA;
 
     private static readonly byte[] HashMapFindCanonical = Convert.FromHexString(
         "8B44240883EC08568B3033D2578B79088BC6F7F78B49048B049185C08D1491" +
@@ -58,10 +64,9 @@ public static class SpawnSupportApiResolver
 
         var lookup = WithRelativeCall(HashLookupCanonical, 0x13,
             layout.HashFind - checked(layout.HashLookup + 0x18));
-        var tableOwnerVa = checked((uint)imageBase + layout.HashTableGlobalRva);
-        BitConverter.GetBytes(tableOwnerVa).CopyTo(lookup, 0x05);
         Verify(readRva, layout.HashLookup, lookup, "template hash lookup");
         Verify(readRva, layout.HashFind, HashMapFindCanonical, "hash map finder");
+        VerifyHashTableGlobal(readRva, layout, (uint)imageBase);
 
         var owner = WithRelativeCall(OwnerCanonical, 9,
             layout.OwnerPredicate - checked(layout.OwnerResolver + 14));
@@ -85,6 +90,29 @@ public static class SpawnSupportApiResolver
             throw new InvalidOperationException("Internal spawn helper call layout mismatch");
         BitConverter.GetBytes(unchecked((int)displacement)).CopyTo(bytes, opcodeOffset + 1);
         return bytes;
+    }
+
+    /// <summary>Anchor the hash-table owner global to the map-start caller's
+    /// mov ecx,[global]; push edx; call TemplateHashLookup sequence.</summary>
+    private static void VerifyHashTableGlobal(Func<uint, int, byte[]> readRva, Layout layout, uint imageBase)
+    {
+        var site = checked(layout.SpawnWrapperEntry + (uint)CallerSiteOffset);
+        var expected = new byte[12];
+        expected[0] = 0x8B;
+        expected[1] = 0x0D;
+        BitConverter.GetBytes(checked(imageBase + layout.HashTableGlobalRva)).CopyTo(expected, 2);
+        expected[6] = 0x52;
+        expected[7] = 0xE8;
+        var callSite = site + 12;
+        BitConverter.GetBytes(checked((int)((long)layout.HashLookup - callSite))).CopyTo(expected, 8);
+        var actual = readRva(site, expected.Length);
+        if (actual.Length != expected.Length)
+            throw new InvalidOperationException("hash table caller site read length mismatch");
+        var mismatch = actual.AsSpan().SequenceEqual(expected) ? -1 :
+            Enumerable.Range(0, expected.Length).First(index => actual[index] != expected[index]);
+        if (mismatch >= 0)
+            throw new InvalidOperationException($"hash table caller site mismatch at RVA 0x{site + (uint)mismatch:X}: " +
+                $"expected {expected[mismatch]:X2}, read {actual[mismatch]:X2}");
     }
 
     private static void Verify(Func<uint, int, byte[]> readRva, uint rva,
