@@ -97,10 +97,11 @@ public static class SpawnActions
         var addr = imageBase + Convert.ToUInt32(rvaStr, 16);
         var x = mem.ReadF32(addr);
         var z = mem.ReadF32(addr + 4);
-        if (!float.IsFinite(x) || !float.IsFinite(z)) return null;
+        var y = mem.ReadF32(addr + 8);   // ground height (live dump showed 190 at the cursor)
+        if (!float.IsFinite(x) || !float.IsFinite(z) || !float.IsFinite(y)) return null;
         if (MathF.Abs(x) < 0.01f && MathF.Abs(z) < 0.01f) return null;
-        if (MathF.Abs(x) > 100000 || MathF.Abs(z) > 100000) return null;
-        return (x, 0f, z);
+        if (MathF.Abs(x) > 100000 || MathF.Abs(z) > 100000 || MathF.Abs(y) > 100000) return null;
+        return (x, y, z);
     }
 
     /// <summary>Parse a reinforcement code like "6586A5A0" / "0x6586A5A0".</summary>
