@@ -45,5 +45,9 @@ public sealed class DelegateFeature : IFeature
     public FeatureKind Kind { get; }
     public FeatureAvailability Availability { get; }
 
+    /// <summary>Delegates to the engine's historical code, so it is by definition
+    /// not migrated. The catalog check fails while any of these remain.</summary>
+    public bool IsMigrated => false;
+
     public IFeatureState CreateState(FeatureContext context) => _factory(context);
 }

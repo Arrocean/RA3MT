@@ -1,5 +1,6 @@
 using RA3MT.Core.Engine;
 using RA3MT.Core.Features.Abstractions;
+using RA3MT.Core.Features.Host;
 using RA3MT.Core.Memory;
 using RA3MT.Core.Model;
 using RA3MT.Core.Target;
@@ -46,6 +47,16 @@ public sealed class TrainerEngine : IDisposable
         || File.Exists(Path.Combine(AppContext.BaseDirectory, "spawn-bridge.enable"));
 
     public bool SpawnBridgeActive => Attached && _mc is { SpawnBridgeEnabled: true, SpawnMailbox: not null };
+
+    /// <summary>Whether one specific bridge is usable right now.</summary>
+    private bool IsBridgeActive(Engine.BridgeId id) => id switch
+    {
+        Engine.BridgeId.Rank => RankBridgeActive,
+        Engine.BridgeId.Capture => CaptureBridgeActive,
+        Engine.BridgeId.Kill => KillBridgeActive,
+        Engine.BridgeId.Spawn => SpawnBridgeActive,
+        _ => false,
+    };
     public string Version { get; private set; } = "";
     public int Pid { get; private set; }
     public string ProcessPath { get; private set; } = "";
@@ -56,17 +67,22 @@ public sealed class TrainerEngine : IDisposable
     public event Action<string>? Log;
     public event Action? StateChanged;
 
-    private readonly Dictionary<string, bool> _toggleState = new();
+    /// <summary>Owner of the on/off state for stub-flag features. Created eagerly so
+    /// the UI can read it before the first attach; the flag writes themselves are
+    /// routed through <see cref="WriteFeatureFlag"/> and need an installed block.</summary>
+    private readonly SwitchBank _switches;
     private readonly FeatureRegistry _registry;
     private readonly Dictionary<string, IFeatureState> _featureStates = new(StringComparer.Ordinal);
+    private FeatureServiceRegistry _services = new();
 
-    public IReadOnlyDictionary<string, bool> ToggleState => _toggleState;
+    public IReadOnlyDictionary<string, bool> ToggleState => _switches.Snapshot;
     public FeaturesData Data => _data;
     public FeatureRegistry Registry => _registry;
 
     public TrainerEngine()
     {
-        _registry = LegacyFeatureCatalog.Build(_data, this);
+        _registry = LegacyFeatureCatalog.Build(_data, this, RunDiag);
+        _switches = new SwitchBank(_data, WriteFeatureFlag, m => Log?.Invoke(m));
     }
 
     /// <summary>Create one state object per declared feature for this session.
@@ -74,6 +90,7 @@ public sealed class TrainerEngine : IDisposable
     private void CreateFeatureStates()
     {
         _featureStates.Clear();
+        _services = BuildServices();
         var context = new FeatureContext
         {
             Session = new SessionSnapshot
@@ -87,7 +104,15 @@ public sealed class TrainerEngine : IDisposable
                 TotalSites = TotalSites,
             },
             Symbols = new SessionSymbols(_data, _mem!, Version, Base),
-            Log = m => Log?.Invoke(m),
+            Data = _data,
+            Host = new FeatureHost
+            {
+                Log = m => Log?.Invoke(m),
+                NotifyStateChanged = () => StateChanged?.Invoke(),
+                Memory = _mem!,
+                Services = _services,
+                Symbols = new SessionSymbols(_data, _mem!, Version, Base),
+            },
         };
         foreach (var feature in _registry.Features)
         {
@@ -100,6 +125,60 @@ public sealed class TrainerEngine : IDisposable
             {
                 Log?.Invoke($"⚠ 功能 {feature.Id} 初始化失败，已跳过: {ex.Message}");
             }
+        }
+    }
+
+    /// <summary>Capabilities features may depend on for this session.</summary>
+    private FeatureServiceRegistry BuildServices()
+    {
+        var registry = new FeatureServiceRegistry();
+        registry.Register<IGameMemory>(new GameMemory(_mem!, Version, Base));
+        registry.Register<ISwitchBank>(_switches);
+        registry.Register<IBridgeGateway>(new EngineAdapters.BridgeGateway(
+            IsBridgeActive,
+            (id, name) => SubmitBridgeRequests(name, id)));
+        registry.Register<ISpawnGateway>(new EngineAdapters.SpawnGateway(
+            SpawnBridgeActive,
+            CopyHolders,
+            MouseGround,
+            SelectionAnchor,
+            SubmitSpawnRequests));
+        return registry;
+    }
+
+    /// <summary>Template holders of the current selection (copy-selected path).</summary>
+    private IReadOnlyList<uint> CopyHolders()
+    {
+        if (_mem is null) return [];
+        return SpawnActions.EnumerateCopyTargets(_mem, _data, Version, Base)
+            .Select(t => t.holder).ToList();
+    }
+
+    private (float x, float y, float z)? MouseGround()
+    {
+        if (_mem is null) return null;
+        var mouse = SpawnActions.GetMouseWorldPosition(_mem, _data, Version, Base);
+        return mouse is null ? null : (mouse.Value.x, mouse.Value.y, mouse.Value.z);
+    }
+
+    private (float x, float y, float z)? SelectionAnchor()
+    {
+        if (_mem is null) return null;
+        return SpawnActions.GetSelectionAnchor(_mem, _data, Version, Base);
+    }
+
+    /// <summary>Write one stub flag through the installed block.</summary>
+    private FeatureResult WriteFeatureFlag(string flag, bool on)
+    {
+        if (_mc is null) return FeatureResult.Failure("修改器未初始化");
+        try
+        {
+            _mc.SetFlag(flag, on);
+            return FeatureResult.Success;
+        }
+        catch (Exception ex)
+        {
+            return FeatureResult.Failure(ex.Message);
         }
     }
 
@@ -220,8 +299,7 @@ public sealed class TrainerEngine : IDisposable
             ProcessPath = found.modulePath;
             Base = baseAddr;
             ResolvedSites = sites.Count;
-            foreach (var f in _data.Features)
-                if (f.Kind == "toggle") _toggleState[f.Id] = false;
+            _switches.ResetAll();
             CreateFeatureStates();
 
             Log?.Invoke($"修改器已就绪：{sites.Count}/{_data.Hooks.Count} 挂钩点全部通过原始字节校验 ✓");
@@ -275,9 +353,10 @@ public sealed class TrainerEngine : IDisposable
         _mc = null;
         _actionState.Clear();
         _featureStates.Clear();
+        _services = new FeatureServiceRegistry();
         Attached = false;
         RecoveryRequired = false;
-        foreach (var k in _toggleState.Keys.ToList()) _toggleState[k] = false;
+        _switches.ResetAll();
         Log?.Invoke("已从游戏进程脱离，全部挂钩已还原。");
         StateChanged?.Invoke();
     }
@@ -313,6 +392,8 @@ public sealed class TrainerEngine : IDisposable
     // ---------------------------------------------------------------------
     // Historical implementations. These are the bodies the catalog currently
     // wraps as features; they disappear as features migrate (M5).
+    // Every stub-flag toggle is already migrated to SwitchFeature, so only the
+    // code-patch toggle is left here.
     // ---------------------------------------------------------------------
 
     internal (bool ok, string msg) SetFeatureToggle(string featureId, bool on)
@@ -327,17 +408,11 @@ public sealed class TrainerEngine : IDisposable
             {
                 var (vok, vmsg) = SetBuildAnywherePatch(on);
                 if (!vok) return (vok, vmsg);
-                _toggleState[featureId] = on;
                 Log?.Invoke($"{f.Name} = {(on ? "开" : "关")}{(vmsg.Length > 0 ? $"（{vmsg}）" : "")}");
                 StateChanged?.Invoke();
                 return (true, "");
             }
-            if (f.Flag == null) return (false, "功能无开关标志");
-            _mc.SetFlag(f.Flag, on);
-            _toggleState[featureId] = on;
-            Log?.Invoke($"{f.Name} = {(on ? "开" : "关")}");
-            StateChanged?.Invoke();
-            return (true, "");
+            return (false, "功能无开关标志");
         }
         catch (Exception ex)
         {
@@ -374,103 +449,32 @@ public sealed class TrainerEngine : IDisposable
         return (true, on ? "放置范围限制已解除" : "放置范围限制已恢复");
     }
 
+    /// <summary>Last-resort action dispatch. The catalog covers every declared
+    /// feature, so this only runs for an id that has no implementation (a typo or a
+    /// stale UI). It is deliberately tiny: nothing may be added here — new actions
+    /// become features.</summary>
     internal (bool ok, string msg) RunFeatureAction(string featureId, string? arg = null)
     {
         if (RecoveryRequired) return (false, "挂钩恢复未完成，禁止执行动作");
         if (!Attached || _mem == null) return (false, "未附加");
-        var f = _data.Features.FirstOrDefault(x => x.Id == featureId);
-        if (f?.Kind != "action" || f.Action == null) return (false, "功能尚未可用或非动作型功能");
-        try
-        {
-            if (f.Action == "diag")
-                return DiagDump();
-            if (_mc == null)
-                return (false, "修改器未初始化");
-
-            // 威胁等级恢复 = 关闭两个覆盖开关（FINAL3 Normal 语义：不保存旧值）
-            if (f.Action == "threatnormal")
-            {
-                _mc.SetFlag("threatmax", false);
-                _mc.SetFlag("threatzero", false);
-                _toggleState["threat_max"] = false;
-                _toggleState["threat_zero"] = false;
-                Log?.Invoke("威胁等级恢复：覆盖已关闭，交还游戏自然重算");
-                StateChanged?.Invoke();
-                return (true, "");
-            }
-
-            // 晋级桥路径：请求经资金结算（游戏线程）分派到已配对的晋级函数
-            if (f.Action == "lv" && RankBridgeActive)
-                return SubmitBridgeRequests(f.Name, BridgeId.Rank);
-            if (f.Action == "capture")
-            {
-                if (CaptureBridgeActive) return SubmitBridgeRequests(f.Name, BridgeId.Capture);
-                return (false, "需要 bridges.enable 启用俘虏桥并通过校验（直接改属主指针不安全，已禁用）");
-            }
-            if (f.Action == "destroy")
-            {
-                if (KillBridgeActive) return SubmitBridgeRequests(f.Name, BridgeId.Kill);
-                return (false, "需要 bridges.enable 启用摧毁桥并通过校验（直接清血量绕过死亡流程，已禁用）");
-            }
-
-            // 生成桥路径：复制选中（直接模板持有者）/ 基地车 / 战场增援代码（哈希）
-            if (f.Action == "selcopy")
-            {
-                if (!SpawnBridgeActive)
-                    return (false, "需要 spawn-bridge.enable 启用生成桥并通过校验");
-                var targets = SpawnActions.EnumerateCopyTargets(_mem, _data, Version!, Base);
-                if (targets.Count == 0)
-                    return (false, "没有可复制的选中目标（未选中或目标缺少模板链）");
-                var mouse = SpawnActions.GetMouseWorldPosition(_mem, _data, Version!, Base);
-                if (mouse != null)
-                    return SubmitSpawnRequests(f.Name,
-                        targets.Select(t => (0u, t.holder, mouse.Value.x, mouse.Value.y, mouse.Value.z)).ToList());
-                return SubmitSpawnRequests(f.Name,
-                    targets.Select(t => (0u, t.holder, t.x, t.y, t.z)).ToList());
-            }
-            if (f.Action == "spawnhash")
-            {
-                if (!SpawnBridgeActive)
-                    return (false, "需要 spawn-bridge.enable 启用生成桥并通过校验");
-                uint hash;
-                if (arg is "allied" or "soviet" or "japan")
-                {
-                    if (!SpawnActions.McvHashes.TryGetValue(arg, out hash))
-                        return (false, "未知阵营");
-                }
-                else if (!SpawnActions.TryParseHash(arg ?? "", out hash) || hash == 0)
-                {
-                    return (false, "无效的增援代码（应为 8 位十六进制，如 6586A5A0）");
-                }
-                // spawn at the mouse ground point (world x/z, always live);
-                // fall back to the selected unit's position when unavailable
-                var mouse = SpawnActions.GetMouseWorldPosition(_mem, _data, Version!, Base);
-                if (mouse != null)
-                    Log?.Invoke($"生成位置=鼠标地面 0x({mouse.Value.x:F0}, {mouse.Value.z:F0})");
-                var anchor = mouse ?? SpawnActions.GetSelectionAnchor(_mem, _data, Version!, Base);
-                if (anchor == null)
-                    return (false, "鼠标位置不可用：请把鼠标移到游戏画面上，或选中一个己方单位作锚点");
-                var (x, y, z) = anchor.Value;
-                return SubmitSpawnRequests(f.Name, [(hash, 0u, x, y, z)]);
-            }
-
-            var n = SelectionActions.Apply(_mem, _data, Version!, f.Action, Base, _actionState);
-            Log?.Invoke($"{f.Name}: 作用于 {n} 个选中目标");
-            return (n > 0, n > 0 ? "" : "没有可处理的选中目标（未选中或目标不支持此功能）");
-        }
-        catch (Exception ex)
-        {
-            Log?.Invoke($"{f.Name} 失败: {ex.Message}");
-            return (false, ex.Message);
-        }
+        return (false, $"功能 {featureId} 没有实现（catalog 未注册）");
     }
 
-    /// <summary>向生成桥逐个提交请求（每次等待游戏线程消费后再提交下一个）。
-    /// owner 传 0：消费桩在游戏线程用 playerRoot 全局补齐本地阵营。</summary>
+    // ---------------------------------------------------------------------
+    // Bridge plumbing. Features reach this through IBridgeGateway /
+    // ISpawnGateway; the waiting, logging and per-bridge wording live here.
+    // ---------------------------------------------------------------------
+
+    /// <summary>Diagnostics entry point for the feature catalog.</summary>
+    private FeatureResult RunDiag()
+    {
+        var (ok, msg) = DiagDump();
+        return ok ? FeatureResult.Succeeded(msg) : FeatureResult.Failure(msg);
+    }
+
     /// <summary>Submit requests to a game-thread bridge one at a time, waiting for
     /// the settlement stub to consume each before sending the next (the mailbox
-    /// allows a single outstanding request). One implementation for every bridge:
-    /// the differences live in the consumer's payload, not in this loop.</summary>
+    /// allows a single outstanding request).</summary>
     private (bool, string) DrainBridge(string featureName, BridgeId id, IReadOnlyList<BridgeRequest> requests,
         int perTargetTimeoutMs, int totalBudgetMs)
     {
@@ -691,7 +695,7 @@ public sealed class TrainerEngine : IDisposable
         catch { return "<不可读>"; }
     }
 
-    public bool IsOn(string featureId) => _toggleState.TryGetValue(featureId, out var v) && v;
+    public bool IsOn(string featureId) => _switches.IsOn(featureId);
 
     public void Dispose() => Detach();
 

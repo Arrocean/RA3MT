@@ -14,6 +14,11 @@ public interface IFeature
     /// <summary>Static availability for the attached build, before a session exists.</summary>
     FeatureAvailability Availability { get; }
 
+    /// <summary>True when this feature carries its own implementation rather than
+    /// delegating back to the engine's historical switch. The catalog check asserts
+    /// every non-pending feature is migrated, so M5 cannot regress silently.</summary>
+    bool IsMigrated => true;
+
     /// <summary>Create the per-session state object. Called once per attach.</summary>
     IFeatureState CreateState(FeatureContext context);
 }

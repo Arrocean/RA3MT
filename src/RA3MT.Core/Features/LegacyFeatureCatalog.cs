@@ -1,4 +1,5 @@
 using RA3MT.Core.Features.Abstractions;
+using RA3MT.Core.Features.Toggles;
 using RA3MT.Core.Model;
 
 namespace RA3MT.Core.Features;
@@ -13,7 +14,8 @@ namespace RA3MT.Core.Features;
 /// </summary>
 public static class LegacyFeatureCatalog
 {
-    public static FeatureRegistry Build(FeaturesData data, TrainerEngine? engine = null)
+    public static FeatureRegistry Build(FeaturesData data, TrainerEngine? engine = null,
+        Func<FeatureResult>? diagnostics = null)
     {
         var features = new List<IFeature>(data.Features.Count);
         foreach (var def in data.Features)
@@ -27,6 +29,81 @@ public static class LegacyFeatureCatalog
             var availability = kind == FeatureKind.Pending
                 ? FeatureAvailability.NotImplemented
                 : FeatureAvailability.Ready;
+
+            // Toggles that are a plain stub flag are already fully migrated: they
+            // need nothing from the engine beyond the switch bank service.
+            if (def.Id == Patches.BuildAnywhereFeature.FeatureId)
+            {
+                features.Add(new Patches.BuildAnywhereFeature());
+                continue;
+            }
+
+            if (kind == FeatureKind.Toggle && !string.IsNullOrEmpty(def.Flag))
+            {
+                features.Add(new SwitchFeature(def.Id, def.Flag));
+                continue;
+            }
+
+            // Selection actions and threat-normal are migrated too: they only need
+            // the memory accessor, the model and the validated selection helper.
+            if (kind == FeatureKind.Action)
+            {
+                var bridge = def.Action switch
+                {
+                    "lv" => (Engine.BridgeId?)Engine.BridgeId.Rank,
+                    "capture" => Engine.BridgeId.Capture,
+                    "destroy" => Engine.BridgeId.Kill,
+                    _ => null,
+                };
+                if (bridge is not null)
+                {
+                    features.Add(new Actions.BridgeActionFeature(def.Id, bridge.Value, def.Action switch
+                    {
+                        "lv" => "晋级桥未启用（需要 rank-bridge.enable 并通过校验）",
+                        "capture" => "需要 bridges.enable 启用俘虏桥并通过校验（直接改属主指针不安全，已禁用）",
+                        _ => "需要 bridges.enable 启用摧毁桥并通过校验（直接清血量绕过死亡流程，已禁用）",
+                    }));
+                    continue;
+                }
+            }
+
+            // Spawn-bridge actions: copy-selected / the three MCVs / reinforcement
+            // codes. They differ only in how the request is shaped.
+            if (kind == FeatureKind.Action)
+            {
+                var spawnKind = def.Action switch
+                {
+                    "selcopy" => (Actions.SpawnActionKind?)Actions.SpawnActionKind.CopySelection,
+                    // "spawnhash" backs two different features: the MCV buttons carry
+                    // their side in the UI argument, the reinforcement box carries a
+                    // hex code. The feature id is what distinguishes them.
+                    "spawnhash" => def.Id.StartsWith("mcv_", StringComparison.Ordinal)
+                        ? Actions.SpawnActionKind.Mcv
+                        : Actions.SpawnActionKind.HashCode,
+                    _ => null,
+                };
+                if (spawnKind is not null)
+                {
+                    features.Add(new Actions.SpawnActionFeature(def.Id, spawnKind.Value));
+                    continue;
+                }
+            }
+
+            if (kind == FeatureKind.Action && def.Action is not null
+                && def.Action is not ("diag" or "selcopy" or "spawnhash"))
+            {
+                features.Add(def.Action == "threatnormal"
+                    ? new Selection.ThreatNormalFeature()
+                    : new Selection.SelectionActionFeature(def.Id, def.Action));
+                continue;
+            }
+
+            if (def.Action == "diag")
+            {
+                features.Add(new Actions.DiagnosticsFeature(def.Id,
+                    diagnostics ?? (() => FeatureResult.Failure("诊断不可用"))));
+                continue;
+            }
 
             var captured = def;
             features.Add(new DelegateFeature(

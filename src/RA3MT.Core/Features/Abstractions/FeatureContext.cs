@@ -34,8 +34,16 @@ public sealed class FeatureContext
 
     public required ISymbols Symbols { get; init; }
 
+    /// <summary>The features.json model. Features need it for version-specific
+    /// constants and their own private patch offsets.</summary>
+    public required Model.FeaturesData Data { get; init; }
+
+    /// <summary>Logging, change notification, memory and service lookup. Features
+    /// go through this instead of holding a reference to the engine.</summary>
+    public required Host.FeatureHost Host { get; init; }
+
     /// <summary>Written to the trainer log panel.</summary>
-    public required Action<string> Log { get; init; }
+    public Action<string> Log => Host.Log;
 
     public IInjectionMemory Memory => Session.Memory;
     public string Version => Session.Version;

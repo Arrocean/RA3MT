@@ -55,6 +55,11 @@ public sealed class FeatureDef
     [JsonPropertyName("action")] public string? Action { get; set; }
     [JsonPropertyName("desc")] public string Desc { get; set; } = "";
     [JsonPropertyName("src")] public string? Src { get; set; }
+
+    /// <summary>Addresses this feature owns, e.g. a code-patch site. Keeping them
+    /// here instead of in <c>globals</c> stops single-feature data from leaking
+    /// into the shared game-address model.</summary>
+    [JsonPropertyName("private")] public Dictionary<string, string> Private { get; set; } = new();
 }
 
 public sealed class FeaturesData
@@ -84,6 +89,35 @@ public sealed class FeaturesData
         GameGlobalId.BuildAnywherePatch => Globals.BuildAnywherePatch,
         _ => null,
     };
+}
+
+/// <summary>Feature-private offsets: per-feature version maps that must not live in
+/// the shared <see cref="Globals"/> model.</summary>
+public static class PrivateOffsets
+{
+    /// <summary>Read "<c>&lt;version&gt;</c>" from a feature's private map; 0 when absent.</summary>
+    public static uint RvaFor(FeaturesData data, string version, string featureId, string key = "site")
+    {
+        var feature = data.Features.FirstOrDefault(f => f.Id == featureId);
+        if (feature is null) return 0;
+        if (!feature.Private.TryGetValue(key, out var map)) return 0;
+        var entry = map.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(part => part.Split('=', 2, StringSplitOptions.TrimEntries))
+            .FirstOrDefault(pair => pair.Length == 2 && pair[0] == version);
+        if (entry is null) return 0;
+        return Convert.ToUInt32(entry[1], 16);
+    }
+
+    /// <summary>Private value declared as a plain hex string per version:
+    /// <c>"1.13": "0x..."</c>.</summary>
+    public static uint VersionedRva(FeaturesData data, string version, string featureId, string key)
+    {
+        var feature = data.Features.FirstOrDefault(f => f.Id == featureId);
+        if (feature is null) return 0;
+        if (!feature.Private.TryGetValue(key, out var value)) return 0;
+        if (value.Contains('=')) return RvaFor(data, version, featureId, key);
+        return Convert.ToUInt32(value, 16);
+    }
 }
 
 /// <summary>Shared, cross-feature game globals. Feature-private addresses belong

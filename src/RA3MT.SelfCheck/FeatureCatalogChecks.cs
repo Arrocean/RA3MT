@@ -70,10 +70,13 @@ public static class FeatureCatalogChecks
                     ProcessPath = "", ResolvedSites = 0, TotalSites = 0,
                 },
                 Symbols = null!,
-                Log = _ => { },
+                Data = data,
+                Host = UnboundHost(),
             });
-            if (state.SetOn(true).Ok) throw new Exception($"unbound '{f.Id}' reported a successful toggle");
-            if (state.Execute(null).Ok) throw new Exception($"unbound '{f.Id}' reported a successful action");
+            var (toggleOk, _) = state.SetOn(true);
+            if (toggleOk) throw new Exception($"unbound '{f.Id}' reported a successful toggle");
+            var (actionOk, _) = state.Execute(null);
+            if (actionOk) throw new Exception($"unbound '{f.Id}' reported a successful action");
             cases++;
         }
 
@@ -88,7 +91,30 @@ public static class FeatureCatalogChecks
             }
         }
 
+        // 6) migration gate: every runnable feature must carry its own
+        //    implementation. This is the check that keeps M5 from regressing —
+        //    a feature that falls back to the engine's historical switch fails here.
+        var stillDelegating = registry.Features
+            .Where(f => f.Kind != FeatureKind.Pending && !f.IsMigrated)
+            .Select(f => f.Id)
+            .ToList();
+        if (stillDelegating.Count != 0)
+            throw new Exception($"{stillDelegating.Count} feature(s) still delegate to the engine: " +
+                                string.Join(", ", stillDelegating));
+        cases++;
+
         Console.WriteLine($"PASS {cases} feature catalog cases " +
                           $"({data.Features.Count} features, {data.Hooks.Count} hooks, ids unique, unbound states fail closed)");
     }
+
+    /// <summary>Host with no services: what a feature sees when the catalog is built
+    /// without an engine (offline checks).</summary>
+    private static RA3MT.Core.Features.Host.FeatureHost UnboundHost() => new()
+    {
+        Log = _ => { },
+        NotifyStateChanged = () => { },
+        Memory = null!,
+        Services = new RA3MT.Core.Features.Host.FeatureServiceRegistry(),
+        Symbols = null!,
+    };
 }
