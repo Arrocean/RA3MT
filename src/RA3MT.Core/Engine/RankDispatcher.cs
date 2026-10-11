@@ -23,9 +23,9 @@ public static class RankDispatcher
     public const uint CodeOffset = 0x1100;
 
     public static byte[] EmitMoneyBridge(nuint stubVA, nuint siteEnd, nuint blockVA, nuint rootVA,
-        params uint[] dispatcherOffsets)
+        string stubId, params uint[] dispatcherOffsets)
     {
-        var original = StubGen.Emit("money_h2", stubVA + (nuint)(5 * dispatcherOffsets.Length),
+        var original = StubGen.Emit(stubId, stubVA + (nuint)(5 * dispatcherOffsets.Length),
             siteEnd, blockVA, rootVA);
         var bytes = new byte[original.Length + 5 * dispatcherOffsets.Length];
         for (var i = 0; i < dispatcherOffsets.Length; i++)

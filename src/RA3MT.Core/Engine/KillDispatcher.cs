@@ -14,6 +14,15 @@ public static class KillDispatcher
     public const uint BodyOffset = MailboxOffset + 4;
     public const uint DrawableOffset = MailboxOffset + 8;
     public const uint HpOffset = MailboxOffset + 0xC;
+    // Static DamageInfo the stub passes as the adjust() context. A null context
+    // skips the game's damage-processing segment (0x3781A0 modifier pass and the
+    // attacker-aware path), which leaves the body dead but with no death event
+    // (model stays, unit unselectable). The game only reads ctx+8/ctx+0xC here
+    // (damage-type / death-type pair FINAL3 passes as 6 / 0x13); unmatched
+    // pairs simply bypass armor modifiers and still run the full death flow.
+    public const uint DamageInfoOffset = MailboxOffset + 0x10;  // ctx points here
+    public const uint DamageTypeOffset = MailboxOffset + 0x18;  // ctx+8  = 6
+    public const uint DeathTypeOffset = MailboxOffset + 0x1C;   // ctx+0xC = 0x13
     public const uint Idle = 0, Pending = 1, Executing = 2, Success = 3, Reject = 4;
 
     public const uint CodeOffset = 0x1400;
@@ -64,8 +73,8 @@ public static class KillDispatcher
         a.Db(0x0F, 0xAE, 0x04, 0x24);                   // fxsave [esp]
         a.Db(0xFC);                                     // CLD
         a.Db(0x83, 0xEC, 0x04);                         // pad: 2 args + ret = 12 → callee entry aligned
-        a.Push8(0);                                     // arg2 = null context
-        a.Db(0x68); a.Db(BitConverter.GetBytes(LethalDelta)); // push delta (float bits)
+        a.Db(0x68); a.Db(BitConverter.GetBytes(Slot(DamageInfoOffset))); // arg2 = static DamageInfo
+        a.Db(0x68); a.Db(BitConverter.GetBytes(LethalDelta));            // push delta (float bits)
         a.Db(0x8B, Asm.Modrm(3, R.Ecx, R.Ebx));         // mov ecx,ebx : this = hp object
         a.Db(0xE8);                                     // CALL rel32
         int callDisp = a.Length; a.Db(0, 0, 0, 0);
@@ -134,6 +143,10 @@ public sealed class KillRequestMailbox
             _memory.Write(_address + 4, BitConverter.GetBytes(body));
             _memory.Write(_address + 8, BitConverter.GetBytes(drawable));
             _memory.Write(_address + 0xC, BitConverter.GetBytes(hp));
+            // Static DamageInfo payload: adjust() reads ctx+8/ctx+0xC only.
+            // FINAL3 passes damage type 6 / death type 0x13 for its destroy.
+            _memory.Write(_address + 0x18, BitConverter.GetBytes(6u));
+            _memory.Write(_address + 0x1C, BitConverter.GetBytes(0x13u));
             _memory.Write(_address, BitConverter.GetBytes(1u)); // publish last
         }
     }

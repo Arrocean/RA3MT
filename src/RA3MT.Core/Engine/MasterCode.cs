@@ -118,8 +118,12 @@ public sealed class MasterCode
             if (CaptureBridgeEnabled) bridgeOffsets.Add(CaptureDispatcher.CodeOffset);
             if (KillBridgeEnabled) bridgeOffsets.Add(KillDispatcher.CodeOffset);
             if (SpawnBridgeEnabled) bridgeOffsets.Add(SpawnDispatcher.CodeOffset);
-            var code = bridgeOffsets.Count != 0 && stubId == "money_h2"
-                ? RankDispatcher.EmitMoneyBridge(Block + off, siteEnd, Block, _rootVa, bridgeOffsets.ToArray())
+            // Bridge consumers ride both settlement sites: money_h2 (cash settle)
+            // and money_h1 (power settle). With infinite cash enabled the cash
+            // settlement can go quiet for long stretches, but the power settle
+            // keeps ticking, so mailbox requests get consumed either way.
+            var code = bridgeOffsets.Count != 0 && (stubId == "money_h2" || stubId == "money_h1")
+                ? RankDispatcher.EmitMoneyBridge(Block + off, siteEnd, Block, _rootVa, stubId, bridgeOffsets.ToArray())
                 : StubGen.Emit(stubId, Block + off, siteEnd, Block, _rootVa, site.Displaced);
             var next = checked(off + (uint)((code.Length + 15) & ~15));
             if (next > CaptureCount)

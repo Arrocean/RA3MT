@@ -26,9 +26,9 @@ if (args.Length == 2 && args[0] == "stubdump")
         Console.WriteLine($"{id,-14} {code.Length} bytes -> {id}.bin");
     }
     File.WriteAllBytes(Path.Combine(args[1], "money_h2_rank.bin"),
-        RankDispatcher.EmitMoneyBridge(0x40000040, 0x452105, 0x40000000, 0x400000, RankDispatcher.CodeOffset));
+        RankDispatcher.EmitMoneyBridge(0x40000040, 0x452105, 0x40000000, 0x400000, "money_h2", RankDispatcher.CodeOffset));
     File.WriteAllBytes(Path.Combine(args[1], "money_h2_full_bridge.bin"),
-        RankDispatcher.EmitMoneyBridge(0x40000040, 0x452105, 0x40000000, 0x400000,
+        RankDispatcher.EmitMoneyBridge(0x40000040, 0x452105, 0x40000000, 0x400000, "money_h2",
             RankDispatcher.CodeOffset, CaptureDispatcher.CodeOffset, KillDispatcher.CodeOffset));
     File.WriteAllBytes(Path.Combine(args[1], "rank_dispatcher.bin"),
         RankDispatcher.Emit(0x40001100, 0x40000000, 0x785600, 0x400000));
@@ -39,7 +39,7 @@ if (args.Length == 2 && args[0] == "stubdump")
     File.WriteAllBytes(Path.Combine(args[1], "spawn_dispatcher.bin"),
         SpawnDispatcher.Emit(0x40001580, 0x40000000, 0x62E3E0, 0x80D5B0, 0xCF0108, 0x400000));
     File.WriteAllBytes(Path.Combine(args[1], "money_h2_spawn_bridge.bin"),
-        RankDispatcher.EmitMoneyBridge(0x40000040, 0x452105, 0x40000000, 0x400000,
+        RankDispatcher.EmitMoneyBridge(0x40000040, 0x452105, 0x40000000, 0x400000, "money_h2",
             RankDispatcher.CodeOffset, CaptureDispatcher.CodeOffset, KillDispatcher.CodeOffset,
             SpawnDispatcher.CodeOffset));
     return 0;

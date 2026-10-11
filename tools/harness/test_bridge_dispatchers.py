@@ -63,6 +63,8 @@ def shared_entries(vm, own=False):
     put(vm, MAILK + 4, BODY)
     put(vm, MAILK + 8, DRAWABLE)
     put(vm, MAILK + 12, HP)
+    put(vm, MAILK + 0x18, 6)
+    put(vm, MAILK + 0x1C, 0x13)
     put(vm, BODY + 0xF4, DRAWABLE)
     put(vm, DRAWABLE + 0x138, BODY)
     put(vm, BODY + 0x33C, HP)
@@ -128,7 +130,8 @@ def run_kill(blob, align=0, state=1, mutation=None, api_zeroes=True):
     def fake_api(machine, address, size, _):
         sp = machine.reg_read(UC_X86_REG_ESP)
         assert machine.reg_read(UC_X86_REG_ECX) == HP
-        assert get(machine, sp + 4) == 0xFF7FFFFF and get(machine, sp + 8) == 0
+        assert get(machine, sp + 4) == 0xFF7FFFFF and get(machine, sp + 8) == MAILK + 0x10
+        assert get(machine, MAILK + 0x18) == 6 and get(machine, MAILK + 0x1C) == 0x13
         assert (sp + 16) % 16 == 0
         calls.append(address)
         if api_zeroes:
