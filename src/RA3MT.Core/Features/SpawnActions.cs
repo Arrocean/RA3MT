@@ -82,6 +82,27 @@ public static class SpawnActions
         return null;
     }
 
+    /// <summary>Mouse ground point (world x, z; y = ground baseline 0) from the
+    /// UI's always-updated .data copy — live-diff verified to track the cursor
+    /// at any time (hover/placement/commands share it). FINAL3's
+    /// GetMouseXYZinMap equivalent, already transformed to world space.
+    /// Returns null when the version has no registered offset or the values
+    /// look invalid (loading screen, main menu).</summary>
+    public static (float x, float y, float z)? GetMouseWorldPosition(
+        IInjectionMemory mem, FeaturesData data, string version, nuint imageBase)
+    {
+        var global = data.Globals.MouseGround;
+        if (global is null || !global.Rva.TryGetValue(version, out var rvaStr))
+            return null;
+        var addr = imageBase + Convert.ToUInt32(rvaStr, 16);
+        var x = mem.ReadF32(addr);
+        var z = mem.ReadF32(addr + 4);
+        if (!float.IsFinite(x) || !float.IsFinite(z)) return null;
+        if (MathF.Abs(x) < 0.01f && MathF.Abs(z) < 0.01f) return null;
+        if (MathF.Abs(x) > 100000 || MathF.Abs(z) > 100000) return null;
+        return (x, 0f, z);
+    }
+
     /// <summary>Parse a reinforcement code like "6586A5A0" / "0x6586A5A0".</summary>
     public static bool TryParseHash(string text, out uint hash)
     {

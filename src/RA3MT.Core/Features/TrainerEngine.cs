@@ -283,6 +283,10 @@ public sealed class TrainerEngine : IDisposable
                 var targets = SpawnActions.EnumerateCopyTargets(_mem, _data, Version!, Base);
                 if (targets.Count == 0)
                     return (false, "没有可复制的选中目标（未选中或目标缺少模板链）");
+                var mouse = SpawnActions.GetMouseWorldPosition(_mem, _data, Version!, Base);
+                if (mouse != null)
+                    return SubmitSpawnRequests(f.Name,
+                        targets.Select(t => (0u, t.holder, mouse.Value.x, mouse.Value.y, mouse.Value.z)).ToList());
                 return SubmitSpawnRequests(f.Name,
                     targets.Select(t => (0u, t.holder, t.x, t.y, t.z)).ToList());
             }
@@ -300,9 +304,14 @@ public sealed class TrainerEngine : IDisposable
                 {
                     return (false, "无效的增援代码（应为 8 位十六进制，如 6586A5A0）");
                 }
-                var anchor = SpawnActions.GetSelectionAnchor(_mem, _data, Version!, Base);
+                // spawn at the mouse ground point (world x/z, always live);
+                // fall back to the selected unit's position when unavailable
+                var mouse = SpawnActions.GetMouseWorldPosition(_mem, _data, Version!, Base);
+                if (mouse != null)
+                    Log?.Invoke($"生成位置=鼠标地面 0x({mouse.Value.x:F0}, {mouse.Value.z:F0})");
+                var anchor = mouse ?? SpawnActions.GetSelectionAnchor(_mem, _data, Version!, Base);
                 if (anchor == null)
-                    return (false, "请先选中自己的一个单位作为生成位置锚点");
+                    return (false, "鼠标位置不可用：请把鼠标移到游戏画面上，或选中一个己方单位作锚点");
                 var (x, y, z) = anchor.Value;
                 return SubmitSpawnRequests(f.Name, [(hash, 0u, x, y, z)]);
             }

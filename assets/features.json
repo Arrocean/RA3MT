@@ -255,6 +255,12 @@
         "1.13": "0x8f214c"
       },
       "note": "[root]+0x28 = 本地阵营指针；两版 side getter 与调用点静态确认，1.13 活体 owner 匹配（不是玩家索引）"
+    },
+    "mouseGround": {
+      "rva": {
+        "1.13": "0x8e15b8"
+      },
+      "note": "鼠标地面交点 (x, z) float 对——UI 每帧更新的 .data 静态副本，任意时刻跟随鼠标（放置/悬停/命令共用），活体差分验证。y 隐含 0（地面基准）。1.12 对应待活体扫描（无静态引用，运行时指针访问）。"
     }
   },
   "features": [
@@ -619,7 +625,7 @@
       "hotkey": "Alt+C",
       "action": "selcopy",
       "hooks": [],
-      "desc": "经游戏线程生成 wrapper 为玩家复制每个选中单位/建筑（需 spawn-bridge.enable；模板取自选中链）",
+      "desc": "经游戏线程生成 wrapper 在鼠标位置为玩家复制每个选中单位/建筑（需 spawn-bridge.enable；模板取自选中链）",
       "src": "orig[21] FINAL3 CopySelectUnit（map-start spawn wrapper 重配对）"
     },
     {
@@ -631,7 +637,7 @@
       "hotkey": "",
       "action": "spawnhash",
       "hooks": [],
-      "desc": "在选中单位旁生成一辆盟军基地车（需 spawn-bridge.enable；哈希 0x28DA574E 取自游戏字符串哈希表）",
+      "desc": "在鼠标位置生成一辆盟军基地车（需 spawn-bridge.enable；哈希 0x28DA574E 取自游戏字符串哈希表）",
       "src": "orig FINAL3 Base（hash=AlliedMCV）"
     },
     {
@@ -643,7 +649,7 @@
       "hotkey": "",
       "action": "spawnhash",
       "hooks": [],
-      "desc": "在选中单位旁生成一辆苏军基地车（需 spawn-bridge.enable；哈希 0xAF4C0DA5）",
+      "desc": "在鼠标位置生成一辆苏军基地车（需 spawn-bridge.enable；哈希 0xAF4C0DA5）",
       "src": "orig FINAL3 Base（hash=SovietMCV）"
     },
     {
@@ -655,7 +661,7 @@
       "hotkey": "",
       "action": "spawnhash",
       "hooks": [],
-      "desc": "在选中单位旁生成一辆升阳帝国基地车（需 spawn-bridge.enable；哈希 0x1C2EF767）",
+      "desc": "在鼠标位置生成一辆升阳帝国基地车（需 spawn-bridge.enable；哈希 0x1C2EF767）",
       "src": "orig FINAL3 Base（hash=JapanMCV）"
     },
     {
@@ -667,7 +673,7 @@
       "hotkey": "",
       "action": "spawnhash",
       "hooks": [],
-      "desc": "输入 8 位十六进制增援代码（如 6586A5A0）在选中单位旁生成对应单位（需 spawn-bridge.enable）",
+      "desc": "输入 8 位十六进制增援代码（如 6586A5A0）在鼠标位置生成对应单位（需 spawn-bridge.enable）",
       "src": "orig[22] FINAL3 WeNeedBack（WB 字符串哈希 → 静态模板表 → 生成 wrapper）"
     },
     {

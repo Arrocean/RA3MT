@@ -86,4 +86,5 @@ public sealed class Globals
 {
     [JsonPropertyName("selectionList")] public GlobalDef SelectionList { get; set; } = new();
     [JsonPropertyName("playerRoot")] public GlobalDef PlayerRoot { get; set; } = new();
+    [JsonPropertyName("mouseGround")] public GlobalDef? MouseGround { get; set; }
 }
