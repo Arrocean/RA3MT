@@ -17,7 +17,10 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = _vm;
         _vm.LogLines.CollectionChanged += (_, _) => Dispatcher.BeginInvoke(ScrollLogToEnd);
-        RegisterHotkeys();
+        // hotkey registration is deferred to OnSourceInitialized: RegisterHotKey
+        // needs the real window handle — registering against IntPtr.Zero binds
+        // the hotkeys to the thread queue where the WndProc hook never sees them
+        // (that is why "21 registered" never fired).
     }
 
     private void RegisterHotkeys()
@@ -112,6 +115,7 @@ public partial class MainWindow : Window
     {
         base.OnSourceInitialized(e);
         _hotkeys.Attach((HwndSource)PresentationSource.FromVisual(this)!);
+        RegisterHotkeys();   // now the handle exists, RegisterHotKey binds to this window
     }
 
     protected override void OnClosed(EventArgs e)

@@ -283,8 +283,12 @@ public sealed class TrainerEngine : IDisposable
             if (float.IsFinite(current) && current is > 1f and < 5000f)
             {
                 _savedPlacementDistance = current;
-                _mem.WriteF32(slot, 100000f);
-                return (true, $"距离 {current:F0}→100000");
+                // moderate widening: this value is the grid-search radius, so a
+                // huge number makes the per-frame placement sweep walk the whole
+                // map (user-reported freeze). 300 covers a wide build area while
+                // keeping the per-frame cell count sane.
+                _mem.WriteF32(slot, 300f);
+                return (true, $"距离 {current:F0}→300（搜索半径，过大全图扫描会卡）");
             }
             return (false, $"当前距离值异常（{current}），拒绝改写");
         }
