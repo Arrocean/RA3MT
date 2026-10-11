@@ -27,8 +27,11 @@ SITES = {
     'place': (0x511E00, bytes.fromhex('83EC0C8B442410F30F1010')),  # sub esp,0C; mov eax,[esp+10]; movss xmm2,[eax]
 }
 
-MAX_SAMPLES = 96
-SAMPLE_DWORDS = 24          # 8 pushad regs + 16 raw stack dwords
+# Stack-read depth: 12 dwords above the entry esp (48 bytes). Deeper reads
+# could cross the top of a shallow thread stack into unmapped memory; 48
+# bytes still covers eflags + return address + args + several frames.
+MAX_SAMPLES = 48
+SAMPLE_DWORDS = 20          # 8 pushad regs + 12 raw stack dwords
 SAMPLE_BYTES = SAMPLE_DWORDS * 4
 
 
