@@ -513,7 +513,7 @@
       "name": "治疗选中目标",
       "group": "选中单位",
       "kind": "action",
-      "hotkey": "",
+      "hotkey": "Alt+H",
       "action": "heal",
       "desc": "治疗至当前有效上限，保留生命上限修改",
       "src": "modern"
@@ -546,7 +546,7 @@
       "name": "威胁等级最大",
       "group": "其他",
       "kind": "toggle",
-      "hotkey": "",
+      "hotkey": "Alt+T",
       "hooks": [
         "ammo",
         "ammo_2",
@@ -565,7 +565,7 @@
       "name": "威胁等级归零",
       "group": "其他",
       "kind": "toggle",
-      "hotkey": "",
+      "hotkey": "Alt+Shift+T",
       "hooks": [
         "ammo",
         "ammo_2",
@@ -584,7 +584,7 @@
       "name": "威胁等级恢复",
       "group": "其他",
       "kind": "action",
-      "hotkey": "",
+      "hotkey": "Alt+N",
       "action": "threatnormal",
       "desc": "关闭最大/归零覆盖，威胁等级交还游戏自然重算（FINAL3 同款：不保存旧值）",
       "src": "orig[23] FINAL3 Danger Normal"
@@ -595,7 +595,7 @@
       "name": "矿脉恢复满量",
       "group": "其他",
       "kind": "action",
-      "hotkey": "",
+      "hotkey": "Alt+M",
       "hooks": [],
       "desc": "恢复选中的矿脉至 100000 并清零已采量（活体验证链 body+0x398→状态→容器+8）",
       "src": "orig[24] FINAL3 RestoreOreMine（选中版）",
@@ -677,7 +677,7 @@
       "name": "随地建造",
       "group": "战场增援",
       "kind": "toggle",
-      "hotkey": "",
+      "hotkey": "Alt+B",
       "hooks": [],
       "desc": "建筑放置距离放宽到全图（改写游戏自己的 BuildingPlacementDistance 数值 90→100000，关=还原；地形/占用/碰撞检查全部保留）。切换对局后需重新开关一次",
       "src": "orig FINAL3 随地建造（活体定位：放置验证链 0x647300→0x642450→0x120780 的距离参数）"
