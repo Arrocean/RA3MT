@@ -105,6 +105,7 @@ public sealed class FeatureVM : ObservableObject
         "threat_zero" => "🔻",
         "threat_normal" => "↩️",
         "oremine" => "⛏",
+        "build_anywhere" => "🏗",
         "sel_copy" => "📋",
         "mcv_allied" => "🛻",
         "mcv_soviet" => "🚚",

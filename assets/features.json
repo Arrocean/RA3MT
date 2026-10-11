@@ -227,6 +227,18 @@
       "displacedLen": 6,
       "stub": "ammo",
       "asm": "mov eax,[ecx+1278]"
+    },
+    "buildanywhere": {
+      "rva": {
+        "1.12": "0x5247d0",
+        "1.13": "0x50fd60"
+      },
+      "displacedLen": 12,
+      "asm": "sub esp,60; mov eax,[ecx+14]; test eax,eax; mov [esp+38],ecx",
+      "pattern": "83 EC 60 8B 41 14 85 C0 89 4C 24 38 75 08 32 C0 83 C4 60 C2 08 00 8B 48 2C",
+      "patternSiteOffset": 0,
+      "note": "区域连线检查（thiscall ret8）：UI 放置谓词 vf+0x48 的唯一 callee。Bresenham 采样 A/B 两点连线，逐格区域查询后 sete 判定'同可建造区域'（1.13 sete@0x50FEBC / 1.12 @0x52492E；唯一 xref：1.13 0x1F098E / 1.12 0x206BAE）。两版 displaced 字节一致。区域查询本体 0x488C80（88 xrefs）不动。",
+      "displaced": "83EC608B411485C0894C2438"
     }
   },
   "globals": {
@@ -657,6 +669,20 @@
       "hooks": [],
       "desc": "输入 8 位十六进制增援代码（如 6586A5A0）在选中单位旁生成对应单位（需 spawn-bridge.enable）",
       "src": "orig[22] FINAL3 WeNeedBack（WB 字符串哈希 → 静态模板表 → 生成 wrapper）"
+    },
+    {
+      "id": "build_anywhere",
+      "no": "30",
+      "name": "随地建造",
+      "group": "战场增援",
+      "kind": "toggle",
+      "hotkey": "",
+      "hooks": [
+        "buildanywhere"
+      ],
+      "flag": "buildanywhere",
+      "desc": "建筑放置不再要求与基地同区域（保留地形/占用/碰撞检查）。开关经重放原指令完全可逆",
+      "src": "orig FINAL3 随地建造（EA 0xE7565 一字节跳转的重推导：区域连线检查恒真）"
     }
   ],
   "references": {

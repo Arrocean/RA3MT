@@ -15,8 +15,11 @@ if (args.Length == 2 && args[0] == "stubdump")
     {
         var stubId = def.Stub ?? id;
         if (!StubGen.Handles(stubId)) continue;
-        var siteEnd = fakeSite + (uint)def.DisplacedLen;
-        var code = StubGen.Emit(stubId, fakeBase + MasterCode.StubArea, siteEnd, fakeBase, fakeRoot);
+        var displaced = def.DisplacedByVersion != null && def.DisplacedByVersion.Count != 0
+            ? def.DisplacedBytes("1.13")
+            : def.DisplacedBytes();
+        var siteEnd = fakeSite + (uint)displaced.Length;
+        var code = StubGen.Emit(stubId, fakeBase + MasterCode.StubArea, siteEnd, fakeBase, fakeRoot, displaced);
         File.WriteAllBytes(Path.Combine(args[1], $"{id}.bin"), code);
         File.WriteAllText(Path.Combine(args[1], $"{id}.meta"),
             $"stubVa=0x{fakeBase + MasterCode.StubArea:X}\nsiteEnd=0x{siteEnd:X}\nlen={code.Length}\n");
@@ -254,8 +257,11 @@ if (args.Length == 1 && args[0] == "asmtest")
     {
         var stubId = def.Stub ?? id;
         if (!StubGen.Handles(stubId)) continue;
+        var displaced = def.DisplacedByVersion != null && def.DisplacedByVersion.Count != 0
+            ? def.DisplacedBytes("1.13")
+            : def.DisplacedBytes();
         var code = StubGen.Emit(stubId, 0x40000000u + offset,
-            0x452100u + (uint)def.DisplacedLen, 0x40000000u, 0x400000u);
+            0x452100u + (uint)displaced.Length, 0x40000000u, 0x400000u, displaced);
         offset += (uint)((code.Length + 15) & ~15);
     }
     if (offset > MasterCode.CaptureCount) throw new Exception("Stub layout overlaps capture data");

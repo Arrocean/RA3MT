@@ -38,8 +38,8 @@ public static class HookResolver
             var rva = Convert.ToUInt32(rvaStr, 16);
 
             // Primary: exact RVA + displaced-byte verification.
-            var expected = def.DisplacedBytes();
-            var actual = readRva(rva, def.DisplacedLen);
+            var expected = def.DisplacedBytes(version);
+            var actual = readRva(rva, expected.Length);
             if (actual.AsSpan().SequenceEqual(expected))
             {
                 result[id] = new HookResolution
@@ -58,7 +58,7 @@ public static class HookResolver
                 var hits = pat.ScanAll(text)
                     .Select(h => 0x1000u + (uint)h + (uint)def.PatternSiteOffset)
                     .ToList();
-                if (hits.Count == 1 && readRva(hits[0], def.DisplacedLen).AsSpan().SequenceEqual(expected))
+                if (hits.Count == 1 && readRva(hits[0], expected.Length).AsSpan().SequenceEqual(expected))
                 {
                     result[id] = new HookResolution
                     {

@@ -30,6 +30,7 @@ public sealed class MasterCode
         ["revealmap"] = 0x08,
         ["xp999"] = 0x09,
         ["ammo"] = 0x0A,
+        ["buildanywhere"] = 0x0B,
         ["threatmax"] = 0x0D,
         ["threatzero"] = 0x0E,
             };
@@ -119,7 +120,7 @@ public sealed class MasterCode
             if (SpawnBridgeEnabled) bridgeOffsets.Add(SpawnDispatcher.CodeOffset);
             var code = bridgeOffsets.Count != 0 && stubId == "money_h2"
                 ? RankDispatcher.EmitMoneyBridge(Block + off, siteEnd, Block, _rootVa, bridgeOffsets.ToArray())
-                : StubGen.Emit(stubId, Block + off, siteEnd, Block, _rootVa);
+                : StubGen.Emit(stubId, Block + off, siteEnd, Block, _rootVa, site.Displaced);
             var next = checked(off + (uint)((code.Length + 15) & ~15));
             if (next > CaptureCount)
                 throw new InvalidOperationException($"Stub area overlaps capture data at hook '{id}'");
@@ -268,7 +269,8 @@ public static class StubGen
         "money_h2" or "money_h1" or "money_h3" or "money_h4" or
         "proto_cool_a" or "proto_cool_b" or "power" or
         "build_power" or "build_hp_a" or "build_hp_b" or "sidebar_pts" or
-        "power_cool" or "unit_lv" or "zoom_unit_xp" or "ammo" or "weapon_clip" => true,
+        "power_cool" or "unit_lv" or "zoom_unit_xp" or "ammo" or "weapon_clip" or
+        "buildanywhere" => true,
         _ => false,
     };
 
@@ -276,7 +278,9 @@ public static class StubGen
     /// <param name="siteEnd">VA right after the displaced bytes (jump-back target)</param>
     /// <param name="block">VA of the MasterCode block (flag bytes)</param>
     /// <param name="rootVa">VA of the player-context root global</param>
-    public static byte[] Emit(string id, nuint stubVa, nuint siteEnd, nuint block, nuint rootVa) => id switch
+    /// <param name="replay">displaced bytes to replay verbatim (position-independent sites only)</param>
+    public static byte[] Emit(string id, nuint stubVa, nuint siteEnd, nuint block, nuint rootVa,
+        byte[]? replay = null) => id switch
     {
         "money_h2" => MoneyH2(stubVa, siteEnd, block),
         "money_h1" => MoneyH1(stubVa, siteEnd, block),
@@ -294,6 +298,7 @@ public static class StubGen
         "zoom_unit_xp" => ZoomUnitXp(stubVa, siteEnd, block),
         "ammo" => Ammo(stubVa, siteEnd, block),
         "weapon_clip" => WeaponClip(stubVa, siteEnd, block, rootVa),
+        "buildanywhere" => BuildAnywhere(stubVa, siteEnd, block, replay),
         _ => throw new NotImplementedException(id),
     };
 
@@ -667,6 +672,30 @@ public static class StubGen
         a.Popad();
         a.Popfd();
         return c.Fin();
+    }
+
+    // 随地建造 — buildanywhere: 区域连线检查函数头（thiscall ret 8）
+    // 目标函数唯一被 UI 放置谓词的 vf+0x48 调用（双版本各仅 1 个 xref），
+    // 语义 = "A/B 两点（Bresenham 采样连线）是否同属一个可建造区域"。
+    // 开 → 直接 al=1 返回（任意两点视为同区域，FINAL3 同语义）；
+    // 关 → 逐字节重放 displaced 原指令后跳回（两版指令均无位置相关性）。
+    // 地形/占用/碰撞由谓词第二层 ThePlacementGrid 验证保留，不会把建筑放进山里。
+    private static byte[] BuildAnywhere(nuint stubVa, nuint siteEnd, nuint block, byte[]? replay)
+    {
+        if (replay is null || replay.Length < 5)
+            throw new InvalidOperationException("buildanywhere requires the displaced replay bytes");
+        var c = new C(stubVa, siteEnd, block);
+        var a = c.A;
+        a.Pushfd();
+        c.Flag("buildanywhere");
+        a.JneShort(1);
+        a.Popfd();
+        a.Db(0xB0, 0x01);                               // mov al,1
+        a.Db(0xC2, 0x08, 0x00);                         // ret 8 (thiscall, two args)
+        a.Label(1);
+        a.Popfd();
+        a.Db(replay);                                   // original position-independent prologue
+        return c.Fin();                                 // jmp siteEnd
     }
 
     // 威胁等级访问器（旧名 ammo 站点族）：eax=[ecx+0x1278] 为 RedAlert 威胁分量，+8 为威胁值。

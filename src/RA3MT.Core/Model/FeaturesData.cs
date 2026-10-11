@@ -9,6 +9,9 @@ public sealed class HookDef
 {
     [JsonPropertyName("rva")] public Dictionary<string, string> Rva { get; set; } = new();
     [JsonPropertyName("displaced")] public string Displaced { get; set; } = "";
+    /// <summary>Per-version displaced bytes when the two game versions differ
+    /// at this site (checked before the shared "displaced" value).</summary>
+    [JsonPropertyName("displacedByVersion")] public Dictionary<string, string>? DisplacedByVersion { get; set; }
     [JsonPropertyName("displacedLen")] public int DisplacedLen { get; set; }
     [JsonPropertyName("asm")] public string? Asm { get; set; }
     [JsonPropertyName("pattern")] public string? Pattern { get; set; }
@@ -17,7 +20,16 @@ public sealed class HookDef
     /// <summary>Stub id in StubGen when different from the site id (shared stubs).</summary>
     [JsonPropertyName("stub")] public string? Stub { get; set; }
 
-    public byte[] DisplacedBytes() => Convert.FromHexString(Displaced.Replace(" ", ""));
+    public byte[] DisplacedBytes(string? version = null)
+    {
+        if (version != null && DisplacedByVersion != null && DisplacedByVersion.TryGetValue(version, out var perVersion))
+            return Convert.FromHexString(perVersion.Replace(" ", ""));
+        return Convert.FromHexString(Displaced.Replace(" ", ""));
+    }
+
+    public int LengthFor(string version) => DisplacedByVersion != null && DisplacedByVersion.ContainsKey(version)
+        ? DisplacedBytes(version).Length
+        : DisplacedLen;
     public uint RvaFor(string version) => Convert.ToUInt32(Rva[version], 16);
 }
 

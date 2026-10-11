@@ -43,10 +43,11 @@ def find_game():
     lppe = PE()
     lppe.dwSize = ctypes.sizeof(PE)
     snap = k32.CreateToolhelp32Snapshot(0x2, 0)
-    while k32.Process32Next(snap, ctypes.byref(lppe)):
-        name = lppe.szExeFile.decode(errors='replace')
-        if name in MANAGER_VA:
-            procs.append((lppe.th32ProcessID, name))
+    if k32.Process32First(snap, ctypes.byref(lppe)):
+        while k32.Process32Next(snap, ctypes.byref(lppe)):
+            name = lppe.szExeFile.decode(errors='replace')
+            if name in MANAGER_VA:
+                procs.append((lppe.th32ProcessID, name))
     k32.CloseHandle(snap)
     return procs
 
