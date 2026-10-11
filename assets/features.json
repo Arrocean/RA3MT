@@ -255,7 +255,7 @@
         "1.12": "0x8ee98c",
         "1.13": "0x8f2cac"
       },
-      "note": "建筑放置距离全局：[rva]→GameData 对象，[obj+0x0C]=BuildingPlacementDistance（活体实测 90.0）。放置验证 0x642450→0x120780（网格 worker）以此作距离上限；1.12 对称 0x63D8E7→0x138250 逐指令一致。随地建造=改写该值（开 100000/关还原）。"
+      "note": "建筑放置距离全局：[rva]→GameData 对象，[obj+0x0C]=BuildingPlacementDistance（默认 90.0）。该值是候选格搜索半径，不是许可半径——改 300 只是扩圈，改 100000 全图逐格扫描会卡死（实测）。放置链（地址全为 RVA，+0x400000=VA；2026-10-11 静态复核，v18m 深栈活体证实）：顶层 0x647300(唯一caller 0x6A891C)→验证器 0x642450(0xA42457 mov edx,[0xCF2CAC]; fld [edx+0xC] 载入距离)→worker 0x120780(ThePlacementGrid 逐格收集)→followup 0x641510→percell 0x62A1E0 逐格评估：gridquery 0x1065A0 格→世界坐标，[0xCF2410 放置manager] vt+0x38 返回包围盒，4×comiss AABB 测试，出盒→0x62A283 剔除候选。第二阶段 0x6424E0(hash 0x9590538A)。1.12 对称：顶层 0x642840/验证器 0x63D8E0/worker 0x138250/followup 0x62C9A0/percell 0x6252E0(FAIL 0x65383/PASS 0x653A6)/manager 0x8EE0F0，逐指令同构且 AABB rel8 与 1.13 完全相同。真随地建造候选=patch percell AABB（1.13 0xA2A25E 76 23→EB 46 跳过包围盒测试，1.12 0xA2535E 同改），待 placehunt 活体分支频率证实后实施。注意：v18m 笔记里这条链全按 RVA 记录（PLACEHUNT 标签同风格），曾两轮被误当 VA 反汇编得出'死装置/非指令边界'错误结论——引用时先加基址。"
     }
   },
   "features": [
@@ -679,8 +679,8 @@
       "kind": "toggle",
       "hotkey": "Alt+B",
       "hooks": [],
-      "desc": "建筑放置距离放宽到全图（改写游戏自己的 BuildingPlacementDistance 数值 90→100000，关=还原；地形/占用/碰撞检查全部保留）。切换对局后需重新开关一次",
-      "src": "orig FINAL3 随地建造（活体定位：放置验证链 0x647300→0x642450→0x120780 的距离参数）"
+      "desc": "过渡方案：放置搜索半径 90→300（扩圈，改写游戏自己的 BuildingPlacementDistance；关=还原；对局切换后需重开）。全图随地建造 v3=patch percell 0x62A1E0 的 AABB 剔除分支（等价 FINAL3 75 0C→EB 0C），待活体分支频率证实后实现",
+      "src": "orig FINAL3 随地建造（活体链 0x647300→0x642450→0x120780→0x641510→0x62A1E0，全 RVA 记录；AABB gate 静态定位 2026-10-11）"
     }
   ],
   "references": {

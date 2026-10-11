@@ -7,9 +7,17 @@ and before that snapshots registers + raw stack into a ring buffer inside the
 game process. Python polls the buffer read-only. No exceptions, no debugger,
 no thread suspension.
 
-Usage: py tools/analysis/trace_trampoline.py kill|place [seconds] [pid]
-  kill : target 0x7513F0 (death marker), displaced 'cmp byte [esp+4],0'
-  place: target 0x511E00 (placement-grid check), displaced 'sub esp,0x38...'
+Usage: py tools/analysis/trace_trampoline.py kill|place|placeui|anchor|top|validator|percell|placehunt [seconds] [pid]
+  kill     : target 0x7513F0 (death marker), displaced 'cmp byte [esp+4],0'
+  place    : target 0xA3AAB0 (placement cell query, RVA 0x63AAB0)
+  placeui  : target 0x707880 (UI can-place predicate, RVA 0x307880)
+  anchor   : target 0x7A14B0 (anchor search, RVA 0x3A14B0)
+  top      : target 0xA47300 (placement top, RVA 0x647300)
+  validator: target 0xA42450 (distance consumer, RVA 0x642450)
+  percell  : target 0xA2A1E0 (per-candidate-cell AABB evaluator, RVA 0x62A1E0)
+  placehunt: six sites at once (top/validator/percell/AABB-FAIL/AABB-PASS/
+             vf48 control) with per-site calls/sec output. Sweep the mouse
+             in placement mode — no click needed.
 """
 import ctypes
 import ctypes.wintypes as wt
@@ -27,26 +35,51 @@ SITES = {
     'place': (0xA3AAB0, bytes.fromhex('83EC08568BF1')),          # sub esp,8; push esi; mov esi,ecx (THE live-hit placement cell query 0x63AAB0)
     'placeui': (0x707880, bytes.fromhex('56578B7C240C8BF1')),      # push esi; push edi; mov edi,[esp+0C]; mov esi,ecx (UI can-place predicate)
     'anchor': (0x7A14B0, bytes.fromhex('8B4424088B4C240483EC0C')),  # anchor search cdecl(hash, position, restriction, out); position = mouse world float3
+    'top': (0xA47300, bytes.fromhex('578BF98B4C240C')),           # placement top (RVA 0x647300; sole caller 0xAA891C)
+    'validator': (0xA42450, bytes.fromhex('83EC148B44241C')),     # loads distance from [[0xCF2CAC]+0xC] (RVA 0x642450)
+    'percell': (0xA2A1E0, bytes.fromhex('83EC34535556')),         # per-candidate-cell evaluator + AABB gate (RVA 0x62A1E0)
 }
 
-# Multi-target placement hunt: every remaining player-side candidate at once.
-# Each site gets its own 0x200 slice of the data page (own count) and 6 samples.
+# Multi-target placement hunt v3 — chain re-labeled after the SDK cross-check
+# (2026-10-12): the AABB box proved to be the WORLD bounding box (single
+# manager record 0,0,500,560 cells), so it is a coarse clip, not the gate.
+# The real per-cell permission is the cell state machine:
+#   percell PASS 0xA2A2A6 -> [side+0x20] as type idx -> 0xB34740
+#   -> 0xB336E0 (world->cell, 0x34B/record) -> 0xB322D0:
+#        byte[rec+0x32]!=0 -> 3 (blocked)
+#        word[rec+idx*2+4]==0 -> 0 (no coverage for this placement type)
+#        0xFFFF -> global default [0xD233DC]; else 1 (covered)
+#   consumer 0xA2A2C5: cmp eax,1 (5-byte window right after the query call —
+#   samples carry the cell state directly in eax).
+# SDK ground truth: buildability comes from ProjectedBuildabilityInfo radius
+# circles per building (ConYard Radius=600); BuildingPlacementDistance exists
+# ONLY in SkirmishAI/AITargetHeuristicLibrary.xml (200..7000) — the 90.0 at
+# [0xCF2CAC]+0xC is consumed by this chain but its identity is in doubt, and
+# the whole chain may be the AI site-picking path (AI builds concurrently with
+# the user, which would also explain the 100000 full-map-scan freeze).
+# Frequency discipline: note whether the chain lights up in a NO-AI match when
+# the user merely sweeps placement mode — that single observation separates
+# player path from AI path.
 PLACEHUNT = [
-    (0x64C970, bytes.fromhex('83ec785355'),   'PlacementGrid reader 0x24C970'),
-    (0x86F310, bytes.fromhex('83ec2833c0'),   'PlacementGrid reader 0x46F310'),
-    (0x818A00, bytes.fromhex('8b0de0d2ce00'), 'PlacementGrid reader 0x418A00'),
-    (0x82B890, bytes.fromhex('83ec2c5355'),   'PlacementGrid reader 0x42B890'),
-    (0xA3AAB0, bytes.fromhex('83ec08568bf1'), 'PlacementGrid reader 0x63AAB0'),
-    (0x5F0930, bytes.fromhex('83ec18833df030cf0000'), 'region-check vf48 0x1F0930'),
+    (0xA42450, bytes.fromhex('83ec148b44241c'),       'validator 链入口(距离消费方)'),
+    (0xA2A1E0, bytes.fromhex('83ec34535556'),         'percell 候选格评估'),
+    (0xA2A283, bytes.fromhex('8b7424488b4e04'),       '粗筛-FAIL(世界包围盒外)'),
+    (0xA2A2A6, bytes.fromhex('8b0d4c21cf00'),         '粗筛-PASS(进入逐格查询)'),
+    (0xA2A2C5, bytes.fromhex('83f801b101'),           '★格状态 cmp eax,1(eax=0/1/3)'),
+    (0x5F0930, bytes.fromhex('83ec18833df030cf0000'), 'vf48 UI谓词(vt+0x48 对照)'),
 ]
-HUNT_SLICE = 0x200
-HUNT_SAMPLES = 6
+# slice layout: +0 hit count (never reset, drives frequency output),
+# +4 written-sample idx (stops at cap), +0x10 sample area.
+HUNT_SLICE = 0x400                # 0x10 + 8*120 = 0x3D0 <= 0x400
+HUNT_SAMPLES = 8
+HUNT_HDR = 0x10
 
-# Stack-read depth: 22 dwords above the entry esp (88 bytes). The earlier 12
-# was too shallow to see past the immediate caller; 22 still stays well below
-# any realistic thread-stack top (game call chains are deep).
+# Stack-read depth: 30 dwords = 8 pushad regs + 1 pushfd eflags snapshot +
+# 21 raw stack dwords (ret addr, args, deeper frames). The poller prints
+# eflags=stack[0], ret=stack[1], arg1=stack[2]. 21 stack dwords stays well
+# below any realistic thread-stack top (game call chains are deep).
 MAX_SAMPLES = 48
-SAMPLE_DWORDS = 30          # 8 pushad regs + 22 raw stack dwords
+SAMPLE_DWORDS = 30          # 8 pushad + 1 eflags + 21 raw stack dwords
 SAMPLE_BYTES = SAMPLE_DWORDS * 4
 
 
@@ -121,29 +154,33 @@ def find_game():
 
 
 def build_trampoline(tramp_va, data_va, site, displaced, max_samples=None):
-    """Hand-assembled x86. Sample = 8 pushad dwords (EDI,ESI,EBP,ESP,EBX,EDX,ECX,EAX)
-    + 12 dwords of the raw stack at entry (return address, args, deeper frames)."""
+    """Hand-assembled x86. Data slice header: +0 total hit count (never reset
+    — the Python side turns its deltas into calls/sec), +4 written-sample
+    index (frozen at cap), +0x10.. sample area. Sample = 8 pushad dwords
+    (EDI,ESI,EBP,ESP,EBX,EDX,ECX,EAX) + 22 dwords of the raw stack at entry."""
     code = bytearray()
     code += b'\x9C'                                    # pushfd
     code += b'\x60'                                    # pushad
     code += b'\xFC'                                    # cld (rep movsd direction; game threads may carry DF=1)
     # edi = data page base
     code += b'\xBF' + struct.pack('<I', data_va)       # mov edi, imm32
-    # eax = [edi] = sample count
-    code += b'\x8B\x07'                                # mov eax,[edi]
+    # hit count always increments (frequency observable even past cap)
+    code += b'\xFF\x07'                                # inc dword [edi]
+    # eax = [edi+4] = written sample idx
+    code += b'\x8B\x47\x04'                            # mov eax,[edi+4]
     code += b'\x3D' + struct.pack('<I', max_samples or MAX_SAMPLES)   # cmp eax, cap
     skip_fixup = len(code)
     code += b'\x0F\x8D\x00\x00\x00\x00'                # jge skip (patched)
-    # edi = data + 4 + count*SAMPLE_BYTES
+    # edi = data + HUNT_HDR + idx*SAMPLE_BYTES
     code += b'\x69\xC0' + struct.pack('<I', SAMPLE_BYTES)  # imul eax, eax, SAMPLE_BYTES
-    code += b'\x8D\x7C\x07\x04'                        # lea edi,[edi+eax+4]
-    # copy from esp: 24 dwords
+    code += b'\x8D\x7C\x07' + struct.pack('<B', HUNT_HDR)  # lea edi,[edi+eax+HUNT_HDR]
+    # copy from esp: 30 dwords
     code += b'\x8B\xF4'                                # mov esi, esp
-    code += b'\xB9' + struct.pack('<I', SAMPLE_DWORDS) # mov ecx, 24
+    code += b'\xB9' + struct.pack('<I', SAMPLE_DWORDS) # mov ecx, SAMPLE_DWORDS
     code += b'\xF3\xA5'                                # rep movsd
-    # count++
+    # written idx++
     code += b'\xBF' + struct.pack('<I', data_va)       # mov edi, imm32
-    code += b'\xFF\x07'                                # inc dword [edi]
+    code += b'\xFF\x47\x04'                            # inc dword [edi+4]
     # skip:
     skip_pos = len(code)
     struct.pack_into('<i', code, skip_fixup + 2, skip_pos - (skip_fixup + 6))
@@ -159,12 +196,13 @@ def build_trampoline(tramp_va, data_va, site, displaced, max_samples=None):
 
 def run_placehunt(pid, duration):
     """Install one trampoline per candidate site; each has its own data slice.
-    One placement attempt by the user tells us which candidate is really on
-    the player's placement path, with its full call chain."""
+    Polls every 0.5s: per-site hit-count delta (calls/sec) plus new samples.
+    Trigger from the game: enter placement mode and sweep the mouse across the
+    map — the preview recomputes every frame, no click needed."""
     h = k32.OpenProcess(0x1F0FFF, False, pid)
     if not h:
         raise SystemExit('OpenProcess failed (admin?)')
-    if 4 + HUNT_SAMPLES * SAMPLE_BYTES > HUNT_SLICE:
+    if HUNT_HDR + HUNT_SAMPLES * SAMPLE_BYTES > HUNT_SLICE:
         raise SystemExit('hunt slice too small')
 
     # pre-verify every site still has its original bytes
@@ -208,34 +246,57 @@ def run_placehunt(pid, duration):
         resume_all(frozen)
         if not ok_all:
             raise SystemExit('a patch failed; aborting')
-        print(f'placehunt: {len(installs)} detours installed - do ONE placement now', flush=True)
+        print(f'placehunt: {len(installs)} detours installed - enter placement mode and SWEEP THE MOUSE', flush=True)
 
         t0 = time.time()
+        last_count = [0] * len(installs)   # hit counters at previous poll
+        reported = [0] * len(installs)     # samples already printed
+        poll_i = 0
         while time.time() - t0 < duration:
             time.sleep(0.5)
+            poll_i += 1
+            # every 2s: manager allowed-zone records snapshot — if the box is
+            # dynamic (shrinks around the base during placement), the record
+            # array will change while the user sweeps the map. A constant
+            # single (0,0,mapW,mapH) record means AABB is just map clipping
+            # and the EB46 patch would be a no-op.
+            if poll_i % 4 == 0:
+                mgrbuf = read_mem(h, 0xCF2410, 4)
+                if mgrbuf:
+                    mgr = struct.unpack('<I', mgrbuf)[0]
+                    if mgr:
+                        arr = read_mem(h, mgr + 0x54, 8)
+                        if arr and len(arr) == 8:
+                            beg, end = struct.unpack('<II', arr)
+                            nrec = (end - beg) // 16 if beg and end >= beg else 0
+                            first = struct.unpack('<4i', read_mem(h, beg, 16)) if nrec else None
+                            print(f'[mgr] allowed-zone records={nrec}'
+                                  + (f' first={first}' if first else ''), flush=True)
             for idx, (va, displaced, label, tva) in enumerate(installs):
                 base = data + idx * HUNT_SLICE
-                raw = read_mem(h, base, 4 + HUNT_SAMPLES * SAMPLE_BYTES)
+                hdr = read_mem(h, base, HUNT_HDR)
+                if not hdr:
+                    continue
+                hits, widx = struct.unpack_from('<II', hdr, 0)
+                delta = hits - last_count[idx]
+                last_count[idx] = hits
+                if hits == 0:
+                    continue
+                print(f'{label}: {hits} hits (+{delta}/0.5s) samples={min(widx, HUNT_SAMPLES)}', flush=True)
+                raw = read_mem(h, base + HUNT_HDR, HUNT_SAMPLES * SAMPLE_BYTES)
                 if not raw:
                     continue
-                count = struct.unpack_from('<I', raw, 0)[0]
-                if count == 0xFFFFFFFF:   # already reported
-                    continue
-                count = min(count, HUNT_SAMPLES)
-                if count == 0:
-                    continue
-                print(f'=== {label}: {count} samples ===', flush=True)
-                for i in range(count):
-                    off = 4 + i * SAMPLE_BYTES
+                widx = min(widx, HUNT_SAMPLES)
+                while reported[idx] < widx:
+                    off = reported[idx] * SAMPLE_BYTES
                     regs = struct.unpack_from('<8I', raw, off)
                     edi, esi, ebp, esp_pad, ebx, edx, ecx, eax = regs
                     stack = struct.unpack_from(f'<{SAMPLE_DWORDS - 8}I', raw, off + 32)
                     rets = [v for v in stack[1:] if TEXT_LO <= v < TEXT_HI]
-                    print(f'  #{i} eax=0x{eax:X} ecx=0x{ecx:X} esi=0x{esi:X} '
+                    print(f'  #{reported[idx]} eax=0x{eax:X} ecx=0x{ecx:X} esi=0x{esi:X} '
                           f'ret=0x{stack[1]:X} arg1=0x{stack[2]:X}', flush=True)
                     print('    rets: ' + ' '.join(hex(r) for r in rets), flush=True)
-                # done with this slice; zero its count so we don't re-report
-                write_mem(h, base, b'\xFF\xFF\xFF\xFF')   # mark as reported
+                    reported[idx] += 1
         return 0
     finally:
         frozen2 = suspend_all(pid)
@@ -311,20 +372,24 @@ def main():
         seen = 0
         while time.time() - t0 < duration:
             time.sleep(0.5)
-            raw = read_mem(h, data, 4 + MAX_SAMPLES * SAMPLE_BYTES)
-            if not raw:
+            hdr = read_mem(h, data, HUNT_HDR)
+            raw = read_mem(h, data + HUNT_HDR, MAX_SAMPLES * SAMPLE_BYTES) if hdr else None
+            if not hdr or not raw:
                 continue
-            count = struct.unpack_from('<I', raw, 0)[0]
-            if count > MAX_SAMPLES:
-                count = MAX_SAMPLES
-            while seen < count:
-                off = 4 + seen * SAMPLE_BYTES
+            hits, widx = struct.unpack_from('<II', hdr, 0)
+            if hits:
+                print(f'[freq] {hits} hits (+{hits - getattr(main, "_last", 0)}/0.5s)', flush=True)
+                main._last = hits
+            if widx > MAX_SAMPLES:
+                widx = MAX_SAMPLES
+            while seen < widx:
+                off = seen * SAMPLE_BYTES
                 regs = struct.unpack_from('<8I', raw, off)
                 edi, esi, ebp, esp_pad, ebx, edx, ecx, eax = regs
                 stack = struct.unpack_from(f'<{SAMPLE_DWORDS - 8}I', raw, off + 32)
                 rets = [v for v in stack[1:] if TEXT_LO <= v < TEXT_HI]
                 print(f'* #{seen} eax=0x{eax:X} ecx=0x{ecx:X} edx=0x{edx:X} '
-                      f'esi=0x{esi:X} edi=0x{edi:X} eflags=0x{stack[0]:X} '
+                      f'si=0x{esi:X} edi=0x{edi:X} eflags=0x{stack[0]:X} '
                       f'ret=0x{stack[1]:X} arg1=0x{stack[2]:X}', flush=True)
                 print('   rets: ' + ' '.join(hex(r) for r in rets), flush=True)
                 seen += 1
