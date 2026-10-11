@@ -73,6 +73,7 @@ def build_trampoline(tramp_va, data_va, site, displaced):
     code = bytearray()
     code += b'\x9C'                                    # pushfd
     code += b'\x60'                                    # pushad
+    code += b'\xFC'                                    # cld (rep movsd direction; game threads may carry DF=1)
     # edi = data page base
     code += b'\xBF' + struct.pack('<I', data_va)       # mov edi, imm32
     # eax = [edi] = sample count
@@ -133,10 +134,15 @@ def main():
     if not write_mem(h, data, b'\x00' * 0x1000):
         raise SystemExit('zero data page failed')
 
-    # patch the site (trainer-style E9 detour, same write the MasterCode uses)
-    patch = b'\xE9' + struct.pack('<i', tramp - (site + 5))
-    if not write_mem(h, site, patch):
-        raise SystemExit('patch site failed')
+    # Atomic E9 patch for a high-frequency site: write the rel32 bytes first
+    # (every intermediate state stays a legal 'cmp byte [esp+4], imm8'
+    # variant), then the E9 opcode last as one atomic byte flip.
+    rel = struct.pack('<i', tramp - (site + 5))
+    for i in (4, 3, 2, 1):
+        if not write_mem(h, site + i, rel[i - 1:i]):
+            raise SystemExit('patch disp byte failed')
+    if not write_mem(h, site, b'\xE9'):
+        raise SystemExit('patch opcode failed')
     print('detour installed - play normally...', flush=True)
 
     try:
@@ -164,7 +170,10 @@ def main():
             if seen >= MAX_SAMPLES:
                 break
     finally:
-        write_mem(h, site, displaced)
+        # undo the E9 first (one atomic byte back to the cmp opcode), then
+        # restore the operand bytes
+        write_mem(h, site, displaced[0:1])
+        write_mem(h, site + 1, displaced[1:])
         time.sleep(0.1)
         k32.VirtualFreeEx(h, tramp, 0, 0x8000)
         k32.VirtualFreeEx(h, data, 0, 0x8000)
