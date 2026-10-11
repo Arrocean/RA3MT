@@ -91,7 +91,9 @@ def main():
     if not h:
         raise SystemExit('OpenProcess failed (admin?)')
 
-    hwnd = u32.FindWindowW(None, '命令与征服：红色警报3')
+    hwnd = u32.FindWindowW(None, '終極動員令：紅色警戒3')
+    if not hwnd:
+        hwnd = u32.FindWindowW(None, '命令与征服：红色警报3')
     if not hwnd:
         hwnd = u32.FindWindowW(None, 'Red Alert 3')
     rect = wt.RECT()
