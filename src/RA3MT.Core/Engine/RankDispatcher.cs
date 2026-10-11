@@ -20,7 +20,7 @@ public static class RankDispatcher
     public const uint RankAfterOffset = MailboxOffset + 0x14;
     public const uint Idle = 0, Pending = 1, Executing = 2, Success = 3, Reject = 4;
 
-    public const uint CodeOffset = 0x1200;
+    public const uint CodeOffset = 0x1100;
 
     public static byte[] EmitMoneyBridge(nuint stubVA, nuint siteEnd, nuint blockVA, nuint rootVA,
         params uint[] dispatcherOffsets)

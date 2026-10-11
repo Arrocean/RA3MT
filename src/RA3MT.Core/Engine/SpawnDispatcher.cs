@@ -24,7 +24,7 @@ public static class SpawnDispatcher
     public const uint ResolvedHolderOffset = MailboxOffset + 0x20;
     public const uint Idle = 0, Pending = 1, Executing = 2, Success = 3, Reject = 4;
 
-    public const uint CodeOffset = 0x1500;
+    public const uint CodeOffset = 0x1580;
 
     public static byte[] Emit(nuint stubVA, nuint blockVA, nuint spawnWrapperVA,
         nuint hashLookupVA, nuint hashTableGlobalVA, nuint rootVA)

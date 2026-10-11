@@ -31,13 +31,13 @@ if (args.Length == 2 && args[0] == "stubdump")
         RankDispatcher.EmitMoneyBridge(0x40000040, 0x452105, 0x40000000, 0x400000,
             RankDispatcher.CodeOffset, CaptureDispatcher.CodeOffset, KillDispatcher.CodeOffset));
     File.WriteAllBytes(Path.Combine(args[1], "rank_dispatcher.bin"),
-        RankDispatcher.Emit(0x40001200, 0x40000000, 0x785600, 0x400000));
+        RankDispatcher.Emit(0x40001100, 0x40000000, 0x785600, 0x400000));
     File.WriteAllBytes(Path.Combine(args[1], "capture_dispatcher.bin"),
-        CaptureDispatcher.Emit(0x40001300, 0x40000000, 0x7B5DF0, 0x400000));
+        CaptureDispatcher.Emit(0x40001280, 0x40000000, 0x7B5DF0, 0x400000));
     File.WriteAllBytes(Path.Combine(args[1], "kill_dispatcher.bin"),
         KillDispatcher.Emit(0x40001400, 0x40000000, 0x78CB30, 0x400000));
     File.WriteAllBytes(Path.Combine(args[1], "spawn_dispatcher.bin"),
-        SpawnDispatcher.Emit(0x40001500, 0x40000000, 0x62E3E0, 0x80D5B0, 0xCF0108, 0x400000));
+        SpawnDispatcher.Emit(0x40001580, 0x40000000, 0x62E3E0, 0x80D5B0, 0xCF0108, 0x400000));
     File.WriteAllBytes(Path.Combine(args[1], "money_h2_spawn_bridge.bin"),
         RankDispatcher.EmitMoneyBridge(0x40000040, 0x452105, 0x40000000, 0x400000,
             RankDispatcher.CodeOffset, CaptureDispatcher.CodeOffset, KillDispatcher.CodeOffset,

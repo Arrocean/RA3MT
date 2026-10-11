@@ -15,7 +15,7 @@ public static class CaptureDispatcher
     public const uint DrawableOffset = MailboxOffset + 8;
     public const uint Idle = 0, Pending = 1, Executing = 2, Success = 3, Reject = 4;
 
-    public const uint CodeOffset = 0x1300;
+    public const uint CodeOffset = 0x1280;
 
     public static byte[] Emit(nuint stubVA, nuint blockVA, nuint transitionVA, nuint rootVA)
     {
