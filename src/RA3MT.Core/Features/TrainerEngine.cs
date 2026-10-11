@@ -1,4 +1,5 @@
 using RA3MT.Core.Engine;
+using RA3MT.Core.Features.Abstractions;
 using RA3MT.Core.Memory;
 using RA3MT.Core.Model;
 using RA3MT.Core.Target;
@@ -56,9 +57,51 @@ public sealed class TrainerEngine : IDisposable
     public event Action? StateChanged;
 
     private readonly Dictionary<string, bool> _toggleState = new();
+    private readonly FeatureRegistry _registry;
+    private readonly Dictionary<string, IFeatureState> _featureStates = new(StringComparer.Ordinal);
 
     public IReadOnlyDictionary<string, bool> ToggleState => _toggleState;
     public FeaturesData Data => _data;
+    public FeatureRegistry Registry => _registry;
+
+    public TrainerEngine()
+    {
+        _registry = LegacyFeatureCatalog.Build(_data, this);
+    }
+
+    /// <summary>Create one state object per declared feature for this session.
+    /// Failure to create one feature must not block the others.</summary>
+    private void CreateFeatureStates()
+    {
+        _featureStates.Clear();
+        var context = new FeatureContext
+        {
+            Session = new SessionSnapshot
+            {
+                Memory = _mem!,
+                Version = Version,
+                ImageBase = Base,
+                Pid = Pid,
+                ProcessPath = ProcessPath,
+                ResolvedSites = ResolvedSites,
+                TotalSites = TotalSites,
+            },
+            Symbols = new SessionSymbols(_data, _mem!, Version, Base),
+            Log = m => Log?.Invoke(m),
+        };
+        foreach (var feature in _registry.Features)
+        {
+            if (feature.Kind == FeatureKind.Pending) continue;
+            try
+            {
+                _featureStates[feature.Id] = feature.CreateState(context);
+            }
+            catch (Exception ex)
+            {
+                Log?.Invoke($"⚠ 功能 {feature.Id} 初始化失败，已跳过: {ex.Message}");
+            }
+        }
+    }
 
     public void Attach()
     {
@@ -170,6 +213,7 @@ public sealed class TrainerEngine : IDisposable
             ResolvedSites = sites.Count;
             foreach (var f in _data.Features)
                 if (f.Kind == "toggle") _toggleState[f.Id] = false;
+            CreateFeatureStates();
 
             Log?.Invoke($"修改器已就绪：{sites.Count}/{_data.Hooks.Count} 挂钩点全部通过原始字节校验 ✓");
             StateChanged?.Invoke();
@@ -221,6 +265,7 @@ public sealed class TrainerEngine : IDisposable
         _mem = null;
         _mc = null;
         _actionState.Clear();
+        _featureStates.Clear();
         Attached = false;
         RecoveryRequired = false;
         foreach (var k in _toggleState.Keys.ToList()) _toggleState[k] = false;
@@ -228,10 +273,42 @@ public sealed class TrainerEngine : IDisposable
         StateChanged?.Invoke();
     }
 
+    // ---------------------------------------------------------------------
+    // Public dispatch. The engine no longer switches on feature ids: every
+    // request is routed to the feature instance the catalog produced.
+    // ---------------------------------------------------------------------
+
     public (bool ok, string msg) SetToggle(string featureId, bool on)
     {
         if (RecoveryRequired) return (false, "挂钩恢复未完成，禁止启用功能");
         if (!Attached || _mc == null) return (false, "未附加");
+        if (_featureStates.TryGetValue(featureId, out var state))
+        {
+            var (ok, msg) = state.SetOn(on);
+            return (ok, msg);
+        }
+        return SetFeatureToggle(featureId, on);
+    }
+
+    public (bool ok, string msg) ExecuteAction(string featureId, string? arg = null)
+    {
+        if (!Attached || _mem == null) return (false, "未附加");
+        if (_featureStates.TryGetValue(featureId, out var state))
+        {
+            var (ok, msg) = state.Execute(arg);
+            return (ok, msg);
+        }
+        return RunFeatureAction(featureId, arg);
+    }
+
+    // ---------------------------------------------------------------------
+    // Historical implementations. These are the bodies the catalog currently
+    // wraps as features; they disappear as features migrate (M5).
+    // ---------------------------------------------------------------------
+
+    internal (bool ok, string msg) SetFeatureToggle(string featureId, bool on)
+    {
+        if (_mc is null) return (false, "修改器未初始化");
         var f = _data.Features.FirstOrDefault(x => x.Id == featureId);
         if (f?.Kind != "toggle") return (false, "功能尚未可用或非开关型功能");
         try
@@ -288,7 +365,7 @@ public sealed class TrainerEngine : IDisposable
         return (true, on ? "放置范围限制已解除" : "放置范围限制已恢复");
     }
 
-    public (bool ok, string msg) ExecuteAction(string featureId, string? arg = null)
+    internal (bool ok, string msg) RunFeatureAction(string featureId, string? arg = null)
     {
         if (RecoveryRequired) return (false, "挂钩恢复未完成，禁止执行动作");
         if (!Attached || _mem == null) return (false, "未附加");

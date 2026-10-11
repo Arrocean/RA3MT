@@ -73,6 +73,34 @@ public sealed class FeaturesData
         return System.Text.Json.JsonSerializer.Deserialize<FeaturesData>(s)
                ?? throw new InvalidOperationException("features.json failed to deserialize");
     }
+
+    /// <summary>Typed lookup: shared game globals only. Missing entries are null
+    /// so <c>ISymbols</c> can report "unsupported on this version" instead of throwing.</summary>
+    public GlobalDef? ById(GameGlobalId id) => id switch
+    {
+        GameGlobalId.SelectionList => Globals.SelectionList,
+        GameGlobalId.PlayerRoot => Globals.PlayerRoot,
+        GameGlobalId.MouseGround => Globals.MouseGround,
+        GameGlobalId.BuildAnywherePatch => Globals.BuildAnywherePatch,
+        _ => null,
+    };
+}
+
+/// <summary>Shared, cross-feature game globals. Feature-private addresses belong
+/// to the feature's own definition, not here.</summary>
+public enum GameGlobalId
+{
+    /// <summary>Selected-units root (linked list head + count).</summary>
+    SelectionList,
+
+    /// <summary>Local player context root; +0x28 is the side object.</summary>
+    PlayerRoot,
+
+    /// <summary>Mouse ground intersection float3 (x, z, ground y).</summary>
+    MouseGround,
+
+    /// <summary>Building-placement branch patch site (build-anywhere).</summary>
+    BuildAnywherePatch,
 }
 
 public sealed class GameInfo

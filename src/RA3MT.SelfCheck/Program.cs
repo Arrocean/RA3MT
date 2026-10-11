@@ -193,6 +193,12 @@ if (args.Length == 1 && args[0] == "installertest")
     return 0;
 }
 
+if (args.Length == 1 && args[0] == "featuretest")
+{
+    RA3MT.SelfCheck.FeatureCatalogChecks.Run();
+    return 0;
+}
+
 if (args.Length == 1 && args[0] == "resolvertest")
 {
     var fixture = new FeaturesData();
