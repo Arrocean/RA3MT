@@ -2,7 +2,10 @@
 [Bb]in/
 [Oo]bj/
 [Oo]ut/
-artifacts/
+artifacts/*
+!artifacts/baseline_stubs/
+!artifacts/stubs_semantic/
+!artifacts/final3/
 publish/
 publish**
 

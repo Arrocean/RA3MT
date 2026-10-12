@@ -1,0 +1,33 @@
+{
+  "scope": "Static paired bytes and mocked-helper x86 execution; no gameplay proof",
+  "contract": {
+    "this": "ExperienceTracker",
+    "argument1": "positive rank increment count",
+    "argument2": "XP award multiplier flag",
+    "argument3": "rank refresh flag",
+    "calleeStackPopBytes": 12
+  },
+  "versions": {
+    "1.12": {
+      "sha256": "dc54c54aa40d48bf2605cd5616f01e19fb1b3859b9dbe03dfa6dc28e6921e4b0",
+      "rva": "0x39a840",
+      "va": "0x79a840",
+      "length": 99,
+      "thresholdHelper": "0x538f90",
+      "awardHelper": "0x781eb0",
+      "global": "0xcdde7c",
+      "uniqueGuardMatches": 1
+    },
+    "1.13": {
+      "sha256": "e4016847423869b3d4e6a5ae4c74228f2083c65e34416104635602c5526b3eee",
+      "rva": "0x385600",
+      "va": "0x785600",
+      "length": 99,
+      "thresholdHelper": "0x5213c0",
+      "awardHelper": "0x76df90",
+      "global": "0xce219c",
+      "uniqueGuardMatches": 1
+    }
+  },
+  "executionCases": 160
+}

@@ -1,0 +1,72 @@
+{
+  "source": "C:\\Users\\14560\\Downloads\\3DMGAME-Com1.12.ken22265.160913\\RedAlert3_Trainer_1.12_FINAL3.exe",
+  "sha256": "5ddd338ec638e01f82454859db6629d57af4123176c88be7cb33adad3b57e7e9",
+  "size": 1422021,
+  "scripts": [
+    {
+      "offset": "0x8d05b",
+      "encodedLength": 19604,
+      "file": "script_00_0008D05B.cea"
+    },
+    {
+      "offset": "0x91d84",
+      "encodedLength": 57,
+      "file": "script_01_00091D84.cea"
+    },
+    {
+      "offset": "0x91e04",
+      "encodedLength": 57,
+      "file": "script_02_00091E04.cea"
+    },
+    {
+      "offset": "0x91e87",
+      "encodedLength": 57,
+      "file": "script_03_00091E87.cea"
+    },
+    {
+      "offset": "0x91f09",
+      "encodedLength": 57,
+      "file": "script_04_00091F09.cea"
+    },
+    {
+      "offset": "0x91f8c",
+      "encodedLength": 57,
+      "file": "script_05_00091F8C.cea"
+    },
+    {
+      "offset": "0x92012",
+      "encodedLength": 57,
+      "file": "script_06_00092012.cea"
+    },
+    {
+      "offset": "0x9208e",
+      "encodedLength": 97,
+      "file": "script_07_0009208E.cea"
+    },
+    {
+      "offset": "0x92131",
+      "encodedLength": 59,
+      "file": "script_08_00092131.cea"
+    },
+    {
+      "offset": "0x921bd",
+      "encodedLength": 59,
+      "file": "script_09_000921BD.cea"
+    },
+    {
+      "offset": "0x92247",
+      "encodedLength": 59,
+      "file": "script_10_00092247.cea"
+    },
+    {
+      "offset": "0x922d6",
+      "encodedLength": 59,
+      "file": "script_11_000922D6.cea"
+    },
+    {
+      "offset": "0x9294a",
+      "encodedLength": 75,
+      "file": "script_12_0009294A.cea"
+    }
+  ]
+}

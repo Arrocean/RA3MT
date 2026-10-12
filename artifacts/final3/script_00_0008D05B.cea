@@ -1,0 +1,1141 @@
+[ENABLE]
+//=========================================
+// Cheat Master Codes
+// Command and Conquer - Red Alert 3
+// Game Version : 1.12.3444.25830
+// Script Version : Final.3 (3.3)
+// Writer : Ken22265
+// Public Data : December , 2009
+// Script Only Work For Cheat Engine 5.5.  
+
+fullaccess(00401000,0x7c6000)
+globalalloc(ID,0x100)
+globalalloc(iEnable,0x100)
+globalalloc(MustCode,0x3000)
+globalalloc(MustCode2,0x1000)
+define(SelectUnitLevelUp,call MustCode+800)
+define(DestroySelectUnit,call MustCode+900)
+define(GetUnitData,call MustCode+A00)
+define(GetUnitData2,call MustCode+A60)
+define(CreateUnit,call MustCode+AA0)
+define(SetUnitState,call MustCode+B00)
+define(GetMouseXYZinMap,call Mustcode+1120)
+label(_BackPlayerID)
+label(_BackPlayerMoney)
+label(_BackPlayerPower)
+label(_BackPlayerSCPoint)
+label(_BackPlayerHaveAllSC)
+label(_BackPlayerFastBuild)
+label(_BackPlayerFastBuild2)
+label(_BackPlayerFastBuild3)
+label(_BackPlayerSuperPower)
+label(_BackPlayerSuperPower2)
+label(_BackDisableAllSuperPower)
+label(_BackDisableAllSuperPower2)
+label(_BackPlayerZoom)
+label(_BackPlayerMap)
+label(_BackSelectUnitAmmo)
+label(_BackDangerLevel)
+label(_BackRestoreOreMine)
+label(_BackEnemyCantBuild)
+label(_BackPlayerGodMode)
+label(_BackPlayerOneKillItMode)
+label(_ExitPlayerOneKillItMode)
+label(_BackPlayerOneKillItModeData)
+label(_BackPlayerOneKillItModeData2)
+
+iEnable+24:
+db A0 A5 86 65
+
+ra3_1.12.game+FF95B:
+jmp MustCode
+nop
+_BackPlayerID:
+
+MustCode:
+pushad
+mov edx,[eax+28]
+mov [ID],edx
+mov eax,[edx+20]
+mov [ID+4],eax
+popad
+mov edx,[eax+28]
+mov eax,[edx+20]
+jmp _BackPlayerID
+
+//Player Money Code
+ra3_1.12.game+6CFDFE:     
+jmp MustCode+29
+_BackPlayerMoney:
+
+MustCode+29:
+Pushfd
+Pushad
+cmp byte ptr [iEnable+8],01
+db 75 0e
+mov byte ptr [iEnable+8],00
+add [eax+04],#100000
+mov [eax+08],#99999999
+Popad
+Popfd
+add edi,[eax+4]
+mov edx,[ecx]
+mov eax,[iEnable+20]
+test eax,eax
+jne MustCode+600
+jmp _BackPlayerMoney
+
+//Player Power Code
+ra3_1.12.game+6CFD0D:
+jmp MustCode+6c
+nop
+nop
+nop
+nop
+_BackPlayerPower:
+
+MustCode+6c:
+Pushfd
+Pushad
+cmp byte ptr [iEnable+9],01
+db 75 0e
+mov [eax+04],000186A0
+mov [eax+08],00000000
+Popad
+Popfd
+mov eax,[eax+04]
+mov ecx,[esi+000003B0]
+jmp _BackPlayerPower
+
+//Player SCPoints Code
+ra3_1.12.game+6CFE6C:
+jmp MustCode+9F
+nop
+_BackPlayerSCPoint:
+
+MustCode+9F:
+pushfd
+pushad
+cmp byte ptr [iEnable+A],01
+db 75 07
+mov [eax+34],0000000f
+popad
+popfd
+mov edi,[eax+34]
+mov ecx,[esi+3c]
+jmp _BackPlayerSCPoint
+
+//Player Have All SC Code
+ra3_1.12.game+6CFEB5:
+jmp MustCode+c8
+_BackPlayerHaveAllSC:
+
+MustCode+c8:
+pushfd
+pushad
+cmp byte ptr [iEnable+B],01
+db 75 07
+mov [edi+2c],43c78000
+popad
+popfd
+movss xmm0,[edi+2c]
+jmp _BackPlayerHaveAllSC
+
+//Player Fast Build 1 Code
+ra3_1.12.game+30F42E:
+jmp MustCode+f0
+_BackPlayerFastBuild:
+
+MustCode+f0:
+pushfd
+pushad
+cmp byte ptr [iEnable+C],01
+db 75 07
+mov [esi+1c],42c80000
+popad
+popfd
+cvttss2si eax,[esi+1c]
+jmp _BackPlayerFastBuild
+
+//Player Fast Build 2 Code
+ra3_1.12.game+30F38C:
+jmp MustCode+118
+nop
+_BackPlayerFastBuild2:
+
+MustCode+118:
+pushfd
+pushad
+cmp byte ptr [iEnable+C],01
+db 75 07
+mov [esi+1c],42c80000
+popad
+popfd
+fld dword ptr [esi+1c]
+mov [esi+5c],eax
+jmp _BackPlayerFastBuild2
+
+//Player Fast Build 3 Code
+ra3_1.12.game+2F6CFF:   
+jmp MustCode+141
+nop
+_BackPlayerFastBuild3:
+
+MustCode+141:
+pushfd
+pushad
+cmp byte ptr [iEnable+C],01
+db 75 07
+cmp ebp,01
+db 74 02
+db eb 0d
+popad
+popfd
+fld dword ptr [esi+000001bc]
+jmp _BackPlayerFastBuild3
+pushad
+mov eax,[edi+3c]
+inc eax
+mov [edi+14],eax
+popad
+db eb e8
+
+//Player Super Power Code
+ra3_1.12.game+2EBB69: 
+jmp MustCode+175
+nop
+_BackPlayerSuperPower:
+
+MustCode+175:
+pushfd
+pushad
+cmp byte ptr [iEnable+D],01
+db 75 15
+mov ecx,[ID]
+cmp [eax+00000418],ecx
+db 75 07
+mov [esi+20],00000001
+cmp byte ptr [iEnable+E],01
+db 75 15
+mov ecx,[ID]
+cmp [eax+00000418],ecx
+db 74 07
+add [esi+20],00000001
+popad
+popfd
+mov ebx,[eax+00000418]
+jmp _BackPlayerSuperPower
+
+//Player Super Power 2 Code
+ra3_1.12.game+43EC19:
+jmp MustCode+1ca
+_BackPlayerSuperPower2:
+
+MustCode+1ca:
+mov esi,[eax+50]
+mov eax,[ecx]
+pushfd
+pushad
+cmp byte ptr [iEnable+D],01
+db 75 2e 
+mov ecx,[id]
+cmp [esp+28],ecx
+db 75 22
+mov [eax+0c],00000000
+mov eax,[eax]
+mov [eax+0c],00000000
+mov eax,[eax]
+mov [eax+0c],00000000
+mov eax,[eax]
+mov [eax+0c],00000000
+cmp byte ptr [iEnable+E],01
+db 75 2e 
+mov ecx,[id]
+cmp [esp+28],ecx
+db 74 22
+mov [eax+0c],00000000
+mov eax,[eax]
+mov [eax+0c],00000000
+mov eax,[eax]
+mov [eax+0c],00000000
+mov eax,[eax]
+mov [eax+0c],00000000
+popad
+popfd
+jmp _BackPlayerSuperPower2
+
+//Disable All Super Power Code
+ra3_1.12.game+43ECA6:  
+jmp MustCode+250
+nop
+_BackDisableAllSuperPower:
+
+MustCode+250:
+mov edx,[ecx+50]
+cmp edx,[eax+0c]
+pushfd
+pushad
+cmp byte ptr [iEnable+E],01
+db 75 22
+add [eax+0c],00000001
+mov eax,[eax]
+add [eax+0c],00000001
+mov eax,[eax]
+add [eax+0c],00000001
+mov eax,[eax]
+add [eax+0c],00000001
+popad
+popfd
+jmp _BackDisableAllSuperPower
+
+//Disable All Super Power 2 Code
+ra3_1.12.game+30A5F6:  
+jmp MustCode+294
+nop
+_BackDisableAllSuperPower2:
+
+MustCode+294:
+mov ecx,[eax+50]
+cmp ecx,[esi+20]
+pushfd
+pushad
+cmp byte ptr [iEnable+E],01
+db 75 07
+add [esi+20],00000001
+popad
+popfd
+jmp _BackDisableAllSuperPower2
+
+// Player Zoom Code
+ra3_1.12.game+1EC7CD: 
+jmp MustCode+2bd
+_BackPlayerZoom:
+
+MustCode+2bd:
+movss [esi+44],xmm0
+cmp byte ptr [iEnable+F],1
+db 75 0b
+jmp _BackPlayerZoom
+fadd dword ptr [esi+44]
+fstp dword ptr [esi+44]
+cmp byte ptr [iEnable+10],1
+db 75 0b
+jmp _BackPlayerZoom
+fsub dword ptr [esi+44]
+fstp dword ptr [esi+44]
+jmp _BackPlayerZoom
+
+// Player Map Code
+ra3_1.12.game+3C226C:
+jmp MustCode+2f9
+nop
+nop
+nop
+_BackPlayerMap:
+
+MustCode+2f9:
+movss [ebp+00000260],xmm0
+pushfd
+pushad
+cmp byte ptr [iEnable+11],01
+db 75 0a
+mov [ebp+00000260],47c35000
+popad
+popfd
+jmp _BackPlayerMap
+
+// Select Unit Ammo Code   
+ra3_1.12.game+128735:
+jmp MustCode+327
+_BackSelectUnitAmmo:
+
+MustCode+327:
+mov ecx,[edx+edi*4]
+test ecx,ecx
+pushfd
+pushad
+cmp byte ptr [iEnable+12],01
+db 75 13
+cmp [ebp+3AC],00000000
+db 74 07
+mov [ecx+1c],7FFFFFFF
+popad
+popfd
+jmp _BackSelectUnitAmmo
+
+// Danger Level Code
+ra3_1.12.game+438ED0: 
+jmp MustCode+35b
+nop
+_BackDangerLevel:
+
+MustCode+35b:
+mov eax,[ecx+00001278]
+pushfd
+pushad
+cmp byte ptr [iEnable+13],01
+db 75 07
+mov [eax+08],0000c350
+cmp byte ptr [iEnable+13],02
+db 75 07
+mov [eax+08],00000000
+popad
+popfd
+jmp _BackDangerLevel
+
+// Restore OreMine Code
+ra3_1.12.game+2D4933: 
+jmp MustCode+394
+nop
+_BackRestoreOreMine:
+
+MustCode+394:
+mov [eax+8],#100000
+mov eax,[eax+08]
+pushfd
+pushad
+cmp ebx,00
+db 75 17
+cmp byte ptr [iEnable+14],01
+db 75 0e
+mov byte ptr [iEnable+14],00
+mov [ecx+14],00000000
+popad
+popfd
+sub eax,[ecx+14]
+jmp _BackRestoreOreMine
+
+// Enemy Can't Build Code
+ra3_1.12.game+30F530:  
+jmp MustCode+3d0
+_BackEnemyCantBuild:
+
+MustCode+3d0:
+pushfd
+pushad
+cmp byte ptr [iEnable+15],00
+db 75 12
+mov ecx,[ID+4]
+cmp [eax+0c],ecx
+db 74 07
+mov [eax+04],00001388
+cmp byte ptr [iEnable+15],01
+db 75 12
+mov ecx,[ID+4]
+cmp [eax+0c],ecx
+db 74 07
+mov [eax+04],00000001
+popad
+popfd
+add edx,[eax+04]
+cmp edx,edi
+jmp _BackEnemyCantBuild
+
+// Player God Mode Code
+ra3_1.12.game+12EEDF:  
+jmp MustCode+41e
+_BackPlayerGodMode:
+
+MustCode+41e:
+pushfd
+pushad
+cmp byte ptr [iEnable+16],1
+db 75 22
+mov ecx,[ebx+138]
+mov edi,[ecx+418]
+cmp edi,[ID]
+db 75 0e
+mov [esi+4],497423f0
+mov [esi+c],497423f0
+popad
+popfd
+mov edx,[eax+3c]
+mov ecx,esi
+jmp _BackPlayerGodMode
+
+// Player One Kill It Mode Code
+ra3_1.12.game+3651AE:
+jmp MustCode+461
+_BackPlayerOneKillItMode:
+
+MustCode+461:
+push eax
+cmp esi,[ID+10]         
+jne _ExitPlayerOneKillItMode                
+mov eax,[esi-08]           
+or eax,eax                 
+jz _ExitPlayerOneKillItMode                
+push ebx
+mov ebx,[eax+00000390]     
+or  ebx,[eax+00000394]     
+or  ebx,[eax+000003a0]     
+or  ebx,[eax+000003ac]     
+pop ebx
+jz _ExitPlayerOneKillItMode 
+cmp byte ptr [iEnable+17],1
+jne _ExitPlayerOneKillItMode 
+mov eax,[eax+00000418]     
+mov eax,[eax+20]           
+cmp eax,[ID+4]        
+je _ExitPlayerOneKillItMode
+mov [ID+8],esi                  
+sub eax,eax     
+mov [esi+04],eax           
+mov [esi+0c],eax                       
+movss xmm0,[esi+0c] 
+_ExitPlayerOneKillItMode:       
+movss [esi+04],xmm0       
+pop eax
+test eax,eax               
+jmp _BackPlayerOneKillItMode
+             
+ra3_1.12.game+3FE714:
+jmp MustCode+4e5
+nop
+_BackPlayerOneKillItModeData:
+
+MustCode+4e5:
+mov ecx,[esi+0000033c]     
+mov [ID+C],esi            
+mov [ID+10],ecx          
+jmp _BackPlayerOneKillItModeData
+
+ra3_1.12.game+2E24E3:
+jmp MustCode+506
+nop
+_BackPlayerOneKillItModeData2:
+
+MustCode+506:    
+mov [ID+C],ecx            
+mov ecx,[ecx+0000033c] 
+mov [ID+10],ecx          
+jmp _BackPlayerOneKillItModeData2 
+
+MustCode+600:
+pushad
+call MustCode+700
+popad
+xor eax,eax
+mov [iEnable+20],eax
+jmp _BackPlayerMoney
+
+MustCode+700:
+mov eax,[iEnable+20]
+cmp eax,1           
+je MustCode2           //if eax = 1 , Jmp SelectUnitMAXSpeed Code or Exit
+cmp eax,2
+je MustCode2+100       //if eax = 2 , Jmp SelectUnitSlowSpeed Code or Exit
+cmp eax,3
+je MustCode2+200       //if eax = 3 , Jmp SelectUnitFreeze Code or Exit
+cmp eax,4
+je MustCode2+300       //if eax = 4 , Jmp RestoreSelectUnitSpeed Code or Exit
+cmp eax,5
+je MustCode2+400       //if eax = 5 , Jmp SelectUnitHpMax Code or Exit
+cmp eax,6
+je MustCode2+500       //if eax = 6 , Jmp SelectUnitHpMin Code or Exit
+cmp eax,7
+je MustCode2+600       //if eax = 7 , Jmp SelectUnitHpNormal Code or Exit
+cmp eax,8
+je MustCode2+700       //if eax = 8 , Jmp SelectUnitLevelUp Code or Exit
+cmp eax,9
+je MustCode2+800       //if eax = 9 , Jmp ChangeSelectUnit ID Code or Exit
+cmp eax,A
+je MustCode2+900       //if eax = A , Jmp DestroySelectUnit Code or Exit
+cmp eax,B
+je MustCode2+A00       //if eax = B , Jmp GetMeBase Code or Exit
+cmp eax,C
+je MustCode2+B00       //if eax = C , Jmp We need Back Code or Exit
+cmp eax,D               
+je MustCode2+c00       //if eax = D , Jmp Select Unit Copy For Me Code or Exit
+ret
+
+//call SelectUnitLevelUp Code
+MustCode+800:
+mov ecx,eax
+push 0
+push 1
+push 3
+call ra3_1.12.game+35C200
+ret
+
+//call KillSelectUnit Code
+MustCode+900:
+mov ecx,eax
+push 0
+push 19
+push 6
+call ra3_1.12.game+39EA50
+ret
+
+//Call GetUnitData Code
+MustCode+A00:
+mov eax,[ra3_1.12.game+8DB73C]
+mov eax,[eax+5c]
+test eax,eax
+db 75 04
+add esp,4
+ret
+mov eax,[ra3_1.12.game+8DB73C]
+mov eax,[eax+50]
+mov eax,[eax+8]
+mov esi,[eax+138]
+test esi,esi
+db 75 04
+add esp,4
+ret
+mov [MustCode+1000],esi
+mov eax,[esi+38]
+mov [MustCode+1080],eax
+mov eax,[esi+3c]
+mov [MustCode+1084],eax
+mov eax,[esi+40]
+mov [MustCode+1088],eax
+mov eax,[esi+4]
+mov [MustCode+1020],eax
+mov eax,[esi+418]
+mov [MustCode+1040],eax
+ret
+
+//Call GetUnitData2 Code
+MustCode+A60:
+push eax
+mov ecx,[ra3_1.12.game+8E6C58]
+call ra3_1.12.game+3E4230
+mov [MustCode+1020],eax
+ret
+
+//Call CreateUnit Code
+MustCode+AA0:
+mov ecx,[MustCode+1020]
+test ecx,ecx
+db 75 01
+ret
+mov eax,[MustCode+1040]
+mov ebx,[eax+10]
+push ebx
+push eax
+lea eax,[MustCode+1080]
+push eax
+push ecx
+push 0
+call ra3_1.12.game+205240
+add esp,14
+ret
+
+//Call SetUnitState Code
+MustCode+B00:
+or [eax+bc],80000000
+or [eax+c8],00000800
+ret
+
+//Call GetMouseXYZinMap Code
+Mustcode+1120:
+mov eax,[Ra3_1.12.game+8daefc]
+mov ebx,[eax+3c]
+mov [Mustcode+1110],ebx
+mov ebx,[eax+40]
+mov [Mustcode+1114],ebx
+mov ebx,[eax+44]
+mov [Mustcode+111c],ebx
+push 0
+push 0
+lea eax,[Mustcode+1080]
+push eax
+lea eax,[Mustcode+1110]
+push eax
+call Ra3_1.12.game+1ed4a0
+add esp,10
+ret 
+
+Mustcode+1200:
+mov eax,[Ra3_1.12.game+e7565]
+ret
+
+//SelectUnitSuperSpeed Code
+MustCode2:
+mov esi,[ra3_1.12.game+8DB73C]
+mov ecx,[esi+5c]
+test ecx,ecx
+db 75 01
+ret
+mov edi,[esi+50]
+MustCode2+11:
+mov ebx,[edi+8]
+mov eax,[ebx+138]
+test eax,eax
+db 75 01
+ret
+mov eax,[eax+374]
+mov eax,[eax+200]
+test eax,eax
+db 75 01
+ret
+mov ebx,[eax]
+cmp [ebx+8],43fa0000
+db 74 23
+cmp [ebx+8],41200000
+db 74 13
+cmp [ebx+8],00000000
+db 74 0a
+movss xmm0,[ebx+8]
+movss [ebx+40],xmm0
+mov [ebx+8],43fa0000 //float_500
+test ebx,ebx
+db 75 01
+ret
+mov eax,[eax+4]
+cmp [eax+18],3f800000
+db 75 2c
+cmp [eax+8],43fa0000
+db 74 23
+cmp [eax+8],41200000
+db 74 13
+cmp [eax+8],00000000
+db 74 0a
+movss xmm1,[eax+8]
+movss [eax+40],xmm1
+mov [eax+8],43fa0000 //float_500
+MustCode2+9B:
+dec ecx
+db 75 01
+ret
+mov edi,[edi]
+jmp MustCode2+11
+
+//SelectUnitSlowSpeed Code
+MustCode2+100:
+mov esi,[ra3_1.12.game+8DB73C]
+mov ecx,[esi+5c]
+test ecx,ecx
+db 75 01
+ret
+mov edi,[esi+50]
+MustCode2+111:
+mov ebx,[edi+8]
+mov ebx,[ebx+138]
+test eax,eax
+db 75 01
+ret
+mov eax,[eax+374]
+mov eax,[eax+200]
+test eax,eax
+db 75 01
+ret
+mov ebx,[eax]
+cmp [ebx+8],43fa0000
+db 74 1c
+cmp [ebx+8],41200000
+db 74 1a
+cmp [ebx+8],00000000
+db 74 0a
+movss xmm0,[ebx+8]
+movss [ebx+40],xmm0
+mov [ebx+8],41200000 //float_10
+test ebx,ebx
+db 75 01
+ret
+mov eax,[eax+4]
+cmp [eax+18],3f800000
+db 75 2c
+cmp [eax+8],43fa0000
+db 74 1c
+cmp [eax+8],41200000
+db 74 1a
+cmp [eax+8],00000000
+db 74 0a
+movss xmm1,[eax+8]
+movss [eax+40],xmm1
+mov [eax+8],41200000 //float_10
+MustCode2+19b:
+dec ecx
+db 75 01
+ret
+mov edi,[edi]
+jmp MustCode2+111
+
+//SelectUnitFreeze Code
+MustCode2+200:
+mov esi,[ra3_1.12.game+8DB73C]
+mov ecx,[esi+5c]
+test ecx,ecx
+db 75 01
+ret
+mov edi,[esi+50]
+MustCode2+211:
+mov ebx,[edi+8]
+mov eax,[ebx+138]
+test eax,eax
+db 75 01
+ret
+mov eax,[eax+374]
+mov eax,[eax+200]
+test eax,eax
+db 75 01
+ret
+mov ebx,[eax]
+cmp [ebx+8],43fa0000
+db 74 1c
+cmp [ebx+8],41200000
+db 74 13
+cmp [ebx+8],00000000
+db 74 11
+movss xmm0,[ebx+8]
+movss [ebx+40],xmm0
+mov [ebx+8],00000000 //float_0
+test ebx,ebx
+db 75 01
+ret
+mov eax,[eax+4]
+cmp [eax+18],3f800000
+db 75 2c
+cmp [eax+8],43fa0000
+db 74 1c
+cmp [eax+8],41200000
+db 74 13
+cmp [eax+8],00000000
+db 74 11
+movss xmm1,[eax+8]
+movss [eax+40],xmm1
+mov [eax+8],00000000 //float_0
+MustCode2+29b:
+dec ecx
+db 75 01
+ret
+mov edi,[edi]
+jmp MustCode2+211
+
+//RestoreSelectUnitSpeed Code
+MustCode2+300:
+mov esi,[ra3_1.12.game+8DB73C]
+mov ecx,[esi+5c]
+test ecx,ecx
+db 75 01
+ret
+mov edi,[esi+50]
+MustCode2+311:
+mov ebx,[edi+8]
+mov eax,[ebx+138]
+test eax,eax
+db 75 01
+ret
+mov eax,[eax+374]
+mov eax,[eax+200]
+test eax,eax
+db 75 01
+ret
+mov ebx,[eax]
+cmp [ebx+8],43fa0000
+db 74 14
+cmp [ebx+8],41200000
+db 74 0b
+cmp [ebx+8],00000000
+db 74 02
+db eb 0a
+movss xmm0,[ebx+40]
+movss [ebx+8],xmm0
+test ebx,ebx
+db 75 01
+ret
+mov eax,[eax+4]
+cmp [eax+18],3f800000
+db 75 27
+cmp [eax+8],43fa0000
+db 74 14
+cmp [eax+8],41200000
+db 74 0b
+cmp [eax+8],00000000
+db 74 02
+db eb 0a
+movss xmm1,[eax+40]
+movss [eax+8],xmm1
+MustCode2+391:
+dec ecx
+db 75 01
+ret
+mov edi,[edi]
+jmp MustCode2+311
+
+//SelectUnitHpMax Code
+MustCode2+400:
+mov esi,[ra3_1.12.game+8DB73C]
+mov ecx,[esi+5c]
+test ecx,ecx
+db 75 01
+ret
+mov edi,[esi+50]
+MustCode2+411:
+mov ebx,[edi+8]
+mov ebx,[ebx+138]
+mov eax,[ebx+33c]
+test eax,eax
+db 75 01
+ret
+mov [eax+4],497423f0 //float_9999999
+mov [eax+c],497423f0 
+MustCode2+433:
+dec ecx
+db 75 01
+ret
+mov edi,[edi]
+jmp MustCode2+411
+
+//SelectUnitHpMin Code
+MustCode2+500:
+mov esi,[ra3_1.12.game+8DB73C]
+mov ecx,[esi+5c]
+test ecx,ecx
+db 75 01
+ret
+mov edi,[esi+50]
+MustCode2+511:
+mov ebx,[edi+8]
+mov ebx,[ebx+138]
+mov eax,[ebx+33c]
+test eax,eax
+db 75 01
+ret
+mov [eax+4],3F800000 //float_1 
+MustCode2+52c:
+dec ecx
+db 75 01
+ret
+mov edi,[edi]
+jmp MustCode2+511
+
+//SelectUnitHpNormal Code
+MustCode2+600:
+mov esi,[ra3_1.12.game+8DB73C]
+mov ecx,[esi+5c]
+test ecx,ecx
+db 75 01
+ret
+mov edi,[esi+50]
+MustCode2+611:
+mov ebx,[edi+8]
+mov ebx,[ebx+138]
+mov eax,[ebx+33c]
+test eax,eax
+db 75 01
+ret
+mov edx,[eax+10]
+mov [eax+4],edx 
+mov [eax+c],edx
+MustCode2+62e:
+dec ecx
+db 75 01
+ret
+mov edi,[edi]
+jmp MustCode2+611
+
+//SelectUnitLevelUp Code
+MustCode2+700:
+mov esi,[ra3_1.12.game+8DB73C]
+mov ecx,[esi+5c]
+mov [MustCode+1100],ecx 
+mov edi,[esi+50]
+test ecx,ecx
+jne MustCode2+720
+ret
+
+MustCode2+720:
+test ecx,ecx  
+db 75 01
+ret
+mov ebx,[edi+8]
+test ebx,ebx
+db 75 01
+ret
+mov ebx,[ebx+138]
+mov eax,[ebx+3cc]
+SelectUnitLevelUp
+dec [MustCode+1100]
+mov ecx,[MustCode+1100]
+mov edi,[edi] 
+jmp MustCode2+720
+
+//ChangeSelectUnitID Code
+MustCode2+800:
+mov esi,[ra3_1.12.game+8DB73C]
+mov ecx,[esi+5c]
+test ecx,ecx
+db 75 01
+ret
+mov edi,[esi+50]
+MustCode2+811:
+mov ebx,[edi+8]
+mov ebx,[ebx+138]
+test ebx,ebx
+db 75 01
+ret
+cmp [ra3_1.12.game+8E9838],95D6E965
+db 74 47
+cmp [ra3_1.12.game+8E9838],FD87E82A
+db 74 3b
+cmp [ra3_1.12.game+8E9838],856C9DD6
+db 74 2f
+cmp [ra3_1.12.game+8E9838],D20552E1
+db 74 23
+cmp [ra3_1.12.game+8E9838],1AFC9A6E
+db 74 17
+cmp [ra3_1.12.game+8E9838],D6D22475
+db 74 0b
+mov eax,[ID]
+mov [ebx+418],eax
+MustCode2+872:
+dec ecx
+db 75 01
+ret
+mov edi,[edi]
+jmp MustCode2+811
+
+//DestroySelectUnit Code
+MustCode2+900:
+mov esi,[ra3_1.12.game+8DB73C]
+mov eax,[esi+5c]
+test eax,eax
+db 75 01
+ret
+mov edi,[esi+54]
+mov eax,[edi+8]
+test eax,eax
+db 75 01
+ret
+mov eax,[eax+138]
+DestroySelectUnit
+ret
+
+//GetMeBase Code
+MustCode2+A00:
+GetMouseXYZinMap
+mov eax,[ID]
+mov [MustCode+1040],eax
+mov eax,28DA574E
+GetUnitData2
+CreateUnit
+mov eax,AF4C0DA5
+GetUnitData2
+CreateUnit
+mov eax,1C2EF767 
+GetUnitData2
+CreateUnit
+ret
+
+//We Need Back Code
+MustCode2+B00:
+GetMouseXYZinMap
+mov eax,[ID]
+mov [MustCode+1040],eax
+mov eax,[iEnable+24]
+GetUnitData2
+test eax,eax
+db 75 01
+ret
+mov [MustCode+1020],eax
+push 08
+pop eax
+mov [MustCode+1100],eax
+jmp MustCode2+B33
+
+MustCode2+B33:
+mov eax,[MustCode+1100]
+test eax,eax
+db 75 01
+ret
+CreateUnit
+SetUnitState
+mov eax,[eax+3cc]
+SelectUnitLevelUp
+dec [MustCode+1100]
+jmp MustCode2+B33
+
+// Copy For Me Code 
+MustCode2+c00:
+GetMouseXYZinMap
+mov eax,[ID]
+mov [MustCode+1040],eax
+mov eax,[ra3_1.12.game+8E9838]
+GetUnitData2
+CreateUnit
+ret
+
+[disable]
+//=========================================
+// Original Codes
+
+ra3_1.12.game+FF95B: 
+mov edx,[eax+28]
+mov eax,[edx+20]
+
+ra3_1.12.game+6CFDFE: 
+add edi,[eax+04]
+mov edx,[ecx]
+
+ra3_1.12.game+6CFD0D: 
+mov eax,[eax+04]
+mov ecx,[esi+000003b0]
+
+ra3_1.12.game+6CFE6C: 
+mov edi,[eax+34]
+mov ecx,[esi+3c]
+
+ra3_1.12.game+6CFEB5: 
+movss xmm0,[edi+2c]
+
+ra3_1.12.game+30F42E: 
+cvttss2si eax,[esi+1c]
+
+ra3_1.12.game+30F38C: 
+fld dword ptr [esi+1c]
+mov [esi+5c],eax
+
+ra3_1.12.game+2F6CFF: 
+fld dword ptr [esi+000001bc]
+
+ra3_1.12.game+2EBB69: 
+mov ebx,[eax+00000418]
+
+ra3_1.12.game+43EC19: 
+mov esi,[eax+50]
+mov eax,[ecx]
+
+ra3_1.12.game+43ECA6: 
+mov edx,[ecx+50]
+cmp edx,[eax+0c]
+
+ra3_1.12.game+30A5F6: 
+mov ecx,[eax+50]
+cmp ecx,[esi+20]
+
+ra3_1.12.game+1EC7CD: 
+movss [esi+44],xmm0
+
+ra3_1.12.game+3C226C:
+movss [ebp+00000260],xmm0
+
+ra3_1.12.game+128735: 
+mov ecx,[edx+edi*4]
+test ecx,ecx
+
+ra3_1.12.game+438ED0: 
+mov eax,[ecx+00001278]
+
+ra3_1.12.game+2D4933: 
+mov eax,[eax+08]
+sub eax,[ecx+14]
+
+ra3_1.12.game+30F530: 
+add edx,[eax+04]
+cmp edx,edi
+
+ra3_1.12.game+12EEDF: 
+mov edx,[eax+3c]
+mov ecx,esi
+
+ra3_1.12.game+3651AE: 
+movss [esi+04],xmm0
+
+ra3_1.12.game+3FE714:
+mov ecx,[esi+0000033c]
+
+ra3_1.12.game+2E24E3:
+mov ecx,[ecx+0000033c]
