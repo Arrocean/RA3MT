@@ -23,7 +23,7 @@ Core 分四层：
 1. `assets/features.json` 加一条 `features[]`（含 `icon`，需要参数就加 `arg`；
    功能私有地址放 `private`）。
 2. `src/RA3MT.Core/Features/<目录>/` 加一个 `IFeature` 实现。
-3. `Features/LegacyFeatureCatalog.cs`（现为唯一注册点）把 id 接到该实现。
+3. `Features/FeatureCatalog.cs`（唯一注册点）把 id 接到该实现。
 
 > **`features.json` 是手工维护的源数据**（34 功能+26 挂钩+三版本地址表）。
 > 旧生成器（build_features.py / gen_features.py）停留在 24 功能时代且会覆盖

@@ -1,6 +1,4 @@
-namespace RA3MT.Core.Features.Abstractions;
-
-using RA3MT.Core.Model;
+namespace RA3MT.Core.Model;
 
 /// <summary>Game addresses a feature may depend on, resolved by id instead of by
 /// poking at the raw globals model. Resolution is version aware and returns

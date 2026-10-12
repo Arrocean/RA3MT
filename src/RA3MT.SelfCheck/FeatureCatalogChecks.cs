@@ -16,7 +16,7 @@ public static class FeatureCatalogChecks
         var cases = 0;
 
         // 1) one registry entry per declaration, no strays
-        var registry = LegacyFeatureCatalog.Build(data);
+        var registry = FeatureCatalog.Build(data);
         var missing = registry.MissingFrom(data);
         var unknown = registry.UnknownIn(data);
         if (missing.Count != 0)
@@ -59,7 +59,7 @@ public static class FeatureCatalogChecks
         }
 
         // 4) unbound state must fail closed, never throw
-        var unbound = LegacyFeatureCatalog.Build(data);
+        var unbound = FeatureCatalog.Build(data);
         foreach (var f in unbound.Features.Where(x => x.Kind != FeatureKind.Pending))
         {
             var state = f.CreateState(new FeatureContext

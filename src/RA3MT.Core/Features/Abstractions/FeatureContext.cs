@@ -1,5 +1,7 @@
 using RA3MT.Core.Memory;
 
+using RA3MT.Core.Model;
+
 namespace RA3MT.Core.Features.Abstractions;
 
 /// <summary>Immutable facts about the attached game process. Created once per

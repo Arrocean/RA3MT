@@ -15,6 +15,7 @@ public sealed class TrainerEngine : IDisposable
 
     private ProcessMemory? _mem;
     private MasterCode? _mc;
+    private BridgeCoordinator? _bridges;   // session-bound, see Attach/Detach
     private readonly SelectionActionState _actionState = new();
     private FeaturesData _data = FeaturesData.LoadEmbedded();
 
@@ -27,32 +28,23 @@ public sealed class TrainerEngine : IDisposable
     public bool EnableRankBridge { get; set; } =
         Environment.GetEnvironmentVariable("RA3MT_RANK_BRIDGE") is not ("0" or "false");
 
-    public bool RankBridgeActive => Attached && _mc is { RankBridgeEnabled: true, RankMailbox: not null };
+    public bool RankBridgeActive => _bridges is not null && _bridges.IsActive(BridgeId.Rank);
 
     /// <summary>俘虏/摧毁桥开关：默认开启；RA3MT_BRIDGES=0/false 可关闭。
     /// 附加时逐一严格校验，失败者不安装。</summary>
     public bool EnableCaptureKillBridges { get; set; } =
         Environment.GetEnvironmentVariable("RA3MT_BRIDGES") is not ("0" or "false");
 
-    public bool CaptureBridgeActive => Attached && _mc is { CaptureBridgeEnabled: true, CaptureMailbox: not null };
-    public bool KillBridgeActive => Attached && _mc is { KillBridgeEnabled: true, KillMailbox: not null };
+    public bool CaptureBridgeActive => _bridges is not null && _bridges.IsActive(BridgeId.Capture);
+    public bool KillBridgeActive => _bridges is not null && _bridges.IsActive(BridgeId.Kill);
 
     /// <summary>生成桥开关：默认开启；RA3MT_SPAWN=0/false 可关闭（复制选中/三阵营基地车/战场增援）。
     /// 需要生成 wrapper、哈希查找、哈希表全局三项全部严格校验通过才安装消费桩。</summary>
     public bool EnableSpawnBridge { get; set; } =
         Environment.GetEnvironmentVariable("RA3MT_SPAWN") is not ("0" or "false");
 
-    public bool SpawnBridgeActive => Attached && _mc is { SpawnBridgeEnabled: true, SpawnMailbox: not null };
+    public bool SpawnBridgeActive => _bridges is not null && _bridges.IsActive(BridgeId.Spawn);
 
-    /// <summary>Whether one specific bridge is usable right now.</summary>
-    private bool IsBridgeActive(Engine.BridgeId id) => id switch
-    {
-        Engine.BridgeId.Rank => RankBridgeActive,
-        Engine.BridgeId.Capture => CaptureBridgeActive,
-        Engine.BridgeId.Kill => KillBridgeActive,
-        Engine.BridgeId.Spawn => SpawnBridgeActive,
-        _ => false,
-    };
     public string Version { get; private set; } = "";
     public int Pid { get; private set; }
     public string ProcessPath { get; private set; } = "";
@@ -77,7 +69,7 @@ public sealed class TrainerEngine : IDisposable
 
     public TrainerEngine()
     {
-        _registry = LegacyFeatureCatalog.Build(_data, this);
+        _registry = FeatureCatalog.Build(_data, this);
         _switches = new SwitchBank(_data, WriteFeatureFlag, m => Log?.Invoke(m));
     }
 
@@ -130,39 +122,18 @@ public sealed class TrainerEngine : IDisposable
         var registry = new FeatureServiceRegistry();
         registry.Register<IGameMemory>(new GameMemory(_mem!, Version, Base));
         registry.Register<ISwitchBank>(_switches);
+        var bridges = _bridges ?? throw new InvalidOperationException("桥协调器需要已附加的会话");
         registry.Register<IBridgeGateway>(new EngineAdapters.BridgeGateway(
-            IsBridgeActive,
-            (id, name) => SubmitBridgeRequests(name, id)));
+            bridges.IsActive, (id, name) => bridges.SubmitSelected(name, id)));
         registry.Register<ISpawnGateway>(new EngineAdapters.SpawnGateway(
-            SpawnBridgeActive,
-            CopyHolders,
-            MouseGround,
-            SelectionAnchor,
-            (name, reqs) => SubmitSpawnRequests(name, reqs, false),
-            SubmitReinforcement,
-            (name, reqs) => SubmitSpawnRequests(name, reqs, true)));
+            bridges.IsActive(BridgeId.Spawn),
+            bridges.CopyHolders,
+            bridges.MouseGround,
+            bridges.SelectionAnchor,
+            (name, reqs) => bridges.SubmitSpawnRequests(name, reqs, false),
+            bridges.SubmitReinforcement,
+            (name, reqs) => bridges.SubmitSpawnRequests(name, reqs, true)));
         return registry;
-    }
-
-    /// <summary>Template holders of the current selection (copy-selected path).</summary>
-    private IReadOnlyList<uint> CopyHolders()
-    {
-        if (_mem is null) return [];
-        return SpawnActions.EnumerateCopyTargets(_mem, _data, Version, Base)
-            .Select(t => t.holder).ToList();
-    }
-
-    private (float x, float y, float z)? MouseGround()
-    {
-        if (_mem is null) return null;
-        var mouse = SpawnActions.GetMouseWorldPosition(_mem, _data, Version, Base);
-        return mouse is null ? null : (mouse.Value.x, mouse.Value.y, mouse.Value.z);
-    }
-
-    private (float x, float y, float z)? SelectionAnchor()
-    {
-        if (_mem is null) return null;
-        return SpawnActions.GetSelectionAnchor(_mem, _data, Version, Base);
     }
 
     /// <summary>Write one stub flag through the installed block.</summary>
@@ -320,6 +291,8 @@ public sealed class TrainerEngine : IDisposable
             Base = baseAddr;
             ResolvedSites = sites.Count;
             _switches.ResetAll();
+            _bridges = new BridgeCoordinator(mc, mem, version, baseAddr, _data,
+                m => Log?.Invoke(m), () => StateChanged?.Invoke());
             CreateFeatureStates();
 
             Log?.Invoke($"修改器已就绪：{sites.Count}/{_data.Hooks.Count} 挂钩点全部通过原始字节校验 ✓");
@@ -378,6 +351,7 @@ public sealed class TrainerEngine : IDisposable
         _mem?.Dispose();
         _mem = null;
         _mc = null;
+        _bridges = null;
         _actionState.Clear();
         _featureStates.Clear();
         _services = new FeatureServiceRegistry();
@@ -436,269 +410,6 @@ public sealed class TrainerEngine : IDisposable
         if (!Attached || _mem == null) return (false, "未附加");
         return (false, $"功能 {featureId} 没有实现（catalog 未注册）");
     }
-
-    // ---------------------------------------------------------------------
-    // Bridge plumbing. Features reach this through IBridgeGateway /
-    // ISpawnGateway; the waiting, logging and per-bridge wording live here.
-    // ---------------------------------------------------------------------
-
-    /// <summary>Submit requests to a game-thread bridge one at a time, waiting for
-    /// the settlement stub to consume each before sending the next (the mailbox
-    /// allows a single outstanding request).</summary>
-    private (bool, string) DrainBridge(string featureName, BridgeId id, IReadOnlyList<BridgeRequest> requests,
-        int perTargetTimeoutMs, int totalBudgetMs)
-    {
-        if (_mc is null) return (false, "修改器未初始化");
-        var mailbox = _mc.Mailbox(id);
-        if (mailbox is null) return (false, $"{featureName}: 桥未启用");
-        var consumer = _mc.Bridges[id];
-
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        var applied = 0;
-        var rejected = 0;
-        var outstanding = 0;
-        for (var i = 0; i < requests.Count; i++)
-        {
-            var request = requests[i];
-            try
-            {
-                mailbox.Submit(request);
-            }
-            catch (InvalidOperationException ex)
-            {
-                Log?.Invoke($"{featureName}: 0x{request.Body:X} 未提交（邮箱状态 {mailbox.RawState}: {ex.Message}）");
-                outstanding += requests.Count - i;
-                break;
-            }
-
-            var deadline = System.Diagnostics.Stopwatch.StartNew();
-            var outcome = BridgeOutcome.Pending;
-            while (true)
-            {
-                outcome = mailbox.Outcome;
-                if (outcome != BridgeOutcome.Pending) break;
-                if (deadline.ElapsedMilliseconds > perTargetTimeoutMs ||
-                    sw.ElapsedMilliseconds > totalBudgetMs) break;
-                Thread.Sleep(25);
-            }
-
-            switch (outcome)
-            {
-                case BridgeOutcome.Applied:
-                    applied++;
-                    Log?.Invoke($"{featureName}: {DescribeRequest(consumer, mailbox, request)}");
-                    break;
-                case BridgeOutcome.Rejected:
-                    rejected++;
-                    Log?.Invoke($"{featureName}: {DescribeRejection(consumer, request)}");
-                    break;
-                default:
-                    outstanding++;
-                    break;
-            }
-
-            if (sw.ElapsedMilliseconds > totalBudgetMs)
-            {
-                outstanding += requests.Count - i - 1;
-                break;
-            }
-        }
-
-        var msg = applied > 0
-            ? $"已作用于 {applied}/{requests.Count} 个目标"
-            : "游戏线程未消费请求（资金未结算？稍后重试）";
-        if (rejected > 0) msg += $"，{rejected} 个被校验拒绝";
-        if (outstanding > 0) msg += $"，{outstanding} 个待处理（再次触发继续）";
-        Log?.Invoke($"{featureName}: {msg}");
-        StateChanged?.Invoke();
-        return (applied > 0, applied > 0 ? "" : msg);
-    }
-
-    /// <summary>Per-bridge success line. Only the spawn bridge has a resolved
-    /// holder / result body worth reporting.</summary>
-    private static string DescribeRequest(IBridgeConsumer consumer, IBridgeMailbox mailbox, BridgeRequest request) =>
-        mailbox is SpawnRequestMailbox spawn
-            ? (request.Third != 0
-                ? $"已生成 哈希 0x{request.Third:X8}（解析模板 0x{spawn.ReadResult().resolvedHolder:X}）" +
-                  $" → 新单位 0x{spawn.ReadResult().resultBody:X}"
-                : $"已生成 模板 0x{request.Fourth:X} → 新单位 0x{spawn.ReadResult().resultBody:X}")
-            : $"{consumer.DisplayName}: 0x{request.Body:X} 已执行";
-
-    /// <summary>Per-bridge rejection line.</summary>
-    private static string DescribeRejection(IBridgeConsumer consumer, BridgeRequest request) =>
-        consumer.Id == BridgeId.Spawn
-            ? (request.Third != 0
-                ? $"哈希 0x{request.Third:X8} 不在模板表，被拒绝"
-                : $"模板 0x{request.Fourth:X} 校验失败，被拒绝")
-            : $"{consumer.DisplayName}: 0x{request.Body:X} 校验未通过";
-
-    /// <summary>Selected-unit bridges (rank/capture/kill) share this entry point.
-    /// Destroy follows FINAL3's semantics (EA MustCode2+900 takes the single
-    /// [root+0x54] entry): ONE target per invocation — queueing the whole
-    /// selection keeps the mailbox busy across frames and later targets die
-    /// while the player has already moved on (live-reported as stray kills).</summary>
-    private (bool, string) SubmitBridgeRequests(string featureName, BridgeId kind)
-    {
-        var targets = kind switch
-        {
-            BridgeId.Rank => SelectionActions.EnumerateRankTargets(_mem!, _data, Version!, Base)
-                .Select(t => BridgeRequest.For(t.body, t.drawable, t.tracker)).ToList(),
-            BridgeId.Capture => SelectionActions.EnumerateCaptureTargets(_mem!, _data, Version!, Base)
-                .Select(t => BridgeRequest.For(t.body, t.drawable)).ToList(),
-            _ => SelectionActions.EnumerateKillTargets(_mem!, _data, Version!, Base)
-                .Select(t => BridgeRequest.For(t.body, t.drawable, t.hp)).ToList(),
-        };
-        if (targets.Count == 0)
-            return (false, _mc is not null && _mc.Bridges.TryGet(kind, out var consumer)
-                ? consumer.NoTargetMessage
-                : "桥未启用");
-        if (kind == BridgeId.Kill && targets.Count > 1)
-        {
-            var total = targets.Count;
-            targets = targets.GetRange(0, 1);
-            Log?.Invoke($"{featureName}: 选中 {total} 个目标，按 FINAL3 语义一次只摧毁一个" +
-                        $"（剩余 {total - 1} 个，再次执行继续）");
-        }
-        return DrainBridge(featureName, kind, targets, perTargetTimeoutMs: 800, totalBudgetMs: 4000);
-    }
-
-    /// <summary>FINAL3 "We need back": spawn <paramref name="count"/> units of the
-    /// hash around the anchor, then rank every new body up through the rank
-    /// bridge. FINAL3 spawns all eight at the same point; we spread them on a
-    /// small circle because the engine will not separate a pile-up, and each
-    /// reinforcement gets the same level-up FINAL3 applies.</summary>
-    private (bool, string) SubmitReinforcement(string featureName, uint hash, float x, float y, float z, int count)
-    {
-        var spawn = _mc?.SpawnMailbox;
-        if (spawn is null) return (false, $"{featureName}: 生成桥未启用");
-        var bodies = new List<uint>();
-        var rejected = 0;
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        for (var i = 0; i < count; i++)
-        {
-            var angle = i * 2f * MathF.PI / count;
-            var px = x + 50f * MathF.Cos(angle);
-            var pz = z + 50f * MathF.Sin(angle);
-            try
-            {
-                spawn.SubmitAtMouse(hash, 0, px, y, pz, 0);
-            }
-            catch (InvalidOperationException ex)
-            {
-                Log?.Invoke($"{featureName}: 第 {i + 1} 个未提交（{ex.Message}）");
-                break;
-            }
-            var deadline = System.Diagnostics.Stopwatch.StartNew();
-            (uint state, uint body, uint resolved) result;
-            while (true)
-            {
-                result = spawn.ReadResult();
-                if (result.state is 3 or 4) break;
-                if (deadline.ElapsedMilliseconds > 1500 || sw.ElapsedMilliseconds > 8000) break;
-                Thread.Sleep(25);
-            }
-            if (result.state == 3) bodies.Add(result.body);
-            else rejected++;
-            if (sw.ElapsedMilliseconds > 8000) break;
-        }
-        if (bodies.Count == 0)
-            return (false, $"{featureName}: 未生成任何单位" + (rejected > 0 ? $"（{rejected} 个被拒绝）" : ""));
-
-        var ranked = 0;
-        if (_mc is not null && _mc.Mailbox(BridgeId.Rank) is not null && _mem is not null)
-        {
-            var requests = new List<BridgeRequest>();
-            foreach (var body in bodies)
-            {
-                var drawable = _mem.ReadU32(body + 0xF4u);
-                var tracker = _mem.ReadU32(body + 0x3CCu);
-                if (drawable < 0x10000 || tracker < 0x10000) continue;
-                requests.Add(BridgeRequest.For(body, drawable, tracker));
-            }
-            if (requests.Count > 0)
-            {
-                var (rok, _) = DrainBridge($"{featureName}·升星", BridgeId.Rank, requests, 800, 8000);
-                if (rok) ranked = requests.Count;
-            }
-        }
-        else
-        {
-            Log?.Invoke($"{featureName}: 晋级桥未启用，已生成但未升星");
-        }
-        var msg = $"已生成 {bodies.Count} 个单位" + (ranked > 0 ? "并升星" : "");
-        Log?.Invoke($"{featureName}: {msg}");
-        return (true, msg);
-    }
-
-    /// <summary>Spawn bridge entry point: every request carries a template hash or
-    /// a template holder plus a world position.</summary>
-    private (bool, string) SubmitSpawnRequests(string featureName,
-        List<(uint hash, uint holder, float x, float y, float z)> requests, bool atMouse = false)
-    {
-        var spawn = _mc?.SpawnMailbox;
-        if (spawn is null) return (false, $"{featureName}: 生成桥未启用");
-
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        var applied = 0;
-        var rejected = 0;
-        var outstanding = 0;
-        for (var i = 0; i < requests.Count; i++)
-        {
-            var (hash, holder, x, y, z) = requests[i];
-            try
-            {
-                if (atMouse) spawn.SubmitAtMouse(hash, holder, x, y, z, 0);
-                else spawn.Submit(hash, holder, x, y, z, 0);
-            }
-            catch (InvalidOperationException ex)
-            {
-                Log?.Invoke($"{featureName}: 第 {i + 1} 个未提交（邮箱状态 {spawn.State}: {ex.Message}）");
-                outstanding += requests.Count - i;
-                break;
-            }
-
-            var deadline = System.Diagnostics.Stopwatch.StartNew();
-            (uint state, uint body, uint resolved) result;
-            while (true)
-            {
-                result = spawn.ReadResult();
-                if (result.state is 3 or 4) break;
-                if (deadline.ElapsedMilliseconds > 1500 || sw.ElapsedMilliseconds > 6000) break;
-                Thread.Sleep(25);
-            }
-
-            if (result.state == 3)
-            {
-                applied++;
-                var describe = hash != 0
-                    ? $"哈希 0x{hash:X8}（解析模板 0x{result.resolved:X}）"
-                    : $"模板 0x{holder:X}";
-                Log?.Invoke($"{featureName}: 已生成 {describe} → 新单位 0x{result.body:X}");
-            }
-            else if (result.state == 4)
-            {
-                rejected++;
-                var reason = hash != 0 ? $"哈希 0x{hash:X8} 不在模板表" : $"模板 0x{holder:X} 校验失败";
-                Log?.Invoke($"{featureName}: {reason}，被拒绝");
-            }
-            else outstanding++;
-
-            if (sw.ElapsedMilliseconds > 6000)
-            {
-                outstanding += requests.Count - i - 1;
-                break;
-            }
-        }
-        var msg = applied > 0
-            ? $"已生成 {applied}/{requests.Count} 个单位"
-            : "游戏线程未消费生成请求（资金未结算？稍后重试）";
-        if (rejected > 0) msg += $"，{rejected} 个被校验拒绝";
-        if (outstanding > 0) msg += $"，{outstanding} 个待处理（再次触发继续）";
-        Log?.Invoke($"{featureName}: {msg}");
-        StateChanged?.Invoke();
-        return (applied > 0, applied > 0 ? "" : msg);
-    }
-
 
     public bool IsOn(string featureId) => _switches.IsOn(featureId);
 
