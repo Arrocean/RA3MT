@@ -20,7 +20,7 @@ import time
 
 k32 = ctypes.windll.kernel32
 
-CANDS = [0x71014F0, 0x710178C, 0x790C258, 0x7AC9628]
+CANDS = [0x58E07EC, 0x713518C, 0x71014F0, 0x710178C, 0x790C258, 0x7AC9628]
 DATA_LO, DATA_HI = 0xCE0000, 0xD00000     # 1.13 .data (image regions excluded from scan4)
 
 
@@ -86,14 +86,9 @@ def main():
             for c in CANDS:
                 b = read(h, c, 12)
                 x, y, z = struct.unpack('<3f', b) if b else (float('nan'),) * 3
-                line.append(f'0x{c:X}=({x:7.1f},{y:7.1f},{z:5.1f})')
-            body = selected_body(h)
-            if body >= 0x10000:
-                ub = read(h, body + 0x38, 12)
-                ux, uy, uz = struct.unpack('<3f', ub)
-                line.append(f'| 单位({ux:7.1f},{uy:7.1f},{uz:5.1f})')
-            print(' '.join(line), flush=True)
-            time.sleep(1)
+                line.append(f'{x:8.1f},{y:8.1f},{z:6.1f}')
+            print(' | '.join(line), flush=True)
+            time.sleep(0.3)
     finally:
         # .data pointer hunt: which global points near each candidate?
         print('\n=== .data 指针反查（指向候选 ±0x400 的全局）===')
