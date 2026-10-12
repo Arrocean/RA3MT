@@ -3,8 +3,9 @@ Run SelfCheck stubdump artifacts/stubs_semantic first, then this script.
 Requires unicorn; no process access, remote calls, game writes or native threads.
 
 The kill dispatcher routes through the game's FULL damage entry (thiscall
-Body, args damage-type 6 / death-type 0x13 / 0, ret 0xC) — FINAL3's exact
-destroy call — so the mock asserts that convention instead of the old
+Body, args damage-type 6 / death-type NORMAL / 0, ret 0xC) — FINAL3's
+destroy call with CATALYST swapped for NORMAL (no splash) — the mock
+asserts that convention.
 bottom-level HP-adjust one.
 """
 from pathlib import Path
@@ -135,7 +136,7 @@ def run_kill(blob, align=0, state=1, mutation=None, api_zeroes=True):
         sp = machine.reg_read(UC_X86_REG_ESP)
         assert machine.reg_read(UC_X86_REG_ECX) == BODY, 'damage entry this must be the Body'
         assert get(machine, sp + 4) == 6, 'arg1 must be damage type 6'
-        assert get(machine, sp + 8) == 0x13, 'arg2 must be death type 0x13'
+        assert get(machine, sp + 8) == 1, 'arg2 must be death type NORMAL (1)'
         assert get(machine, sp + 12) == 0, 'arg3 must be 0'
         assert (sp + 16) % 16 == 0
         calls.append(address)

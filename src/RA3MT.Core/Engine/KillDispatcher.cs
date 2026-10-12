@@ -4,9 +4,9 @@ using RA3MT.Core.Memory;
 namespace RA3MT.Core.Engine;
 
 /// <summary>Game-thread destroy consumer: routes the kill through the game's
-/// FULL damage entry (thiscall Body, args damage-type 6 / death-type 0x13 / 0,
-/// ret 0xC) — the same call FINAL3's destroy uses (EA 1.12 RVA 0x39EA50,
-/// live-verified with death animations). The entry constructs a DamageInfo and
+/// FULL damage entry (thiscall Body, args damage-type 6 / death-type NORMAL / 0,
+/// ret 0xC) — FINAL3's destroy call (EA 1.12 RVA 0x39EA50) with the death type
+/// swapped from CATALYST to NORMAL to avoid its splash damage. The entry constructs a DamageInfo and
 /// drives [Body+0x33C]'s complete pipeline, so the death decision, animation
 /// dispatch and model recycling all run inside the game's own path. The
 /// previous implementation called the bottom-level HP adjust and mirrored the
@@ -22,9 +22,13 @@ public static class KillDispatcher
 
     public const uint CodeOffset = 0x1400;
 
-    // FINAL3's destroy argument triple: damage type 6, death type 0x13, 0.
+    // Argument triple for the full damage entry. Damage type 6 = UNRESISTABLE
+    // (armor-piercing, FINAL3's choice). Death type: FINAL3 passes 0x13 =
+    // CATALYST, whose death FX chain-damages nearby units (live-reported as
+    // stray splash on adjacent infantry); 1 = NORMAL keeps the unit's own
+    // death animation without the catalyst blast (SDK Death.xsd / DamageDef.xsd).
     private const uint DamageType = 6;
-    private const uint DeathType = 0x13;
+    private const uint DeathType = 1;
 
     public static byte[] Emit(nuint stubVA, nuint blockVA, nuint damageEntryVA, nuint rootVA)
     {
