@@ -33,14 +33,25 @@ public partial class MainWindow : Window
             {
                 if (string.IsNullOrEmpty(f.Hotkey) || !f.IsEnabled) continue;
                 FeatureVM feature = f;
-                var registered = _hotkeys.Register(f.Hotkey, () => Dispatcher.Invoke(() =>
+                void Fire()
                 {
                     if (!_vm.Attached) return;
                     if (feature.IsToggle)
                         feature.IsOn = !feature.IsOn;
                     else if (feature.IsAction)
                         feature.Execute.Execute(null);
-                }));
+                }
+                var registered = _hotkeys.Register(f.Hotkey, () => Dispatcher.Invoke(Fire));
+                if (!registered && !f.Hotkey.Contains('+'))
+                {
+                    // 裸功能键常被系统/其他程序占用（如 F12 的调试保留位）——自动回退 Ctrl+原键
+                    var fallback = "Ctrl+" + f.Hotkey;
+                    if (_hotkeys.Register(fallback, () => Dispatcher.Invoke(Fire)))
+                    {
+                        registered = true;
+                        _vm.Log($"热键 {f.Hotkey} 被占用，{f.Name} 已改用 {fallback}");
+                    }
+                }
                 if (registered) ok++;
                 else _vm.Log($"⚠ 热键 {f.Hotkey}（{f.Name}）注册失败，可能被其他程序占用");
             }

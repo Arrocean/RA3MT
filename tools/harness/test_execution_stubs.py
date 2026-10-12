@@ -374,9 +374,11 @@ cases += 1
 
 import struct as _s2
 CUR = _s2.unpack('<I', _s2.pack('<f', 137.0))[0]
+NEG = 0xC3000000   # -128.0f damage delta in xmm1
+POS = 0x41400000   # +12.0f heal delta in xmm1
 for enabled in [0, 1]:
     for victim in ['match_enemy', 'match_local', 'other_health']:
-        for context in ['valid', 'gate_zero', 'null_owner', 'null_root', 'null_side']:
+        for context in ['valid', 'heal', 'null_owner', 'null_root', 'null_side']:
             vm, end = machine('onekill')
             drawable = body
             controller, side, owner_obj = DATA + 0x1000, DATA + 0x2000, DATA + 0x5000
@@ -386,7 +388,6 @@ for enabled in [0, 1]:
             local_owner = victim == 'match_local'
             put(vm, owner_obj + 0x20, 2 if local_owner else 3)
             put(vm, body + 0x418, owner_obj if context != 'null_owner' else 0)
-            put(vm, body + 0x390, 5 if context != 'gate_zero' else 0)  # combat gate
             health_now = health if victim.startswith('match') else health + 0x10
             put(vm, BLOCK + 0x30, body)
             put(vm, BLOCK + 0x34, health)
@@ -395,6 +396,7 @@ for enabled in [0, 1]:
             vm.mem_write(BLOCK + 0x38, bytes([enabled]))
             vm.reg_write(UC_X86_REG_ESI, health_now)
             vm.reg_write(UC_X86_REG_XMM0, 0x40490000)     # 3.0f as pending new HP
+            vm.reg_write(UC_X86_REG_XMM1, POS if context == 'heal' else NEG)
             before = snapshot(vm)
             execute(vm, end)
             kill = enabled == 1 and victim == 'match_enemy' and context == 'valid'

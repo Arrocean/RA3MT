@@ -59,9 +59,10 @@ public sealed class MasterCode
     public const uint DiagWeaponEax = 0x2C;   // ammo 的 eax（武器对象）
 
     // 一击必杀（F12）：两个数据钩子捕获"正在被处理的 body/健康模块"，
-    // 主钩子在 HP 写入点比对捕获值后清零敌方 HP。0x30..0x38 在数据区末尾（<0x40）。
+    // 主钩子在 HP 写入点比对捕获值后清零敌方 HP。0x30..0x3C 在数据区末尾（<0x40）。
     public const uint OneKillBody = 0x30;     // 数据钩子捕获的 body
     public const uint OneKillHealth = 0x34;   // 数据钩子捕获的健康模块
+    public const uint OneKillZero = 0x3C;     // 0.0f 常量（块内存零初始化保证）
     // onekill 功能标志在 Flags["onekill"]=0x38
 
     public nuint Block { get; private set; }
@@ -667,9 +668,12 @@ public static class StubGen
     // [F12] 一击必杀 — 主钩 onekill: movss [esi+4],xmm0
     // EA 0x3651AE ≡ 1.13 0x38CB4E ≡ 1.12 0x3A366E（HP adjust 方法，kill 桥
     // 早已验证的 0x38CB30/0x3A3650 +0x1E）。FINAL3 语义：esi 是刚被数据钩子
-    // 捕获的健康模块、且 body 通过 [390/394/3A0/3AC] 任一非零门、且属主槽位
-    // ≠本地槽位 → 当前/上限 HP 双清零 + xmm0 置 0（重放写入 0）= 该单位即刻死亡。
-    // FINAL3 的 [esi-8] 反查 body 以捕获槽替代（数据钩子存的就是同一 body）。
+    // 捕获的健康模块、属主槽位≠本地槽位 → 当前/上限 HP 双清零 + xmm0 置 0
+    // （重放写入 0）= 该单位即刻死亡。FINAL3 的 [esi-8] 反查 body 以捕获槽
+    // 替代（数据钩子存的就是同一 body）。
+    // 门控偏离说明：FINAL3 用 [body+390|394|3A0|3AC] 任一非零做门——实测
+    // （v30）敌方主基地等无武装建筑全零被挡，无法一击必杀；换成"本次增量
+    // xmm1<0"（真伤害才杀，治疗/修理跳过），语义更准且覆盖建筑。
     private static byte[] OneKill(nuint stubVA, nuint siteEnd, nuint block, nuint rootVA)
     {
         var c = new C(stubVA, siteEnd, block);
@@ -678,16 +682,14 @@ public static class StubGen
         a.Pushad();
         c.Flag("onekill");
         a.JneShort(1);
+        a.Db(0x0F, 0x2F, 0x0D);                           // comiss xmm1,[block+0x3C]（0.0f）
+        a.Db(BitConverter.GetBytes((uint)(block + MasterCode.OneKillZero)));
+        a.JaeShort(1);                                    // 增量≥0（治疗/修理）→ 放行
         a.MovRegAbs(R.Eax, (uint)(block + MasterCode.OneKillHealth));
         a.Db(0x39, 0xF0);                                 // cmp eax,esi（≠刚捕获的受害者 → 放行）
         a.JneShort(1);
         a.MovRegAbs(R.Eax, (uint)(block + MasterCode.OneKillBody));
         a.TestRegReg(R.Eax, R.Eax);
-        a.JeShort(1);
-        a.MovRegRegDisp32(R.Ebx, R.Eax, 0x390);           // 门：战斗相关字段任一非零（FINAL3 同款）
-        a.Db(0x0B, 0x98, 0x94, 0x03, 0x00, 0x00);         // or ebx,[eax+0x394]
-        a.Db(0x0B, 0x98, 0xA0, 0x03, 0x00, 0x00);         // or ebx,[eax+0x3A0]
-        a.Db(0x0B, 0x98, 0xAC, 0x03, 0x00, 0x00);         // or ebx,[eax+0x3AC]
         a.JeShort(1);
         a.MovRegRegDisp32(R.Ecx, R.Eax, 0x418);           // 属主
         a.TestRegReg(R.Ecx, R.Ecx);
