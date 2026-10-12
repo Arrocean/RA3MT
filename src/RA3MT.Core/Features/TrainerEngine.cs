@@ -285,7 +285,7 @@ public sealed class TrainerEngine : IDisposable
             // EA original; classify by content before resolving any hook.
             if (version == "1.12")
             {
-                version = Discriminate112(mem, baseAddr);
+                version = Target.GameBuildClassifier.Classify(mem, baseAddr, _data);
                 if (version != found.version)
                     Log?.Invoke($"识别为 EA 原版 1.12（{found.modulePath}）");
             }
@@ -348,37 +348,6 @@ public sealed class TrainerEngine : IDisposable
             throw;
         }
     }
-
-    /// <summary>Both builds ship a module named ra3_1.12.game, but whole code
-    /// regions live at different addresses with identical instruction bytes.
-    /// Two independent anchors (money chain + zoom/selection iterator, 14
-    /// bytes total) must both match the EA slots to classify as the EA
-    /// original; anything else keeps the repack answer so an unknown build
-    /// fails loudly in the hook verifier instead of guessing here.</summary>
-    private string Discriminate112(Memory.ProcessMemory mem, nuint baseAddr)
-    {
-        foreach (var id in new[] { moneyProbeId, zoomProbeId })
-        {
-            if (!_data.Hooks.TryGetValue(id, out var def) || !def.Rva.TryGetValue("1.12ea", out var rvaStr))
-                return "1.12";
-            var want = def.DisplacedBytes();
-            try
-            {
-                var probe = mem.Read(baseAddr + Convert.ToUInt32(rvaStr, 16), want.Length);
-                if (!probe.AsSpan().SequenceEqual(want))
-                    return "1.12";
-            }
-            catch
-            {
-                // unreadable probe — let the repack path surface the real error
-                return "1.12";
-            }
-        }
-        return "1.12ea";
-    }
-
-    private const string moneyProbeId = "money_h1";
-    private const string zoomProbeId = "zoom_unit_xp";
 
     public void Detach()
     {

@@ -46,6 +46,50 @@ if (args.Length == 2 && args[0] == "stubdump")
     return 0;
 }
 
+if (args.Length == 1 && args[0] == "livetest")
+{
+    // Read-only live verification: find the running game, classify the build,
+    // resolve every hook site and bridge API against live memory. Nothing is
+    // written and no hooks are installed — safe to run against any build.
+    var liveData = FeaturesData.LoadEmbedded();
+    var liveFound = RA3MT.Core.Memory.ProcessMemory.FindGame(liveData.Game.ModuleNames)
+                    ?? throw new InvalidOperationException("未找到运行中的红警3进程（请先启动游戏）");
+    var liveMem = new RA3MT.Core.Memory.ProcessMemory(liveFound.pid);
+    var liveMain = System.Diagnostics.Process.GetProcessById(liveFound.pid).MainModule
+                   ?? throw new InvalidOperationException("无法读取主模块");
+    var liveBase = (nuint)liveMain.BaseAddress;
+    var liveVersion = liveFound.version == "1.12"
+        ? RA3MT.Core.Target.GameBuildClassifier.Classify(liveMem, liveBase, liveData)
+        : liveFound.version;
+
+    Console.WriteLine($"live pid={liveFound.pid}");
+    Console.WriteLine($"live module={liveFound.modulePath}");
+    Console.WriteLine($"live module-version={liveFound.version} -> classified={liveVersion}");
+
+    var liveImage = new RA3MT.Core.Target.DelegateImageReader((rva, len) => liveMem.Read(liveBase + rva, len));
+    var liveText = liveMem.Read(liveBase + 0x1000, 0x7D0000);
+    var liveSites = HookResolver.ResolveAll(liveData, liveVersion, liveImage.Read, liveText, liveBase);
+    Console.WriteLine($"live hook sites: {liveSites.Count}/{liveData.Hooks.Count} 字节校验通过");
+    var liveMethods = liveSites.Values.GroupBy(s => s.Method)
+        .Select(g => $"{g.Key}={g.Count()}");
+    Console.WriteLine($"live methods: {string.Join(" ", liveMethods)}");
+
+    var rank = RA3MT.Core.Target.RankApiResolver.Resolve(liveVersion, liveBase, liveImage);
+    var capture = RA3MT.Core.Target.CaptureApiResolver.Resolve(liveVersion, liveBase, liveImage);
+    var (killAdj, killMark, killDmg) = RA3MT.Core.Target.KillApiResolver.Resolve(liveVersion, liveBase, liveImage);
+    var spawn = SpawnApiResolver.Resolve(liveVersion, liveBase, liveImage.Read);
+    var support = SpawnSupportApiResolver.Resolve(liveVersion, liveBase, liveImage.Read);
+    Console.WriteLine($"live bridges: rank=0x{rank:X} capture=0x{capture:X} kill=0x{killAdj:X}/0x{killMark:X}/0x{killDmg:X}");
+    Console.WriteLine($"live spawn: wrapper=0x{spawn:X} lookup=0x{support.TemplateHashLookup:X} " +
+                      $"owner=0x{support.OwnerResolver:X} transform=0x{support.MouseScreenToWorld:X}");
+
+    var ok = liveSites.Count == liveData.Hooks.Count;
+    Console.WriteLine(ok
+        ? $"PASS live {liveVersion}: full hook + bridge resolution against the running process"
+        : $"FAIL live {liveVersion}: only {liveSites.Count}/{liveData.Hooks.Count} sites resolved");
+    return ok ? 0 : 1;
+}
+
 if (args.Length == 1 && args[0] == "bridgetest")
 {
     var rankDataDir = TrainerGameDataDir() ?? throw new InvalidOperationException("Game Data directory not found");
