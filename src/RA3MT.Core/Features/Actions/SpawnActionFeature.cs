@@ -81,11 +81,15 @@ public sealed class SpawnActionFeature(string id, SpawnActionKind kind) : IFeatu
         {
             if (!SpawnActions.TryParseHash(arg ?? "", out var hash) || hash == 0)
                 return FeatureResult.Failure("无效的增援代码（应为 8 位十六进制，如 6586A5A0）");
-            var anchor = gateway.MouseGround ?? gateway.SelectionAnchor;
+            var mouse = gateway.MouseGround;
+            if (mouse is { } m)
+                context.Host.Log($"增援代码 0x{hash:X8}：围绕鼠标地面 0x({m.x:F0}, {m.z:F0}) 生成 8 个并升星");
+            else
+                context.Host.Log("增援：鼠标地面坐标不可用（游戏失焦会冻结该值）——请点回游戏画面再按热键；将回退选中单位锚点");
+            var anchor = mouse ?? gateway.SelectionAnchor;
             if (anchor is null)
                 return FeatureResult.Failure("鼠标位置不可用：请把鼠标移到游戏画面上，或选中一个己方单位作锚点");
             var (x, y, z) = anchor.Value;
-            context.Host.Log($"增援代码 0x{hash:X8}：围绕鼠标一次生成 8 个并升星（FINAL3 语义）");
             return gateway.SubmitReinforcement(feature.Id, hash, x, y, z);
         }
 
