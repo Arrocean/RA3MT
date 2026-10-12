@@ -310,4 +310,41 @@ for enabled in [0, 1]:
                 preserved(vm, before, [UC_X86_REG_EDX, UC_X86_REG_EFLAGS])
                 cases += 1
 
+
+# godmode [F11] 玩家无敌: health fields re-pinned at the health-bar reader.
+# ebx=drawable ([ebx+0x138]=body, body+0x418=owner), esi=health module
+# ([esi]=vtable, +4 current, +0xC max), eax=[esi] at the site.
+import struct as _s
+CUR, MAXHP = _s.unpack('<I', _s.pack('<f', 137.0))[0], _s.unpack('<I', _s.pack('<f', 300.0))[0]
+PIN = 0x497423F0  # 1000000.0f
+for enabled in [0, 1]:
+    for local in [False, True]:
+        for context in ['valid', 'null_body', 'null_health', 'null_root', 'null_side']:
+            vm, end = machine('godmode')
+            drawable, body, health, vtable = DATA, DATA + 0x1000, DATA + 0x2000, DATA + 0x4000
+            controller, side = DATA + 0x3000, DATA + 0x5000
+            owner = side if local else side + 0x100
+            put(vm, drawable + 0x138, body if context != 'null_body' else 0)
+            put(vm, body + 0x418, owner)
+            put(vm, controller + 0x28, side if context != 'null_side' else 0)
+            put(vm, GLOBAL, controller if context != 'null_root' else 0)
+            put(vm, health, vtable)
+            put(vm, health + 0x4, CUR)
+            put(vm, health + 0xC, MAXHP)
+            put(vm, vtable + 0x3C, 0x5151)
+            vm.mem_write(BLOCK + 0xF, bytes([enabled]))
+            vm.reg_write(UC_X86_REG_EBX, drawable)
+            vm.reg_write(UC_X86_REG_ESI, health if context != 'null_health' else 0)
+            vm.reg_write(UC_X86_REG_EAX, vtable)
+            before = snapshot(vm)
+            execute(vm, end)
+            pinned = enabled == 1 and context == 'valid' and local
+            assert get(vm, health + 0x4) == (PIN if pinned else CUR), (enabled, local, context)
+            assert get(vm, health + 0xC) == (PIN if pinned else MAXHP), (enabled, local, context)
+            # replay: mov edx,[eax+3C]; mov ecx,esi
+            assert vm.reg_read(UC_X86_REG_EDX) == 0x5151, 'replay mov edx,[eax+3C] lost'
+            assert vm.reg_read(UC_X86_REG_ECX) == (health if context != 'null_health' else 0), 'replay mov ecx,esi lost'
+            preserved(vm, before, [UC_X86_REG_EDX, UC_X86_REG_ECX])
+            cases += 1
+
 print(f'PASS {cases} x86 execution cases including selected local Weapon clip refill, capacity and null guards')

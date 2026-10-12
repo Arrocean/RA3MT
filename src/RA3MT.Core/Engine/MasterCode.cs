@@ -33,6 +33,7 @@ public sealed class MasterCode
         ["aiblock"] = 0x0B,
         ["threatmax"] = 0x0D,
         ["threatzero"] = 0x0E,
+        ["godmode"] = 0x0F,
             };
 
     public const uint BlockSize = BlockLayoutCatalog.BlockSize;
@@ -290,7 +291,7 @@ public static class StubGen
         "proto_cool_a" or "proto_cool_b" or "power" or
         "build_power" or "build_hp_a" or "build_hp_b" or "sidebar_pts" or
         "power_cool" or "unit_lv" or "zoom_unit_xp" or "ammo" or "weapon_clip" or
-        "aiblock" => true,
+        "aiblock" or "godmode" => true,
         _ => false,
     };
 
@@ -319,6 +320,7 @@ public static class StubGen
         "ammo" => Ammo(stubVa, siteEnd, block),
         "weapon_clip" => WeaponClip(stubVa, siteEnd, block, rootVa),
         "aiblock" => AiBlock(stubVa, siteEnd, block, rootVa),
+        "godmode" => GodMode(stubVa, siteEnd, block, rootVa),
         _ => throw new NotImplementedException(id),
     };
 
@@ -610,6 +612,45 @@ public static class StubGen
         a.Popfd();
         a.Db(0x03, 0x50, 0x04);                           // add edx,[eax+04]
         a.Db(0x3B, 0xD7);                                 // cmp edx,edi（标志供随后的 jb 消费）
+        return c.Fin();
+    }
+
+    // [F11] 玩家无敌 — godmode: mov edx,[eax+3C]; mov ecx,esi
+    // FINAL3 EA 0x12EEDF 的包含函数（0x12EEA0）与重打包 1.13 0x1588C0 / 1.12
+    // 0x1705A0 逐指令同构：this=ebx=drawable → [ebx+0x138]=body → esi=[body+0x33C]
+    // 健康模块 → vt+0x48(上限)/vt+0x3C(当前) 读取（血条渲染，每帧跑）。
+    // FINAL3 机制：读取时把健康模块的**真实 HP 字段** +4(当前)/+0xC(上限) 重置
+    // 1000000.0——掉血一帧内被刷回满，相当于无敌。属主 [body+0x418] 与
+    // [[root]+0x28] 比（阵营指针编码，rank/spawn 桥同款）。
+    private static byte[] GodMode(nuint stubVA, nuint siteEnd, nuint block, nuint rootVA)
+    {
+        var c = new C(stubVA, siteEnd, block);
+        var a = c.A;
+        a.Pushfd();
+        a.Pushad();                                       // ebx/esi/eax live at the site
+        c.Flag("godmode");
+        a.JneShort(1);
+        a.MovRegRegDisp32(R.Ecx, R.Ebx, 0x138);           // ecx = [drawable+0x138] body
+        a.TestRegReg(R.Ecx, R.Ecx);
+        a.JeShort(1);                                     // 防御：无 body 跳过（FINAL3 不查）
+        a.MovRegRegDisp32(R.Edi, R.Ecx, 0x418);           // edi = 属主
+        a.TestRegReg(R.Esi, R.Esi);
+        a.JeShort(1);                                     // 防御：健康模块空跳过
+        a.MovRegAbs(R.Ebx, (uint)rootVA);
+        a.TestRegReg(R.Ebx, R.Ebx);
+        a.JeShort(1);                                     // 尚未捕获玩家 → 跳过
+        a.MovRegRegDisp8(R.Edx, R.Ebx, 0x28);             // edx = side
+        a.TestRegReg(R.Edx, R.Edx);
+        a.JeShort(1);                                     // local side unavailable: no mutation
+        a.Db(0x39, 0xD7);                                 // cmp edi,edx（属主 vs 本地阵营）
+        a.JneShort(1);                                    // 属主!=己方 → 跳过
+        a.MovM32RegDisp8Imm32(R.Esi, 0x04, 0x497423F0);   // [health+4]  = 1000000.0f
+        a.MovM32RegDisp8Imm32(R.Esi, 0x0C, 0x497423F0);   // [health+0xC] = 1000000.0f
+        a.Label(1);
+        a.Popad();
+        a.Popfd();
+        a.Db(0x8B, 0x50, 0x3C);                           // mov edx,[eax+3C]
+        a.Db(0x8B, 0xCE);                                 // mov ecx,esi
         return c.Fin();
     }
 

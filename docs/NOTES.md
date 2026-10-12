@@ -1,5 +1,47 @@
 # 逆向笔记（重打包版 1.12/1.13）
 
+## v29（F11 玩家无敌实装，publish-v29，待实测）
+
+### 定位（EA 原版直接反汇编，一击定案）
+
+- FINAL3 EA 0x12EEDF 的包含函数 **0x12EEA0 与重打包 1.13 0x1588C0 / 1.12
+  0x1705A0 逐指令同构**：this=ebx=drawable → [ebx+0x138]=body →
+  esi=[body+0x33C] 健康模块 → vt+0x48(上限)/vt+0x3C(当前)（血条渲染读取，每帧跑）
+  → [ebx+0x3A4]-[ebx+0x39C] 屏幕坐标数学。站点即 vt+0x3C 装载处：
+  **1.13 0x1588FF / 1.12 0x1705DF**，displaced `8B 50 3C 8B CE`（`mov edx,[eax+3C];
+  mov ecx,esi`）三版同字节。
+- 5 字节模式在重打包有 22 个命中（vtable 调用惯用语），全不可靠；改用
+  `D9 5C 24 08 8B 06 | 8B 50 3C 8B CE`（fstp+mov eax,[esi]+站点）11 字节模式
+  在 1.13/1.12/EA 三镜像各唯一命中，EA 侧正好落在 FINAL3 钩子地址上。
+- **机制（FINAL3 F11）**：血条读取函数每帧运行时，把健康模块的**真实 HP 字段**
+  +4(当前)/+0xC(上限) 重置 1000000.0f（vt getter 读的就是这两个字段）——
+  掉血一帧内被刷回满 = 无敌。属主 [body+0x418] vs [[root]+0x28]（阵营指针
+  编码，与 aiblock 的槽位号编码不同——v28 教训的又一例证）。
+
+### 实装
+
+- StubGen `godmode` 桩 78B（flag 0x0F）：pushad 内重走 [ebx+0x138]→[+0x418]
+  属主链（FINAL3 原样）+ root 链本地阵营比对 + body/health/root/side 四重判空
+  （FINAL3 一重不查，防御性补齐）→ 钉 [esi+4]/[esi+0xC]=0x497423F0 → 重放
+  两指令。features.json：hook godmode + 功能 no.35（toggle，热键 **F11**，
+  建造组）。
+- 工程坑：**链接式 EmbeddedResource（assets/features.json）改动不被增量构建
+  跟踪**——改 JSON 后必须 `dotnet build src/RA3MT.Core --no-incremental`
+  （否则 SelfCheck 仍读旧资源，v29 首轮"44/44"假象）。另：Asm 无 JbShort/
+  CmpRegReg，判空用 TestRegReg+JeShort、reg-reg 比较用裸字节 `39 D7`。
+
+### 验证
+
+SelfCheck 46/46（双版 displaced+11 字节特征码唯一命中）+ featuretest 107
+（35 功能/23 挂钩）+ 全套件 + Unicorn execution 221→**241**（godmode 20 例：
+flag×属主×5 种空态；断言双字段钉值+重放寄存器 edx=[vt+0x3C]/ecx=esi 不失真）
++ 桥 60/25/217。基线 30 桩（纯新增）。publish-v29（62MB x86 + 三 .enable）。
+
+### 待实测
+
+F11 开 → 己方单位/建筑被打血条闪一下立刻回满、永远打不死；敌方正常掉血；
+F10/F11 同开互不干扰；关 F11 后恢复正常掉血（血条刷新时不再重置）。
+
 ## v28（F10 修复：条目属主是槽位号非阵营指针，publish-v28，待实测）
 
 ### v27 实测翻车与根因

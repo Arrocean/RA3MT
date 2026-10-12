@@ -65,6 +65,17 @@
       "pattern": "03 50 04 3B D7",
       "patternSiteOffset": 0
     },
+    "godmode": {
+      "rva": {
+        "1.12": "0x1705df",
+        "1.13": "0x1588ff"
+      },
+      "displaced": "8B503C8BCE",
+      "displacedLen": 5,
+      "asm": "mov edx,[eax+3C]; mov ecx,esi",
+      "pattern": "D9 5C 24 08 8B 06 8B 50 3C 8B CE",
+      "patternSiteOffset": 6
+    },
     "build_hp_b": {
       "rva": {
         "1.12": "0x47cc16",
@@ -388,6 +399,21 @@
       "flag": "aiblock",
       "desc": "电脑阵营的生产进度被钉在每拍 1：任何单位/建筑都造不完（FINAL3 F10 同款语义；含盟友，不影响己方）",
       "src": "FINAL3 F10"
+    },
+    {
+      "id": "godmode",
+      "no": "35",
+      "name": "玩家无敌",
+      "group": "建造",
+      "kind": "toggle",
+      "hotkey": "F11",
+      "icon": "🛡",
+      "hooks": [
+        "godmode"
+      ],
+      "flag": "godmode",
+      "desc": "己方单位/建筑的生命在血条刷新时被重置为 100 万（FINAL3 F11 同款：掉血一帧内回满）；关闭后恢复正常掉血",
+      "src": "FINAL3 F11"
     },
     {
       "id": "zoomlimit",
