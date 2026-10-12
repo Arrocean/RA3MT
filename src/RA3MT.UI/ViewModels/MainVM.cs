@@ -155,7 +155,7 @@ public sealed class MainVM : ObservableObject
         }, _ => Attached);
         LaunchCmd = new RelayCommand(_ => TryLaunchGame(), _ => NotAttached);
 
-        Log($"RA3 Trainer 现代重制版 v27 就绪 — 支持 1.12 / 1.13（{TotalFeatures} 项功能，{Engine.Data.Hooks.Count} 个挂钩点）");
+        Log($"RA3 Trainer 现代重制版 v28 就绪 — 支持 1.12 / 1.13（{TotalFeatures} 项功能，{Engine.Data.Hooks.Count} 个挂钩点）");
         Log("提示：先启动红警3并进入主菜单，再点击「附加进程」。");
     }
 

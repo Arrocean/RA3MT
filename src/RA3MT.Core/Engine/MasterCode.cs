@@ -583,7 +583,10 @@ public static class StubGen
     // 增量、[eax+0x14]=已付、edi=剩余预算；edx≥edi 走完成路径。FINAL3 的启用档
     // （script_09 → iEnable+15=1）把非本地条目的增量钉 1——每拍只付 1，任何
     // 单位/建筑都造不完（它默认的 5000 档=瞬间完成，不抄）。
-    // 属主取条目 [eax+0xC]，本地侧照 build_power 惯用例 [[root]+0x28]。
+    // 属主：条目 [eax+0xC] 是玩家槽位号（int，游戏经 [root+idx*4+0x30] 解析玩家
+    // ——0x4761A0），本地槽位号=[[[root]+0x28]+0x20]（游戏自己的本地判定链，
+    // 双版 24/32 处同型，如 0x11F4BE/0x547B10）。v27 曾拿条目槽位跟 side 指针
+    // 本身比（永远不等）→ 连己方一起钉，实测翻车后改链。
     private static byte[] AiBlock(nuint stubVA, nuint siteEnd, nuint block, nuint rootVA)
     {
         var c = new C(stubVA, siteEnd, block);
@@ -595,10 +598,11 @@ public static class StubGen
         a.MovRegAbs(R.Ebx, (uint)rootVA);
         a.TestRegReg(R.Ebx, R.Ebx);
         a.JeShort(1);                                     // 尚未捕获玩家 → 跳过
-        a.MovRegRegDisp8(R.Ecx, R.Ebx, 0x28);
+        a.MovRegRegDisp8(R.Ecx, R.Ebx, 0x28);             // ecx = side
         a.TestRegReg(R.Ecx, R.Ecx);
         a.JeShort(1);                                     // local side unavailable: no mutation
-        a.CmpRegMRegDisp32(R.Ecx, R.Eax, 0xC);            // cmp side,[entry+0xC]
+        a.MovRegRegDisp8(R.Ecx, R.Ecx, 0x20);             // ecx = [side+0x20] 本地玩家槽位号（0 合法，不做 test）
+        a.CmpRegMRegDisp32(R.Ecx, R.Eax, 0xC);            // cmp localSlot,[entry+0xC]
         a.JeShort(1);                                     // 属主==己方 → 跳过
         a.MovM32RegDisp8Imm32(R.Eax, 0x04, 1);            // 敌方增量钉 1
         a.Label(1);
