@@ -66,6 +66,8 @@ public sealed class MasterCode
     private readonly nuint _spawnWrapperApi;
     private readonly nuint _hashLookupApi;
     private readonly nuint _hashTableGlobalVa;
+    private readonly nuint _mouseObjGlobalVa;
+    private readonly nuint _mouseTransformApi;
     public bool RankBridgeEnabled => _rankApi != 0;
     public bool CaptureBridgeEnabled => _captureApi != 0;
     public bool KillBridgeEnabled => _killApi != 0 && _killDeathMarkerApi != 0;
@@ -97,7 +99,8 @@ public sealed class MasterCode
         Dictionary<string, HookResolution> sites, IReadOnlyDictionary<string, HookDef> defs, Action<string>? log,
         nuint rankApi = 0, nuint captureApi = 0, nuint killApi = 0,
         nuint killDeathMarkerApi = 0,
-        nuint spawnWrapperApi = 0, nuint hashLookupApi = 0, nuint hashTableGlobalVa = 0)
+        nuint spawnWrapperApi = 0, nuint hashLookupApi = 0, nuint hashTableGlobalVa = 0,
+        nuint mouseObjGlobalVa = 0, nuint mouseTransformApi = 0)
     {
         _mem = mem;
         _rankApi = rankApi;
@@ -107,6 +110,8 @@ public sealed class MasterCode
         _spawnWrapperApi = spawnWrapperApi;
         _hashLookupApi = hashLookupApi;
         _hashTableGlobalVa = hashTableGlobalVa;
+        _mouseObjGlobalVa = mouseObjGlobalVa;
+        _mouseTransformApi = mouseTransformApi;
         _rootVa = playerRootVa;
         _sites = sites;
         _stubBySite = defs.ToDictionary(kv => kv.Key, kv => kv.Value.Stub ?? kv.Key);
@@ -123,7 +128,8 @@ public sealed class MasterCode
         if (CaptureBridgeEnabled) consumers.Add(new CaptureBridgeConsumer(_captureApi, _rootVa));
         if (KillBridgeEnabled) consumers.Add(new KillBridgeConsumer(_killApi, _rootVa));
         if (SpawnBridgeEnabled)
-            consumers.Add(new SpawnBridgeConsumer(_spawnWrapperApi, _hashLookupApi, _hashTableGlobalVa, _rootVa));
+            consumers.Add(new SpawnBridgeConsumer(_spawnWrapperApi, _hashLookupApi, _hashTableGlobalVa, _rootVa,
+            _mouseObjGlobalVa, _mouseTransformApi));
         return new BridgeConsumerSet(consumers);
     }
 

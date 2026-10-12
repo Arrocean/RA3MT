@@ -11,7 +11,9 @@ public sealed record SpawnSupportApis(
     nuint OwnerResolver,
     nuint OwnerKindPredicate,
     nuint HashTableOwnerGlobal,
-    nuint OwnerKindGlobal);
+    nuint OwnerKindGlobal,
+    nuint MouseScreenToWorld,
+    nuint MouseObjectGlobal);
 
 public static class SpawnSupportApiResolver
 {
@@ -23,12 +25,16 @@ public static class SpawnSupportApiResolver
         uint OwnerPredicate,
         uint HashTableGlobalRva,
         uint OwnerKindGlobalRva,
-        uint SpawnWrapperEntry);
+        uint SpawnWrapperEntry,
+        uint MouseTransform,
+        uint MouseObjectGlobalRva);
 
     private static readonly Layout[] Layouts =
     [
-        new("1.13", 0x40D5B0, 0x40D2C0, 0x4647A0, 0xFF4A0, 0x8F0108, 0x8E21A4, 0x22E3E0),
-        new("1.12", 0x422510, 0x11F110, 0x4793B0, 0x1175D0, 0x8EBDE8, 0x8DDE84, 0x2440F0),
+        new("1.13", 0x40D5B0, 0x40D2C0, 0x4647A0, 0xFF4A0, 0x8F0108, 0x8E21A4, 0x22E3E0,
+            0x20ECF0, 0x8E43BC),
+        new("1.12", 0x422510, 0x11F110, 0x4793B0, 0x1175D0, 0x8EBDE8, 0x8DDE84, 0x2440F0,
+            0x22C500, 0x8E009C),
     ];
 
     // The map-start caller directly above the spawn wrapper loads the static hash
@@ -51,6 +57,16 @@ public static class SpawnSupportApiResolver
 
     private static readonly byte[] OwnerPredicateCanonical = Convert.FromHexString(
         "8B814801000083F807741283F806740D83F808740883F805740332C0C3B001C3");
+
+    // Screen->world transform (cdecl screenXY*, outWorld*, 0, 0; ret al; caller
+    // cleans 0x10). Located from FINAL3's EA call target (RVA 0x1ED4A0) by its
+    // unique prologue: sub esp,0xD0; cmp [esp+0xD4],0; push ebp; je far;
+    // mov ebp,[esp+0xDC]; test ebp; je far. Live-verified 2026-10-12: the mouse
+    // object behind the global stores INTEGER screen pixels at +0x3C/+0x40
+    // (OS GetCursorPos cross-check), so the stub converts them with fild.
+    private static readonly byte[] MouseTransformCanonical = Convert.FromHexString(
+        "81ecd000000083bc24d400000000550f845f040000" +
+        "8bac24dc00000085ed0f8450040000");
 
     public const string Id = "spawn-support";
 
@@ -78,6 +94,7 @@ public static class SpawnSupportApiResolver
         BitConverter.GetBytes(checked((uint)imageBase + layout.OwnerKindGlobalRva)).CopyTo(owner, 5);
         Verify(image, layout.OwnerResolver, owner, "owner resolver");
         Verify(image, layout.OwnerPredicate, OwnerPredicateCanonical, "owner-kind predicate");
+        Verify(image, layout.MouseTransform, MouseTransformCanonical, "mouse screen-to-world transform");
 
         return new SpawnSupportApis(
             imageBase + layout.HashLookup,
@@ -85,7 +102,9 @@ public static class SpawnSupportApiResolver
             imageBase + layout.OwnerResolver,
             imageBase + layout.OwnerPredicate,
             imageBase + layout.HashTableGlobalRva,
-            imageBase + layout.OwnerKindGlobalRva);
+            imageBase + layout.OwnerKindGlobalRva,
+            imageBase + layout.MouseTransform,
+            imageBase + layout.MouseObjectGlobalRva);
     }
 
     private static byte[] WithRelativeCall(byte[] canonical, int opcodeOffset, uint displacement)

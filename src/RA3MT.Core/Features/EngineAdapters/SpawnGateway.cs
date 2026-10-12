@@ -11,7 +11,8 @@ public sealed class SpawnGateway(
     Func<(float x, float y, float z)?> mouseGround,
     Func<(float x, float y, float z)?> selectionAnchor,
     Func<string, List<(uint hash, uint holder, float x, float y, float z)>, (bool ok, string msg)> submit,
-    Func<string, uint, float, float, float, int, (bool ok, string msg)> reinforcement)
+    Func<string, uint, float, float, float, int, (bool ok, string msg)> reinforcement,
+    Func<string, List<(uint hash, uint holder, float x, float y, float z)>, (bool ok, string msg)> submitMouse)
     : ISpawnGateway
 {
     public bool IsAvailable => active;
@@ -24,6 +25,15 @@ public sealed class SpawnGateway(
         List<(uint hash, uint holder, float x, float y, float z)> requests)
     {
         var (ok, msg) = submit(featureName, requests);
+        return ok ? FeatureResult.Succeeded(msg) : FeatureResult.Failure(msg);
+    }
+
+    /// <summary>Spawn at the LIVE mouse position (game-thread transform; the
+    /// request position is only a fallback if the transform fails).</summary>
+    public FeatureResult SubmitAtMouse(string featureName,
+        List<(uint hash, uint holder, float x, float y, float z)> requests)
+    {
+        var (ok, msg) = submitMouse(featureName, requests);
         return ok ? FeatureResult.Succeeded(msg) : FeatureResult.Failure(msg);
     }
 

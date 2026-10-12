@@ -67,7 +67,7 @@ public sealed class SpawnActionFeature(string id, SpawnActionKind kind) : IFeatu
                 requests.AddRange(holders.Select(holder => (0u, holder, a.x, a.y, a.z)));
             }
 
-            return gateway.Submit(feature.Id, requests);
+            return gateway.SubmitAtMouse(feature.Id, requests);
         }
 
         private FeatureResult SpawnMcv(ISpawnGateway gateway, string? arg)
@@ -104,7 +104,7 @@ public sealed class SpawnActionFeature(string id, SpawnActionKind kind) : IFeatu
             if (anchor is null)
                 return FeatureResult.Failure("鼠标位置不可用：请把鼠标移到游戏画面上，或选中一个己方单位作锚点");
             var (x, y, z) = anchor.Value;
-            return gateway.Submit(feature.Id, [(hash, 0u, x, y, z)]);
+            return gateway.SubmitAtMouse(feature.Id, [(hash, 0u, x, y, z)]);
         }
     }
 }

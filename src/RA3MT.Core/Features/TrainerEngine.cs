@@ -142,8 +142,9 @@ public sealed class TrainerEngine : IDisposable
             CopyHolders,
             MouseGround,
             SelectionAnchor,
-            SubmitSpawnRequests,
-            SubmitReinforcement));
+            (name, reqs) => SubmitSpawnRequests(name, reqs, false),
+            SubmitReinforcement,
+            (name, reqs) => SubmitSpawnRequests(name, reqs, true)));
         return registry;
     }
 
@@ -188,7 +189,8 @@ public sealed class TrainerEngine : IDisposable
     /// which is exactly how <see cref="MasterCode"/> decides what to install.</summary>
     private readonly record struct BridgeApis(
         nuint Rank, nuint Capture, nuint KillDamageEntry, nuint KillDeathMarker,
-        nuint SpawnWrapper, nuint HashLookup, nuint HashTableGlobal);
+        nuint SpawnWrapper, nuint HashLookup, nuint HashTableGlobal,
+        nuint MouseObjectGlobal, nuint MouseTransform);
 
     /// <summary>Resolve every optional bridge capability. Each resolver is
     /// individually fenced: a contract mismatch downgrades that one bridge and is
@@ -198,6 +200,7 @@ public sealed class TrainerEngine : IDisposable
     {
         nuint rank = 0, capture = 0, kill = 0, marker = 0;
         nuint spawnWrapper = 0, hashLookup = 0, hashTableGlobal = 0;
+        nuint mouseObjGlobal = 0, mouseTransform = 0;
 
         if (EnableRankBridge)
         {
@@ -230,13 +233,16 @@ public sealed class TrainerEngine : IDisposable
                 {
                     var wrapper = Target.SpawnApiResolver.Resolve(version, imageBase, image);
                     var support = Target.SpawnSupportApiResolver.Resolve(version, imageBase, image);
-                    return (wrapper, support.TemplateHashLookup, support.HashTableOwnerGlobal);
+                    return (wrapper, support.TemplateHashLookup, support.HashTableOwnerGlobal,
+                        support.MouseObjectGlobal, support.MouseScreenToWorld);
                 },
                 resolved =>
                 {
                     spawnWrapper = resolved.wrapper;
                     hashLookup = resolved.TemplateHashLookup;
                     hashTableGlobal = resolved.HashTableOwnerGlobal;
+                    mouseObjGlobal = resolved.MouseObjectGlobal;
+                    mouseTransform = resolved.MouseScreenToWorld;
                 },
                 reason => Log?.Invoke($"生成桥：{reason}，功能不可用"));
         }
@@ -251,7 +257,8 @@ public sealed class TrainerEngine : IDisposable
             Log?.Invoke($"生成桥：生成 wrapper 校验通过 0x{spawnWrapper:X}，" +
                         $"哈希查找 0x{hashLookup:X}，模板表全局 0x{hashTableGlobal:X}");
 
-        return new BridgeApis(rank, capture, kill, marker, spawnWrapper, hashLookup, hashTableGlobal);
+        return new BridgeApis(rank, capture, kill, marker, spawnWrapper, hashLookup, hashTableGlobal,
+            mouseObjGlobal, mouseTransform);
     }
 
     public void Attach()
@@ -286,7 +293,8 @@ public sealed class TrainerEngine : IDisposable
 
             var mc = new MasterCode(mem, baseAddr, baseAddr + rootRva, sites, _data.Hooks, Log,
                 bridges.Rank, bridges.Capture, bridges.KillDamageEntry, bridges.KillDeathMarker,
-                bridges.SpawnWrapper, bridges.HashLookup, bridges.HashTableGlobal);
+                bridges.SpawnWrapper, bridges.HashLookup, bridges.HashTableGlobal,
+                bridges.MouseObjectGlobal, bridges.MouseTransform);
             pendingMaster = mc;
             mc.Install();
 
@@ -568,7 +576,7 @@ public sealed class TrainerEngine : IDisposable
             var pz = z + 50f * MathF.Sin(angle);
             try
             {
-                spawn.Submit(hash, 0, px, y, pz, 0);
+                spawn.SubmitAtMouse(hash, 0, px, y, pz, 0);
             }
             catch (InvalidOperationException ex)
             {
@@ -620,7 +628,7 @@ public sealed class TrainerEngine : IDisposable
     /// <summary>Spawn bridge entry point: every request carries a template hash or
     /// a template holder plus a world position.</summary>
     private (bool, string) SubmitSpawnRequests(string featureName,
-        List<(uint hash, uint holder, float x, float y, float z)> requests)
+        List<(uint hash, uint holder, float x, float y, float z)> requests, bool atMouse = false)
     {
         var spawn = _mc?.SpawnMailbox;
         if (spawn is null) return (false, $"{featureName}: 生成桥未启用");
@@ -634,7 +642,8 @@ public sealed class TrainerEngine : IDisposable
             var (hash, holder, x, y, z) = requests[i];
             try
             {
-                spawn.Submit(hash, holder, x, y, z, 0);
+                if (atMouse) spawn.SubmitAtMouse(hash, holder, x, y, z, 0);
+                else spawn.Submit(hash, holder, x, y, z, 0);
             }
             catch (InvalidOperationException ex)
             {

@@ -60,7 +60,7 @@ public sealed class KillBridgeConsumer(nuint damageEntryVa, nuint rootVa) : IBri
 /// <summary>Spawn bridge: creates units through the game's map-start spawn
 /// wrapper, resolving WB-string hashes on the game thread.</summary>
 public sealed class SpawnBridgeConsumer(nuint wrapperVa, nuint hashLookupVa, nuint hashTableGlobalVa,
-    nuint rootVa) : IBridgeConsumer
+    nuint rootVa, nuint mouseObjGlobalVa, nuint mouseTransformVa) : IBridgeConsumer
 {
     public BridgeId Id => BridgeId.Spawn;
     public string DisplayName => "生成桥";
@@ -70,7 +70,8 @@ public sealed class SpawnBridgeConsumer(nuint wrapperVa, nuint hashLookupVa, nui
     public void Declare(BlockLayout layout) => BlockLayoutCatalog.DeclareBridge(layout, "Spawn");
 
     public byte[] EmitDispatcher(nuint dispatcherVa, nuint blockVa) =>
-        SpawnDispatcher.Emit(dispatcherVa, blockVa, wrapperVa, hashLookupVa, hashTableGlobalVa, rootVa);
+        SpawnDispatcher.Emit(dispatcherVa, blockVa, wrapperVa, hashLookupVa, hashTableGlobalVa, rootVa,
+            mouseObjGlobalVa, mouseTransformVa);
 
     public IBridgeMailbox CreateMailbox(IInjectionMemory memory, nuint blockVa) =>
         new SpawnRequestMailbox(memory, blockVa);

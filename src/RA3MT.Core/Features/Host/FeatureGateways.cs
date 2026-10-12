@@ -47,6 +47,10 @@ public interface ISpawnGateway : IFeatureService
     /// <summary>Submit spawn requests (hash 0 = spawn the given holder).</summary>
     FeatureResult Submit(string featureName, List<(uint hash, uint holder, float x, float y, float z)> requests);
 
+    /// <summary>Spawn at the live mouse: the stub converts the mouse object's
+    /// screen pixels through the game's own transform on the game thread.</summary>
+    FeatureResult SubmitAtMouse(string featureName, List<(uint hash, uint holder, float x, float y, float z)> requests);
+
     /// <summary>FINAL3-style reinforcement ("We need back"): spawn
     /// <paramref name="count"/> units of the hash spread around (x, y, z), then
     /// rank each new unit up through the rank bridge. Rank-up is skipped with a

@@ -59,7 +59,7 @@ public static class BlockLayoutChecks
             ("Capture", CaptureDispatcher.Emit(block + 0x1280, block, (nuint)0x7B5DF0, root).Length),
             ("Kill", KillDispatcher.Emit(block + 0x1400, block, (nuint)0x7C7190, root).Length),
             ("Spawn", SpawnDispatcher.Emit(block + 0x1580, block, (nuint)0x62E3E0, (nuint)0x80D5B0,
-                (nuint)0xCF0108, root).Length),
+                (nuint)0xCF0108, root, 0xCE43BC, 0x60ECF0).Length),
         };
         foreach (var (owner, length) in measured)
         {

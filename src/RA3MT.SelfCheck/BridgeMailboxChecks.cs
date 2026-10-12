@@ -101,7 +101,7 @@ public static class BridgeMailboxChecks
             if (allowed)
             {
                 var expectedOrder = new List<nuint>();
-                for (var slot = 4; slot <= 0x20; slot += 4)
+                for (var slot = 4; slot <= 0x24; slot += 4)
                     expectedOrder.Add(block + SpawnDispatcher.MailboxOffset + (nuint)slot);
                 expectedOrder.Add(block + SpawnDispatcher.StateOffset);
                 if (!memory.Writes.SequenceEqual(expectedOrder))

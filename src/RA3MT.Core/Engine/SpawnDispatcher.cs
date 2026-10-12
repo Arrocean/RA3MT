@@ -22,22 +22,25 @@ public static class SpawnDispatcher
     public const uint OwnerOffset = MailboxOffset + 0x18;        // 0 = local side via playerRoot
     public const uint ResultBodyOffset = MailboxOffset + 0x1C;   // wrapper return value
     public const uint ResolvedHolderOffset = MailboxOffset + 0x20;
+    public const uint MouseModeOffset = MailboxOffset + 0x24;     // !=0: derive pos from the live mouse on the game thread
     public const uint Idle = 0, Pending = 1, Executing = 2, Success = 3, Reject = 4;
 
     public const uint CodeOffset = 0x1580;
 
     public static byte[] Emit(nuint stubVA, nuint blockVA, nuint spawnWrapperVA,
-        nuint hashLookupVA, nuint hashTableGlobalVA, nuint rootVA)
+        nuint hashLookupVA, nuint hashTableGlobalVA, nuint rootVA,
+        nuint mouseObjGlobalVA, nuint transformVA)
     {
         uint start = checked((uint)stubVA), block = checked((uint)blockVA);
         uint wrapper = checked((uint)spawnWrapperVA), lookup = checked((uint)hashLookupVA);
         uint tableGlobal = checked((uint)hashTableGlobalVA), root = checked((uint)rootVA);
+        uint mouseObj = checked((uint)mouseObjGlobalVA), transform = checked((uint)transformVA);
         uint Slot(uint offset) => checked(block + offset);
         var a = new Asm();
         var labels = new Dictionary<int, int>();
         var patches = new List<(int position, int label)>();
         const int Exit = 1, Rejected = 2, Direct = 3, HaveTemplate = 4,
-            HaveOwner = 5, FxReject = 6, FxDone = 7;
+            HaveOwner = 5, FxReject = 6, FxDone = 7, MouseSkip = 8;
         void Mark(int id) { a.Label(id); labels.Add(id, a.Length); }
         void Branch(byte condition, int label)
         {
@@ -96,6 +99,31 @@ public static class SpawnDispatcher
         a.Db(0x89, 0x84, 0x24, 0, 0x02, 0, 0);          // [esp+200] = old ESP
         a.Db(0x0F, 0xAE, 0x04, 0x24);                   // fxsave [esp]
         a.Db(0xFC);                                     // CLD
+        // ---- mouse mode: FINAL3-style live mouse → world on the game thread ----
+        // MouseMode != 0: read the mouse object's integer screen pixels
+        // (+0x3C/+0x40), convert to floats at [esp+0x204..0x20B] (inside the
+        // reserved FX area, above the saved old-ESP), call the game's own
+        // screen->world transform cdecl(screenXY*, out*, 0, 0; ret al), and
+        // let it overwrite the mailbox position float3 the wrapper consumes.
+        a.MovRegAbs(R.Eax, Slot(MouseModeOffset));
+        a.TestRegReg(R.Eax, R.Eax);
+        Branch(0x84, MouseSkip);                        // not mouse mode: keep mailbox pos
+        a.MovRegAbs(R.Eax, mouseObj); NonNull(R.Eax);
+        a.Db(0xDF, 0x40, 0x3C);                         // fild dword [eax+0x3C]
+        a.Db(0xD9, 0x5C, 0x24, 0x04);                   // fstp dword [esp+0x204]
+        a.Db(0xDF, 0x40, 0x40);                         // fild dword [eax+0x40]
+        a.Db(0xD9, 0x5C, 0x24, 0x08);                   // fstp dword [esp+0x208]
+        a.Push8(0);
+        a.Push8(0);
+        a.Db(0x68); a.Db(BitConverter.GetBytes(Slot(PosXOffset)));  // out = mailbox pos float3
+        a.Db(0x8D, 0x44, 0x24, 0x14);                   // lea eax,[esp+0x14] = &screenXY
+        a.Db(0x50);                                     // push &screenXY
+        a.Db(0xE8);                                     // CALL rel32 transform
+        int transformDisp = a.Length; a.Db(0, 0, 0, 0);
+        a.Db(0x83, 0xC4, 0x10);                         // cdecl: caller cleans 4 args
+        a.TestRegReg(R.Eax, R.Eax);
+        Branch(0x84, FxReject);                         // transform failed -> reject
+        Mark(MouseSkip);
         a.Db(0x83, 0xEC, 0x08);                         // pad: 5 args + ret = 24 → wrapper entry esp%16 == 0
         a.Push8(0);                                     // arg5: wrapper ignores it (FINAL3 passes [side+0x10])
         a.Push(R.Ebp);                                  // arg4 = owner side
@@ -127,6 +155,8 @@ public static class SpawnDispatcher
             unchecked((int)(lookup - (start + (uint)(lookupDisp + 4)))));
         BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(callDisp, 4),
             unchecked((int)(wrapper - (start + (uint)(callDisp + 4)))));
+        BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(transformDisp, 4),
+            unchecked((int)(transform - (start + (uint)(transformDisp + 4)))));
         foreach (var (position, label) in patches)
             BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(position, 4),
                 checked(labels[label] - (position + 4)));
@@ -142,6 +172,7 @@ public sealed class SpawnRequestMailbox : RequestMailbox
     public const uint Offset = SpawnDispatcher.MailboxOffset;
 
     private uint[] _position = [];
+    private bool _mouseMode;
 
     public SpawnRequestMailbox(IInjectionMemory memory, nuint block) : base(memory, block, Offset) { }
 
@@ -167,6 +198,7 @@ public sealed class SpawnRequestMailbox : RequestMailbox
         WriteU32(0x18, request.Body); // owner (0 = resolve local side)
         WriteU32(0x1C, 0u);
         WriteU32(0x20, 0u);
+        WriteU32(0x24, _mouseMode ? 1u : 0u);
     }
 
     /// <summary>Submit a spawn carrying an explicit world position and owner.
@@ -176,6 +208,22 @@ public sealed class SpawnRequestMailbox : RequestMailbox
     {
         if (!float.IsFinite(x) || !float.IsFinite(y) || !float.IsFinite(z))
             throw new ArgumentException("Spawn position must be finite");
+        _mouseMode = false;
+        _position = [BitConverter.SingleToUInt32Bits(x), BitConverter.SingleToUInt32Bits(y),
+                     BitConverter.SingleToUInt32Bits(z)];
+        Submit(BridgeRequest.For(owner, 0, hash, holder));
+    }
+
+    /// <summary>FINAL3-style mouse mode: the stub derives the spawn position on
+    /// the game thread from the live mouse (screen pixels → the game's own
+    /// screen-to-world transform), so the trainer never samples a possibly
+    /// frozen or mis-scaled world-coordinate cache. The fallback position is
+    /// only used when the transform itself fails.</summary>
+    public void SubmitAtMouse(uint hash, uint holder, float x, float y, float z, uint owner)
+    {
+        if (!float.IsFinite(x) || !float.IsFinite(y) || !float.IsFinite(z))
+            throw new ArgumentException("Spawn fallback position must be finite");
+        _mouseMode = true;
         _position = [BitConverter.SingleToUInt32Bits(x), BitConverter.SingleToUInt32Bits(y),
                      BitConverter.SingleToUInt32Bits(z)];
         Submit(BridgeRequest.For(owner, 0, hash, holder));
