@@ -101,16 +101,19 @@ def main():
     print(f'   A 完成（{len(snap_a)} 块）')
     print('② 鼠标移到【右下角】停住……5 秒后快照 B')
     time.sleep(5)
-    diffs = {}            # addr -> list of (dword_index, va_bits, vb_bits)
+    diffs = {}            # addr -> list of (dword_index, A-triple bytes, B-triple bytes)
     for addr, a in snap_a.items():
         b = read(h, addr, len(a))
         if b is None:
             continue
         n = len(a) // 4
-        for i in range(n):
+        for i in range(n - 2):
             off = i * 4
-            if a[off:off + 4] != b[off:off + 4]:
-                diffs.setdefault(addr, []).append((i, a[off:off + 4], b[off:off + 4]))
+            a3 = a[off:off + 12]
+            b3 = b[off:off + 12]
+            # triple pre-filter: x/y both change, z stable — the EA mouse layout
+            if a3[:8] != b3[:8] and a3[8:12] == b3[8:12]:
+                diffs.setdefault(addr, []).append((i, a3, b3))
     total_diffs = sum(len(v) for v in diffs.values())
     print(f'   A→B 变化 dword：{total_diffs}（含噪声，正常）')
     print('③ 鼠标移回【同一个左上角位置】停住……5 秒后快照 A2')
@@ -121,18 +124,15 @@ def main():
         a2 = read(h, addr, len(snap_a[addr]))
         if a2 is None:
             continue
-        idxset = {i for i, _, _ in lst}
-        for i, va_raw, vb_raw in lst:
-            if i + 2 not in idxset:
-                continue
-            ax, ay, az = struct.unpack('<3f', va_raw)
-            bx, by, bz = struct.unpack('<3f', vb_raw)
-            a2off = i * 4
-            if a2[a2off:a2off + 12] != va_raw:
+        for i, a3, b3 in lst:
+            off = i * 4
+            if a2[off:off + 12] != a3:
                 continue    # did not return to A → noise
             va_addr = addr + i * 4
             if EXCLUDE_LO <= va_addr <= EXCLUDE_HI:
                 continue
+            ax, ay, az = struct.unpack('<3f', a3)
+            bx, by, bz = struct.unpack('<3f', b3)
             if not all(v == v and abs(v) < 1e7 for v in (ax, ay, az, bx, by, bz)):
                 continue
             dx, dy = bx - ax, by - ay
