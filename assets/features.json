@@ -496,19 +496,16 @@
       "src": "orig[09]"
     },
     {
-      "id": "xp999",
+      "id": "sel_lv",
       "no": "10",
       "name": "选中单位瞬升三星",
       "group": "选中单位",
-      "kind": "pending",
-      "hotkey": "Ctrl+P",
-      "icon": "⭐",
-      "hooks": [
-        "zoom_unit_xp"
-      ],
-      "flag": "xp999",
-      "desc": "待配对FINAL3三参数晋级函数；旧界面条目钩子实际是弹药",
-      "src": "orig[10]"
+      "kind": "action",
+      "hotkey": "Alt+P",
+      "icon": "🌟",
+      "action": "lv",
+      "desc": "选中单位直接晋升三星（FINAL3 P 键同款 rank(3,1,0)，走晋级桥，支持多目标；需 rank-bridge.enable）",
+      "src": "orig[10] FINAL3 P"
     },
     {
       "id": "ammo",
@@ -524,18 +521,6 @@
       "flag": "ammo",
       "desc": "本地选中单位开火后回填真实弹夹容量；不改变连发计数，待实战复测",
       "src": "orig[18]"
-    },
-    {
-      "id": "sel_lv",
-      "no": "10",
-      "name": "提高选中单位经验",
-      "group": "选中单位",
-      "kind": "action",
-      "hotkey": "Alt+P",
-      "icon": "🌟",
-      "action": "lv",
-      "desc": "现代替代动作：经验值设为 999999，星级待后续刷新；不等同FINAL3直接晋级",
-      "src": "orig[10]"
     },
     {
       "id": "sel_speed",
