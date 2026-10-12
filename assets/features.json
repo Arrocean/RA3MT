@@ -76,6 +76,39 @@
       "pattern": "D9 5C 24 08 8B 06 8B 50 3C 8B CE",
       "patternSiteOffset": 6
     },
+    "onekill": {
+      "rva": {
+        "1.12": "0x3a366e",
+        "1.13": "0x38cb4e"
+      },
+      "displaced": "F30F114604",
+      "displacedLen": 5,
+      "asm": "movss [esi+4],xmm0",
+      "pattern": "F3 0F 10 46 04 F3 0F 11 46 08 F3 0F 58 C1 57 F3 0F 11 46 04 74",
+      "patternSiteOffset": 15
+    },
+    "onekill_a": {
+      "rva": {
+        "1.12": "0x43c964",
+        "1.13": "0x427b34"
+      },
+      "displaced": "8B8E3C030000",
+      "displacedLen": 6,
+      "asm": "mov ecx,[esi+0x33C]",
+      "pattern": "8B 8E 3C 03 00 00 8B 95 80 00 00 00",
+      "patternSiteOffset": 0
+    },
+    "onekill_b": {
+      "rva": {
+        "1.12": "0x320963",
+        "1.13": "0x30b6c3"
+      },
+      "displaced": "8B893C030000",
+      "displacedLen": 6,
+      "asm": "mov ecx,[ecx+0x33C]",
+      "pattern": "8B 4C 24 0C 8B 89 3C 03 00 00",
+      "patternSiteOffset": 4
+    },
     "build_hp_b": {
       "rva": {
         "1.12": "0x47cc16",
@@ -414,6 +447,23 @@
       "flag": "godmode",
       "desc": "己方单位/建筑的生命在血条刷新时被重置为 100 万（FINAL3 F11 同款：掉血一帧内回满）；关闭后恢复正常掉血",
       "src": "FINAL3 F11"
+    },
+    {
+      "id": "onekill",
+      "no": "36",
+      "name": "一击必杀",
+      "group": "建造",
+      "kind": "toggle",
+      "hotkey": "F12",
+      "icon": "💀",
+      "hooks": [
+        "onekill",
+        "onekill_a",
+        "onekill_b"
+      ],
+      "flag": "onekill",
+      "desc": "任何敌方单位受到伤害即刻死亡（当前与上限 HP 双清零；FINAL3 F12 三钩子同款，含盟友，不影响己方）",
+      "src": "FINAL3 F12"
     },
     {
       "id": "zoomlimit",

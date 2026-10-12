@@ -347,4 +347,61 @@ for enabled in [0, 1]:
             preserved(vm, before, [UC_X86_REG_EDX, UC_X86_REG_ECX])
             cases += 1
 
+
+# onekill [F12] 一击必杀 family: two data hooks capture the processed body and
+# its health module; the main hook (HP adjust write) zeroes current+max HP for
+# a non-local victim that passes the combat gate.
+vm, end = machine('onekill_a')
+body, health = DATA, DATA + 0x4000
+put(vm, body + 0x33C, health)
+vm.reg_write(UC_X86_REG_ESI, body)
+before = snapshot(vm)
+execute(vm, end)
+assert get(vm, BLOCK + 0x30) == body and get(vm, BLOCK + 0x34) == health
+assert vm.reg_read(UC_X86_REG_ECX) == health, 'replay mov ecx,[esi+33C] lost'
+preserved(vm, before, [UC_X86_REG_ECX])
+cases += 1
+
+vm, end = machine('onekill_b')
+put(vm, body + 0x33C, health)
+vm.reg_write(UC_X86_REG_ECX, body)
+before = snapshot(vm)
+execute(vm, end)
+assert get(vm, BLOCK + 0x30) == body and get(vm, BLOCK + 0x34) == health
+assert vm.reg_read(UC_X86_REG_ECX) == health, 'replay mov ecx,[ecx+33C] lost'
+preserved(vm, before, [UC_X86_REG_ECX])  # displaced itself rewrites ecx
+cases += 1
+
+import struct as _s2
+CUR = _s2.unpack('<I', _s2.pack('<f', 137.0))[0]
+for enabled in [0, 1]:
+    for victim in ['match_enemy', 'match_local', 'other_health']:
+        for context in ['valid', 'gate_zero', 'null_owner', 'null_root', 'null_side']:
+            vm, end = machine('onekill')
+            drawable = body
+            controller, side, owner_obj = DATA + 0x1000, DATA + 0x2000, DATA + 0x5000
+            put(vm, controller + 0x28, side if context != 'null_side' else 0)
+            put(vm, GLOBAL, controller if context != 'null_root' else 0)
+            put(vm, side + 0x20, 2)                       # local slot
+            local_owner = victim == 'match_local'
+            put(vm, owner_obj + 0x20, 2 if local_owner else 3)
+            put(vm, body + 0x418, owner_obj if context != 'null_owner' else 0)
+            put(vm, body + 0x390, 5 if context != 'gate_zero' else 0)  # combat gate
+            health_now = health if victim.startswith('match') else health + 0x10
+            put(vm, BLOCK + 0x30, body)
+            put(vm, BLOCK + 0x34, health)
+            put(vm, health_now + 0x4, CUR)
+            put(vm, health_now + 0xC, CUR)
+            vm.mem_write(BLOCK + 0x38, bytes([enabled]))
+            vm.reg_write(UC_X86_REG_ESI, health_now)
+            vm.reg_write(UC_X86_REG_XMM0, 0x40490000)     # 3.0f as pending new HP
+            before = snapshot(vm)
+            execute(vm, end)
+            kill = enabled == 1 and victim == 'match_enemy' and context == 'valid'
+            expected_hp = 0 if kill else 0x40490000        # replay stores xmm0
+            assert get(vm, health_now + 0x4) == expected_hp, (enabled, victim, context)
+            assert get(vm, health_now + 0xC) == (0 if kill else CUR), (enabled, victim, context)
+            preserved(vm, before, [])
+            cases += 1
+
 print(f'PASS {cases} x86 execution cases including selected local Weapon clip refill, capacity and null guards')

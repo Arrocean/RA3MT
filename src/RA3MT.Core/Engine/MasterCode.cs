@@ -34,6 +34,7 @@ public sealed class MasterCode
         ["threatmax"] = 0x0D,
         ["threatzero"] = 0x0E,
         ["godmode"] = 0x0F,
+        ["onekill"] = 0x38,   // 0x00-0x0F 已占满；0x38 在数据区末尾（<0x40）
             };
 
     public const uint BlockSize = BlockLayoutCatalog.BlockSize;
@@ -56,6 +57,12 @@ public sealed class MasterCode
     public const uint DiagSelArr = 0x24;      // zoom_unit_xp 的 edx（数组基址）
     public const uint DiagSelIdx = 0x28;      // zoom_unit_xp 的 edi（下标）
     public const uint DiagWeaponEax = 0x2C;   // ammo 的 eax（武器对象）
+
+    // 一击必杀（F12）：两个数据钩子捕获"正在被处理的 body/健康模块"，
+    // 主钩子在 HP 写入点比对捕获值后清零敌方 HP。0x30..0x38 在数据区末尾（<0x40）。
+    public const uint OneKillBody = 0x30;     // 数据钩子捕获的 body
+    public const uint OneKillHealth = 0x34;   // 数据钩子捕获的健康模块
+    // onekill 功能标志在 Flags["onekill"]=0x38
 
     public nuint Block { get; private set; }
     public bool Installed { get; private set; }
@@ -291,7 +298,7 @@ public static class StubGen
         "proto_cool_a" or "proto_cool_b" or "power" or
         "build_power" or "build_hp_a" or "build_hp_b" or "sidebar_pts" or
         "power_cool" or "unit_lv" or "zoom_unit_xp" or "ammo" or "weapon_clip" or
-        "aiblock" or "godmode" => true,
+        "aiblock" or "godmode" or "onekill" or "onekill_a" or "onekill_b" => true,
         _ => false,
     };
 
@@ -321,6 +328,9 @@ public static class StubGen
         "weapon_clip" => WeaponClip(stubVa, siteEnd, block, rootVa),
         "aiblock" => AiBlock(stubVa, siteEnd, block, rootVa),
         "godmode" => GodMode(stubVa, siteEnd, block, rootVa),
+        "onekill" => OneKill(stubVa, siteEnd, block, rootVa),
+        "onekill_a" => OneKillA(stubVa, siteEnd, block),
+        "onekill_b" => OneKillB(stubVa, siteEnd, block),
         _ => throw new NotImplementedException(id),
     };
 
@@ -651,6 +661,79 @@ public static class StubGen
         a.Popfd();
         a.Db(0x8B, 0x50, 0x3C);                           // mov edx,[eax+3C]
         a.Db(0x8B, 0xCE);                                 // mov ecx,esi
+        return c.Fin();
+    }
+
+    // [F12] 一击必杀 — 主钩 onekill: movss [esi+4],xmm0
+    // EA 0x3651AE ≡ 1.13 0x38CB4E ≡ 1.12 0x3A366E（HP adjust 方法，kill 桥
+    // 早已验证的 0x38CB30/0x3A3650 +0x1E）。FINAL3 语义：esi 是刚被数据钩子
+    // 捕获的健康模块、且 body 通过 [390/394/3A0/3AC] 任一非零门、且属主槽位
+    // ≠本地槽位 → 当前/上限 HP 双清零 + xmm0 置 0（重放写入 0）= 该单位即刻死亡。
+    // FINAL3 的 [esi-8] 反查 body 以捕获槽替代（数据钩子存的就是同一 body）。
+    private static byte[] OneKill(nuint stubVA, nuint siteEnd, nuint block, nuint rootVA)
+    {
+        var c = new C(stubVA, siteEnd, block);
+        var a = c.A;
+        a.Pushfd();                                       // 站点后的 je 消费函数头 test 的标志
+        a.Pushad();
+        c.Flag("onekill");
+        a.JneShort(1);
+        a.MovRegAbs(R.Eax, (uint)(block + MasterCode.OneKillHealth));
+        a.Db(0x39, 0xF0);                                 // cmp eax,esi（≠刚捕获的受害者 → 放行）
+        a.JneShort(1);
+        a.MovRegAbs(R.Eax, (uint)(block + MasterCode.OneKillBody));
+        a.TestRegReg(R.Eax, R.Eax);
+        a.JeShort(1);
+        a.MovRegRegDisp32(R.Ebx, R.Eax, 0x390);           // 门：战斗相关字段任一非零（FINAL3 同款）
+        a.Db(0x0B, 0x98, 0x94, 0x03, 0x00, 0x00);         // or ebx,[eax+0x394]
+        a.Db(0x0B, 0x98, 0xA0, 0x03, 0x00, 0x00);         // or ebx,[eax+0x3A0]
+        a.Db(0x0B, 0x98, 0xAC, 0x03, 0x00, 0x00);         // or ebx,[eax+0x3AC]
+        a.JeShort(1);
+        a.MovRegRegDisp32(R.Ecx, R.Eax, 0x418);           // 属主
+        a.TestRegReg(R.Ecx, R.Ecx);
+        a.JeShort(1);
+        a.MovRegRegDisp8(R.Eax, R.Ecx, 0x20);             // 属主槽位号
+        a.MovRegAbs(R.Ebx, (uint)rootVA);                 // [root global] → root 对象
+        a.TestRegReg(R.Ebx, R.Ebx);
+        a.JeShort(1);
+        a.MovRegRegDisp8(R.Edx, R.Ebx, 0x28);             // side
+        a.TestRegReg(R.Edx, R.Edx);
+        a.JeShort(1);
+        a.MovRegRegDisp8(R.Edx, R.Edx, 0x20);             // 本地槽位号
+        a.Db(0x39, 0xD0);                                 // cmp eax,edx
+        a.JeShort(1);                                     // 己方单位 → 放行
+        a.Db(0x0F, 0x57, 0xC0);                           // xorps xmm0,xmm0（重放将写 0）
+        a.MovM32RegDisp8Imm32(R.Esi, 0x04, 0);            // 当前 HP = 0
+        a.MovM32RegDisp8Imm32(R.Esi, 0x0C, 0);            // 上限 HP = 0
+        a.Label(1);
+        a.Popad();
+        a.Popfd();
+        a.Db(0xF3, 0x0F, 0x11, 0x46, 0x04);               // movss [esi+4],xmm0
+        return c.Fin();
+    }
+
+    // [F12] 数据钩 A — onekill_a: mov ecx,[esi+0x33C]
+    // EA 0x3FE714 ≡ 1.13 0x427B34 ≡ 1.12 0x43C964（esi=body 的伤害处理路径）。
+    // 无 pushfd/pushad：指令本身只写 ecx（重放同款），标志零扰动。
+    private static byte[] OneKillA(nuint stubVA, nuint siteEnd, nuint block)
+    {
+        var c = new C(stubVA, siteEnd, block);
+        var a = c.A;
+        a.Db(0x8B, 0x8E, 0x3C, 0x03, 0x00, 0x00);         // mov ecx,[esi+0x33C]（重放）
+        a.MovM32AbsReg(R.Esi, (uint)(block + MasterCode.OneKillBody));
+        a.MovM32AbsReg(R.Ecx, (uint)(block + MasterCode.OneKillHealth));
+        return c.Fin();
+    }
+
+    // [F12] 数据钩 B — onekill_b: mov ecx,[ecx+0x33C]
+    // EA 0x2E24E3 ≡ 1.13 0x30B6C3 ≡ 1.12 0x320963（ecx=body 的另一条路径）。
+    private static byte[] OneKillB(nuint stubVA, nuint siteEnd, nuint block)
+    {
+        var c = new C(stubVA, siteEnd, block);
+        var a = c.A;
+        a.MovM32AbsReg(R.Ecx, (uint)(block + MasterCode.OneKillBody)); // 捕获 body（重放前，ecx 尚是 body）
+        a.Db(0x8B, 0x89, 0x3C, 0x03, 0x00, 0x00);         // mov ecx,[ecx+0x33C]（重放）
+        a.MovM32AbsReg(R.Ecx, (uint)(block + MasterCode.OneKillHealth));
         return c.Fin();
     }
 

@@ -1,5 +1,50 @@
 # 逆向笔记（重打包版 1.12/1.13）
 
+## v30（F12 一击必杀实装：三钩子协作，publish-v30，待实测）
+
+### FINAL3 架构（script_00 全解）与双版定位
+
+- **主钩**（EA 0x3651AE，displaced `F3 0F 11 46 04`=movss [esi+4],xmm0）=
+  健康模块 HP adjust 方法的"写当前血"处。**EA ≡ 1.13 0x38CB4E ≡ 1.12
+  0x3A366E**——正是 kill 桥早已验证的 HP adjust（0x38CB30/0x3A3650）+0x1E，
+  交叉自洽。站点后紧跟 `je`（消费函数头 `test eax,eax` 的标志）→ 桩必须
+  pushfd 保护。
+- **数据钩 A**（EA 0x3FE714，displaced `8B 8E 3C 03 00 00`=mov ecx,[esi+33C]，
+  esi=body）：捕获"正在被处理的 body/健康模块"到块槽 0x30/0x34。双版
+  1.13 0x427B34 / 1.12 0x43C964。
+- **数据钩 B**（EA 0x2E24E3，displaced `8B 89 3C 03 00 00`=mov ecx,[ecx+33C]，
+  ecx=body）：同捕获。1.13 0x30B6C3 / 1.12 0x320963。
+- **主桩逻辑**（FINAL3 MustCode+461）：esi==捕获的健康模块 → body 过
+  [390/394/3A0/3AC] 任一非零门（战斗相关）→ 属主槽位≠本地槽位（v28 链）→
+  **当前/上限 HP 双清零 + xorps xmm0**（重放 movss 写入 0）= 敌方单位受到
+  任何伤害即刻死亡。FINAL3 的 [esi-8] 反查 body 以捕获槽替代（同一对象）。
+  FINAL3 尾部多余的 `test eax,eax`（clobber 标志）与 [ID+8] 死存储不抄。
+- 模式：主钩 20 字节（movss xmm0,[esi+4]; [esi+8]=xmm0; addss; push edi;
+  站点; je）、数据钩 A 加 `mov edx,[ebp+0x80]`、数据钩 B 加前导
+  `mov ecx,[esp+0xC]`——三模式在 EA/1.13/1.12 各唯一命中。
+
+### 实装
+
+- StubGen `onekill`(121B,flag 0x38——0x00-0x0F 标志区已满，扩展到数据区末尾
+  <0x40) + `onekill_a`(23B) + `onekill_b`(23B)。数据钩无 pushfd/pushad
+  （指令只写 ecx，与 displaced 同款，标志零扰动）。功能 no.36/热键 **F12**，
+  挂钩点 23→26、功能 35→36。
+- 工程坑：**手写 modrm 算错 reg 字段**（`39 E0`=cmp eax,**esp**，本意
+  cmp eax,esi=0xF0）——Unicorn 矩阵用例当场逮住（杀敌分支永不触发），修正后过。
+
+### 验证
+
+SelfCheck 52/52（26 挂钩双版）+ featuretest 112 + 全套件 + Unicorn execution
+273（onekill 家族 32 例：数据钩双形态捕获、主桩 flag×受害者匹配×属主×门×
+空态矩阵、xmm0 置零路径、重放语义）+ 桥 60/25/217。基线 33 桩（纯新增）。
+publish-v30（62MB x86 + 三 .enable）。
+
+### 待实测
+
+F12 开 → 打敌方任意单位一下立刻死亡（含盟友单位也一击死）；己方单位互相
+无伤；与 F10/F11 同开互不干扰；关 F12 恢复正常伤害。FINAL3 19b 遗留观察项：
+门字段 [390..3AC] 的确切语义未深究（照抄 FINAL3）。
+
 ## v29（F11 玩家无敌实装，publish-v29，待实测）
 
 ### 定位（EA 原版直接反汇编，一击定案）
