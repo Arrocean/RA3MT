@@ -98,7 +98,7 @@ public sealed class MainVM : ObservableObject
     /// <summary>Single source of truth for the displayed version. Scheme
     /// (from v261013): date + per-day sequence — vYYMMDD-N, N counts the
     /// releases of that calendar day.</summary>
-    public const string AppVersion = "v261013-6";
+    public const string AppVersion = "v261013-7";
     public string BannerText => $"{AppVersion} · 现代重制版";
 
     public TrainerEngine Engine { get; } = new();
@@ -203,6 +203,8 @@ public sealed class MainVM : ObservableObject
         }, _ => Attached);
 
         Log($"RA3 Trainer 现代重制版 {AppVersion} 就绪 — 支持 1.12 / 1.13（{TotalFeatures} 项功能，{Engine.Data.Hooks.Count} 个挂钩点）");
+        if (SingleFileCache.FreedBytes > 0)
+            Log($"已清理旧版本运行缓存 {SingleFileCache.FreedBytes / 1048576.0:F1} MB（%TEMP%\\.net，避免版本更替累积占用）");
         Log("提示：点击「开始游戏」会自动启动游戏并附加；游戏已在运行时点击则直接附加。");
     }
 
