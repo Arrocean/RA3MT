@@ -13,7 +13,8 @@
   "money_h2": {
    "rva": {
     "1.12": "0x664e9e",
-    "1.13": "0x6699ce"
+    "1.13": "0x6699ce",
+    "1.12ea": "0x6CFDFE"
    },
    "displaced": "0378048B11",
    "displacedLen": 5,
@@ -24,7 +25,8 @@
   "money_h1": {
    "rva": {
     "1.12": "0x664dad",
-    "1.13": "0x6698dd"
+    "1.13": "0x6698dd",
+    "1.12ea": "0x6CFD0D"
    },
    "displaced": "8B40048B8EB0030000",
    "displacedLen": 9,
@@ -35,7 +37,8 @@
   "proto_cool_b": {
    "rva": {
     "1.12": "0x34d81e",
-    "1.13": "0x3386ce"
+    "1.13": "0x3386ce",
+    "1.12ea": "0x30F42E"
    },
    "displaced": "F30F2C461C",
    "displacedLen": 5,
@@ -46,7 +49,8 @@
   "proto_cool_a": {
    "rva": {
     "1.12": "0x34d77c",
-    "1.13": "0x33862c"
+    "1.13": "0x33862c",
+    "1.12ea": "0x30F38C"
    },
    "displaced": "D9461C89465C",
    "displacedLen": 6,
@@ -57,7 +61,8 @@
   "aiblock": {
    "rva": {
     "1.12": "0x34d920",
-    "1.13": "0x3387d0"
+    "1.13": "0x3387d0",
+    "1.12ea": "0x30F530"
    },
    "displaced": "0350043BD7",
    "displacedLen": 5,
@@ -68,7 +73,8 @@
   "godmode": {
    "rva": {
     "1.12": "0x1705df",
-    "1.13": "0x1588ff"
+    "1.13": "0x1588ff",
+    "1.12ea": "0x12EEDF"
    },
    "displaced": "8B503C8BCE",
    "displacedLen": 5,
@@ -79,7 +85,8 @@
   "onekill": {
    "rva": {
     "1.12": "0x3a366e",
-    "1.13": "0x38cb4e"
+    "1.13": "0x38cb4e",
+    "1.12ea": "0x3651AE"
    },
    "displaced": "F30F114604",
    "displacedLen": 5,
@@ -90,7 +97,8 @@
   "onekill_a": {
    "rva": {
     "1.12": "0x43c964",
-    "1.13": "0x427b34"
+    "1.13": "0x427b34",
+    "1.12ea": "0x3FE714"
    },
    "displaced": "8B8E3C030000",
    "displacedLen": 6,
@@ -101,7 +109,8 @@
   "onekill_b": {
    "rva": {
     "1.12": "0x320963",
-    "1.13": "0x30b6c3"
+    "1.13": "0x30b6c3",
+    "1.12ea": "0x2E24E3"
    },
    "displaced": "8B893C030000",
    "displacedLen": 6,
@@ -112,7 +121,8 @@
   "build_hp_b": {
    "rva": {
     "1.12": "0x47cc16",
-    "1.13": "0x468056"
+    "1.13": "0x468056",
+    "1.12ea": "0x43ECA6"
    },
    "displaced": "8B51503B500C",
    "displacedLen": 6,
@@ -123,7 +133,8 @@
   "zoom_unit_xp": {
    "rva": {
     "1.12": "0x169d85",
-    "1.13": "0x152115"
+    "1.13": "0x152115",
+    "1.12ea": "0x128735"
    },
    "displaced": "8B0CBA85C9",
    "displacedLen": 5,
@@ -134,7 +145,8 @@
   "money_h3": {
    "rva": {
     "1.12": "0x664F0C",
-    "1.13": "0x669a3c"
+    "1.13": "0x669a3c",
+    "1.12ea": "0x6CFE6C"
    },
    "displaced": "8B78348B4E3C",
    "displacedLen": 6,
@@ -144,7 +156,8 @@
   "build_hp_a": {
    "rva": {
     "1.12": "0x47CB89",
-    "1.13": "0x467fc9"
+    "1.13": "0x467fc9",
+    "1.12ea": "0x43EC19"
    },
    "displaced": "8B70508B01",
    "displacedLen": 5,
@@ -154,7 +167,8 @@
   "sidebar_pts": {
    "rva": {
     "1.12": "0x348A06",
-    "1.13": "0x333886"
+    "1.13": "0x333886",
+    "1.12ea": "0x30A5F6"
    },
    "displaced": "8B48503B4E20",
    "displacedLen": 6,
@@ -164,7 +178,8 @@
   "unit_lv": {
    "rva": {
     "1.12": "0x4005BC",
-    "1.13": "0x3eb50c"
+    "1.13": "0x3eb50c",
+    "1.12ea": "0x3C226C"
    },
    "displaced": "F30F118560020000",
    "displacedLen": 8,
@@ -173,7 +188,8 @@
   "power_cool": {
    "rva": {
     "1.12": "0x22B82D",
-    "1.13": "0x216C7D"
+    "1.13": "0x216C7D",
+    "1.12ea": "0x1EC7CD"
    },
    "displaced": "F30F114644",
    "displacedLen": 5,
@@ -183,7 +199,8 @@
   "build_power": {
    "rva": {
     "1.12": "0x329f19",
-    "1.13": "0x314d19"
+    "1.13": "0x314d19",
+    "1.12ea": "0x2EBB69"
    },
    "displaced": "8B9818040000",
    "displacedLen": 6,
@@ -194,7 +211,8 @@
   "ammo": {
    "rva": {
     "1.12": "0x477090",
-    "1.13": "0x4622E0"
+    "1.13": "0x4622E0",
+    "1.12ea": "0x438EF0"
    },
    "displaced": "8B8178120000",
    "displacedLen": 6,
@@ -207,7 +225,8 @@
   "power": {
    "rva": {
     "1.12": "0x33511F",
-    "1.13": "0x31FEDF"
+    "1.13": "0x31FEDF",
+    "1.12ea": "0x2F6CFF"
    },
    "displaced": "D986BC010000",
    "displacedLen": 6,
@@ -216,7 +235,8 @@
   "money_h4": {
    "rva": {
     "1.12": "0x664F55",
-    "1.13": "0x669A85"
+    "1.13": "0x669A85",
+    "1.12ea": "0x6CFEB5"
    },
    "displaced": "F30F10472C",
    "displacedLen": 5,
@@ -225,7 +245,8 @@
   "ammo_2": {
    "rva": {
     "1.12": "0x477070",
-    "1.13": "0x4622C0"
+    "1.13": "0x4622C0",
+    "1.12ea": "0x438ED0"
    },
    "displaced": "8B8178120000",
    "displacedLen": 6,
@@ -235,7 +256,8 @@
   "ammo_3": {
    "rva": {
     "1.12": "0x4770B0",
-    "1.13": "0x462300"
+    "1.13": "0x462300",
+    "1.12ea": "0x438F10"
    },
    "displaced": "8B8178120000",
    "displacedLen": 6,
@@ -245,7 +267,8 @@
   "ammo_4": {
    "rva": {
     "1.12": "0x479DC0",
-    "1.13": "0x4651B0"
+    "1.13": "0x4651B0",
+    "1.12ea": "0x43BD10"
    },
    "displaced": "8B8178120000",
    "displacedLen": 6,
@@ -255,7 +278,8 @@
   "ammo_5": {
    "rva": {
     "1.12": "0x479DE0",
-    "1.13": "0x4651D0"
+    "1.13": "0x4651D0",
+    "1.12ea": "0x43BD30"
    },
    "displaced": "8B8178120000",
    "displacedLen": 6,
@@ -265,7 +289,8 @@
   "weapon_clip": {
    "rva": {
     "1.12": "0x3CF271",
-    "1.13": "0x3B9171"
+    "1.13": "0x3B9171",
+    "1.12ea": "0x390ED1"
    },
    "displaced": "83C8FF01461C",
    "displacedLen": 6,
@@ -276,7 +301,8 @@
   "ammo_6": {
    "rva": {
     "1.12": "0x479E00",
-    "1.13": "0x4651F0"
+    "1.13": "0x4651F0",
+    "1.12ea": "0x43BD50"
    },
    "displaced": "8B8178120000",
    "displacedLen": 6,
@@ -288,16 +314,18 @@
   "selectionList": {
    "rva": {
     "1.12": "0x8E08DC",
-    "1.13": "0x8E4BFC"
+    "1.13": "0x8E4BFC",
+    "1.12ea": "0x8DB7A0"
    },
    "note": "[root]+0x5C=count,+0x50=head linked list; node+8->wrapper+0x138->body; body+0x418=side pointer"
   },
   "playerRoot": {
    "rva": {
     "1.12": "0x8ede2c",
-    "1.13": "0x8f214c"
+    "1.13": "0x8f214c",
+    "1.12ea": "0x8E8C9C"
    },
-   "note": "[root]+0x28 = 本地阵营指针；两版 side getter 与调用点静态确认，1.13 活体 owner 匹配（不是玩家索引）"
+   "note": "[root]+0x28 = 本地阵营指针；两版 side getter 与调用点静态确认，1.13 活体 owner 匹配（不是玩家索引）；1.12ea=EA 原版（capture 契约与 zoom 函数镜像双确认）"
   },
   "mouseGround": {
    "rva": {
@@ -394,7 +422,7 @@
    "icon": "🏗",
    "hooks": [],
    "private": {
-    "site": "1.12=0x128df5;1.13=0x111955"
+    "site": "1.12=0x128df5;1.13=0x111955;1.12ea=0xE7565"
    },
    "desc": "建筑不再限制在基地范围内，满足地形的格子可直接建造。地形、障碍、碰撞检查仍然有效；随时可开关，修改器退出时自动还原",
    "src": "orig FINAL3 随地建造（放置 gate '范围外返回失败码2' 分支 jne→jmp；EA 0x4E7565 ↔ 1.13 0x511955 ↔ 1.12 0x528DF5，三版同字节；2026-10-12 Steam 1.13 实测放置成功）"

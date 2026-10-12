@@ -32,12 +32,18 @@ public static class SpawnApiResolver
          0x350DD0, 0x466000, 0x418A00, 0x2BA1D0, 0x306460, 0x40CFC0],
         [0x4793B0, 0x11A210, 0x421450, 0x421FE0, 0x41DB00, 0x4793B0,
          0x365670, 0x47AC10, 0x42D720, 0x2CFAF0, 0x31B790, 0x421FE0],
+        // EA original 1.12: the canonical wrapper matches with every byte
+        // difference inside a call/operand slot; targets decoded from the EA
+        // image at 0x205240 (FINAL3's CreateUnit).
+        [0x43B300, 0xD8420, 0x3E3170, 0x3E3D00, 0x3DF7E0, 0x43B300,
+         0x327270, 0x43CB60, 0x3EF540, 0x291120, 0x2DD250, 0x3E3D00],
     ];
 
     private static readonly (string Version, uint Entry, uint ManagerRva, int TargetSet)[] Layouts =
     [
         ("1.13", 0x22E3E0, 0x8F1DB8, 0),
         ("1.12", 0x2440F0, 0x8EDA98, 1),
+        ("1.12ea", 0x205240, 0x8E8908, 2),
     ];
 
     public const string Id = "spawn";

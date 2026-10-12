@@ -35,6 +35,12 @@ public static class SpawnSupportApiResolver
             0x20ECF0, 0x8E43BC),
         new("1.12", 0x422510, 0x11F110, 0x4793B0, 0x1175D0, 0x8EBDE8, 0x8DDE84, 0x2440F0,
             0x22C500, 0x8E009C),
+        // EA original 1.12: every canonical helper contract hits uniquely; the
+        // hash-table global is the EA template dictionary FINAL3 documented
+        // (0x8E6C58 + lookup 0x3E4230); mouse object global 0x8DAEFC carries
+        // the same 13-referencer registration cluster as both repacks.
+        new("1.12ea", 0x3E4230, 0x104E10, 0x43B300, 0xD5400, 0x8E6C58, 0x8D8CE4, 0x205240,
+            0x1ED4A0, 0x8DAEFC),
     ];
 
     // The map-start caller directly above the spawn wrapper loads the static hash

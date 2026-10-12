@@ -89,6 +89,18 @@ public static class ImageScan
         throw new InvalidOperationException($"{apiName}: unsupported version '{version}'");
     }
 
+    /// <summary>Three-or-more-version layout table ("1.12" / "1.13" /
+    /// "1.12ea" …). Pairs are checked in order; unknown versions fail with the
+    /// API name for context.</summary>
+    public static TLayout Layout<TLayout>(string version, string apiName,
+        params (string Version, TLayout Layout)[] table)
+    {
+        foreach (var (key, layout) in table)
+            if (version == key)
+                return layout;
+        throw new InvalidOperationException($"{apiName}: unsupported version '{version}'");
+    }
+
     /// <summary>Build the resolution record that goes into logs and tests.</summary>
     public static ApiResolution Resolved(string name, string version, nuint imageBase, uint rva, int verifiedBytes) =>
         new(name, version, imageBase + rva, verifiedBytes);

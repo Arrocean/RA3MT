@@ -11,10 +11,12 @@ public static class RankApiResolver
 
     private readonly record struct Layout(uint Entry, uint Threshold, uint Award, uint Root);
 
-    private static Layout For(string version) => ImageScan.Layout(version, "Rank API", "1.12",
-        new Layout(0x39A840u, 0x138F90u, 0x381EB0u, 0x8DDE7Cu),
-        "1.13",
-        new Layout(0x385600u, 0x1213C0u, 0x36DF90u, 0x8E219Cu));
+    private static Layout For(string version) => ImageScan.Layout(version, "Rank API",
+        ("1.12", new Layout(0x39A840u, 0x138F90u, 0x381EB0u, 0x8DDE7Cu)),
+        ("1.13", new Layout(0x385600u, 0x1213C0u, 0x36DF90u, 0x8E219Cu)),
+        // EA original 1.12: FINAL3's own call target; same 99-byte contract,
+        // helper/global operands extracted from the EA image offline.
+        ("1.12ea", new Layout(0x35C200u, 0xF7680u, 0x343920u, 0x8D8CDCu)));
 
     public static ApiAddress Resolve(string version, nuint imageBase, IImageReader image)
     {

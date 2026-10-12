@@ -280,11 +280,17 @@ public sealed class TrainerEngine : IDisposable
                        ?? throw new InvalidOperationException("无法读取主模块");
             var baseAddr = (nuint)main.BaseAddress;
 
+            // ra3_1.12.game is the module name of both the Steam repack and the
+            // EA original; classify by content before resolving any hook.
+            var version = found.version == "1.12" ? Discriminate112(mem, baseAddr) : found.version;
+            if (version != found.version)
+                Log?.Invoke("识别为 EA 原版 1.12（Ultimate Collection 重打包之外的原版布局）");
+
             Log?.Invoke($"附加 {Path.GetFileName(found.modulePath)} (PID {found.pid}) 基址 0x{baseAddr:X}");
             var image = new Target.DelegateImageReader((rva, len) => mem.Read(baseAddr + rva, len));
             var text = mem.Read(baseAddr + 0x1000, 0x7D0000);
             var sites = HookResolver.ResolveAll(
-                _data, found.version,
+                _data, version,
                 readRva: image.Read,
                 text,
                 gameBase: baseAddr,
@@ -293,8 +299,8 @@ public sealed class TrainerEngine : IDisposable
             if (sites.Count != _data.Hooks.Count)
                 throw new InvalidOperationException($"挂钩点校验不完整（{sites.Count}/{_data.Hooks.Count}），拒绝部分附加；请确认游戏版本且没有其他修改器挂钩");
 
-            var rootRva = _data.Globals.PlayerRoot.RvaFor(found.version);
-            var bridges = ResolveBridgeApis(found.version, baseAddr, image);
+            var rootRva = _data.Globals.PlayerRoot.RvaFor(version);
+            var bridges = ResolveBridgeApis(version, baseAddr, image);
 
             var mc = new MasterCode(mem, baseAddr, baseAddr + rootRva, sites, _data.Hooks, Log,
                 bridges.Rank, bridges.Capture, bridges.KillDamageEntry, bridges.KillDeathMarker,
@@ -308,7 +314,7 @@ public sealed class TrainerEngine : IDisposable
             _actionState.Clear();
             Attached = true;
             RecoveryRequired = false;
-            Version = found.version;
+            Version = version;
             Pid = found.pid;
             ProcessPath = found.modulePath;
             Base = baseAddr;
@@ -337,6 +343,29 @@ public sealed class TrainerEngine : IDisposable
             mem.Dispose();
             throw;
         }
+    }
+
+    /// <summary>Both builds ship a module named ra3_1.12.game, but the money
+    /// chain lives at different addresses with identical instruction bytes.
+    /// Read the EA slot first: a match proves the EA original; anything else
+    /// keeps the repack answer so an unknown build fails loudly in the hook
+    /// verifier instead of guessing here.</summary>
+    private string Discriminate112(Memory.ProcessMemory mem, nuint baseAddr)
+    {
+        if (!_data.Hooks.TryGetValue("money_h1", out var def))
+            return "1.12";
+        var want = def.DisplacedBytes();
+        try
+        {
+            var probe = mem.Read(baseAddr + def.RvaFor("1.12ea"), want.Length);
+            if (probe.AsSpan().SequenceEqual(want))
+                return "1.12ea";
+        }
+        catch
+        {
+            // unreadable probe — let the repack path surface the real error
+        }
+        return "1.12";
     }
 
     public void Detach()

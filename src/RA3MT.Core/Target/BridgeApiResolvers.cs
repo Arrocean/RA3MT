@@ -14,10 +14,13 @@ public static class CaptureApiResolver
 
     private readonly record struct Layout(uint Entry, uint Helper, uint Root, uint RetOffset);
 
-    private static Layout For(string version) => ImageScan.Layout(version, "Capture transition", "1.12",
-        new Layout(0x3CBF50u, 0x166340u, 0x8EDE2Cu, 0x285u),
-        "1.13",
-        new Layout(0x3B5DF0u, 0x2FDBC0u, 0x8F214Cu, 0x285u));
+    private static Layout For(string version) => ImageScan.Layout(version, "Capture transition",
+        ("1.12", new Layout(0x3CBF50u, 0x166340u, 0x8EDE2Cu, 0x285u)),
+        ("1.13", new Layout(0x3B5DF0u, 0x2FDBC0u, 0x8F214Cu, 0x285u)),
+        // EA original 1.12: prologue contract hits uniquely; helper called at
+        // the same three offsets (+0x21/+0x2A/+0x55); root global mirrors the
+        // repack layout (also confirmed by the zoom function's side-getter).
+        ("1.12ea", new Layout(0x38DBB0u, 0x124C60u, 0x8E8C9Cu, 0x285u)));
 
     public static ApiAddress Resolve(string version, nuint imageBase, IImageReader image)
     {
@@ -67,10 +70,12 @@ public static class KillApiResolver
 
     private readonly record struct Layout(uint Entry, uint Marker, uint DamageEntry);
 
-    private static Layout For(string version) => ImageScan.Layout(version, "HP adjust", "1.12",
-        new Layout(0x3A3650u, 0x365C90u, 0x3DCDF0u),
-        "1.13",
-        new Layout(0x38CB30u, 0x3513F0u, 0x3C7190u));
+    private static Layout For(string version) => ImageScan.Layout(version, "HP adjust",
+        ("1.12", new Layout(0x3A3650u, 0x365C90u, 0x3DCDF0u)),
+        ("1.13", new Layout(0x38CB30u, 0x3513F0u, 0x3C7190u)),
+        // EA original 1.12: all three contracts hit uniquely; the damage entry
+        // is the exact address FINAL3's destroy calls (live-verified there).
+        ("1.12ea", new Layout(0x365190u, 0x327890u, 0x39EA50u)));
 
     /// <summary>Resolve the HP adjust function, the death marker and the full
     /// damage entry; never invokes game code.</summary>

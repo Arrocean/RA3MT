@@ -98,7 +98,7 @@ public sealed class MainVM : ObservableObject
     /// <summary>Single source of truth for the displayed version. Scheme
     /// (from v261013): date + per-day sequence — vYYMMDD-N, N counts the
     /// releases of that calendar day.</summary>
-    public const string AppVersion = "v261013-1";
+    public const string AppVersion = "v261013-2";
     public string BannerText => $"{AppVersion} · 现代重制版";
 
     public TrainerEngine Engine { get; } = new();
@@ -136,6 +136,7 @@ public sealed class MainVM : ObservableObject
     private CancellationTokenSource? _waitCts;
 
     public string Version { get => _version; private set => Set(ref _version, value); }
+    public string VersionText => Version == "1.12ea" ? "1.12 EA原版" : Version;
     public int Pid { get => _pid; private set => Set(ref _pid, value); }
     public int Resolved { get => _resolved; private set => Set(ref _resolved, value); }
     public int TotalFeatures { get; private set; }

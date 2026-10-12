@@ -49,9 +49,9 @@ if (args.Length == 2 && args[0] == "stubdump")
 if (args.Length == 1 && args[0] == "bridgetest")
 {
     var rankDataDir = TrainerGameDataDir() ?? throw new InvalidOperationException("Game Data directory not found");
-    foreach (var version in new[] { "1.12", "1.13" })
+    foreach (var (version, gameFile) in VersionImages(rankDataDir))
     {
-        var image = new StaticImage(Path.Combine(rankDataDir, $"ra3_{version}.game"));
+        var image = new StaticImage(gameFile);
         var rank = RA3MT.Core.Target.RankApiResolver.Resolve(version, 0x400000, (rva, len) => image.GetRva(rva, len));
         var capture = RA3MT.Core.Target.CaptureApiResolver.Resolve(version, 0x400000, (rva, len) => image.GetRva(rva, len));
         var (kill, killMarker, killDamage) = RA3MT.Core.Target.KillApiResolver.Resolve(version, 0x400000, (rva, len) => image.GetRva(rva, len));
@@ -69,7 +69,7 @@ if (args.Length == 1 && args[0] == "bridgetest")
             catch (InvalidOperationException) { refused = true; }
             if (!refused) throw new Exception($"Altered {name} contract accepted");
         }
-        Console.WriteLine($"PASS {version} three altered bridge contracts rejected");
+        Console.WriteLine($"PASS {version} four altered bridge contracts rejected");
     }
     RA3MT.SelfCheck.BridgeMailboxChecks.Run();
     return 0;
@@ -86,9 +86,9 @@ if (args.Length == 1 && args[0] == "spawntest")
 {
     var spawnDataDir = TrainerGameDataDir() ?? throw new InvalidOperationException("Game Data directory not found");
     var cases = 0;
-    foreach (var version in new[] { "1.12", "1.13" })
+    foreach (var (version, gameFile) in VersionImages(spawnDataDir))
     {
-        var image = new StaticImage(Path.Combine(spawnDataDir, $"ra3_{version}.game"));
+        var image = new StaticImage(gameFile);
         var address = SpawnApiResolver.Resolve(version, 0x400000, (rva, len) => image.GetRva(rva, len));
         Console.WriteLine($"PASS {version} strict spawn wrapper identity 0x{address:X} (304 bytes)");
         var support = SpawnSupportApiResolver.Resolve(version, 0x400000,
@@ -97,10 +97,10 @@ if (args.Length == 1 && args[0] == "spawntest")
                           $"lookup=0x{support.TemplateHashLookup:X}, owner=0x{support.OwnerResolver:X}");
         foreach (var changedRva in new[]
                  {
-                     version == "1.12" ? 0x422510u : 0x40D5B0u,
-                     version == "1.12" ? 0x4793B0u : 0x4647A0u,
-                     version == "1.12" ? 0x1175D0u : 0xFF4A0u,
-                     version == "1.12" ? 0x2442BAu : 0x22E5AAu, // caller-site anchor
+                     version switch { "1.12" => 0x422510u, "1.12ea" => 0x3E4230u, _ => 0x40D5B0u },
+                     version switch { "1.12" => 0x4793B0u, "1.12ea" => 0x43B300u, _ => 0x4647A0u },
+                     version switch { "1.12" => 0x1175D0u, "1.12ea" => 0xD5400u, _ => 0xFF4A0u },
+                     version switch { "1.12" => 0x2442BAu, "1.12ea" => 0x20540Au, _ => 0x22E5AAu }, // caller-site anchor
                  })
         {
             var refused = false;
@@ -117,7 +117,7 @@ if (args.Length == 1 && args[0] == "spawntest")
             if (!refused) throw new Exception($"Altered {version} spawn support API accepted at 0x{changedRva:X}");
             cases++;
         }
-        var entry = version == "1.12" ? 0x2440F0u : 0x22E3E0u;
+        var entry = version switch { "1.12" => 0x2440F0u, "1.12ea" => 0x205240u, _ => 0x22E3E0u };
         var changed = new HashSet<int> { 0, 0x19, 0x98, 0xA7, 0xDA, 0x12F };
         foreach (var offset in new[] { 0x5B, 0x71, 0x93, 0x9F, 0xAC, 0xBF, 0xC8, 0xD3, 0xDF, 0x107, 0x119, 0x121 })
             changed.Add(offset + 1); // each rel32 edge
@@ -157,9 +157,9 @@ if (args.Length == 1 && args[0] == "rankmailboxtest")
 if (args.Length == 1 && args[0] == "ranktest")
 {
     var rankDataDir = TrainerGameDataDir() ?? throw new InvalidOperationException("Game Data directory not found");
-    foreach (var version in new[] { "1.12", "1.13" })
+    foreach (var (version, gameFile) in VersionImages(rankDataDir))
     {
-        var image = new StaticImage(Path.Combine(rankDataDir, $"ra3_{version}.game"));
+        var image = new StaticImage(gameFile);
         var address = RA3MT.Core.Target.RankApiResolver.Resolve(version, 0x400000,
             (rva, len) => image.GetRva(rva, len));
         Console.WriteLine($"PASS {version} rank API 0x{address:X}");
@@ -394,14 +394,12 @@ if (dataDir == null)
 }
 Console.WriteLine($"游戏目录: {dataDir}\n");
 
-var versions = new[] { "1.12", "1.13" };
 var allOk = true;
 var grandTotal = 0;
 var grandOk = 0;
 
-foreach (var ver in versions)
+foreach (var (ver, gamePath) in VersionImages(dataDir))
 {
-    var gamePath = Path.Combine(dataDir, $"ra3_{ver}.game");
     if (!File.Exists(gamePath))
     {
         Console.WriteLine($"== {ver} == 文件不存在: {gamePath}");
@@ -499,6 +497,40 @@ static string? TrainerGameDataDir()
         }
     }
     return null;
+}
+
+static string? TrainerEaDataDir()
+{
+    var candidates = new List<string>();
+    var env = Environment.GetEnvironmentVariable("RA3MT_EA_DIR");
+    if (!string.IsNullOrEmpty(env)) candidates.Add(env);
+    candidates.Add(@"D:\BaiduNetdiskDownload\Red Alert 3\Data");
+    foreach (var c in candidates)
+        if (File.Exists(Path.Combine(c, "ra3_1.12.game"))) return c;
+    return null;
+}
+
+/// <summary>Every game image the checks verify: repack 1.12/1.13 plus the EA
+/// original 1.12 when its Data directory is present (same module filename,
+/// different build).</summary>
+static List<(string ver, string path)> VersionImages(string repackDir)
+{
+    var list = new List<(string, string)>
+    {
+        ("1.12", Path.Combine(repackDir, "ra3_1.12.game")),
+        ("1.13", Path.Combine(repackDir, "ra3_1.13.game")),
+    };
+    var ea = TrainerEaDataDir();
+    if (ea != null)
+    {
+        list.Add(("1.12ea", Path.Combine(ea, "ra3_1.12.game")));
+        Console.WriteLine($"EA 原版目录: {ea}");
+    }
+    else
+    {
+        Console.WriteLine("EA 原版目录未找到（设置 RA3MT_EA_DIR 可指定）——跳过 1.12ea 站点校验");
+    }
+    return list;
 }
 
 static string ToHex(byte[] b) => string.Join(" ", b.Select(x => x.ToString("X2")));
