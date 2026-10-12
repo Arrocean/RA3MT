@@ -319,7 +319,7 @@
     "money_h2"
    ],
    "flag": "money",
-   "desc": "每次资金结算额外 +100000，且电力上限拉满",
+   "desc": "开启后资金快速增长（每次结算 +10 万），电力上限同时拉满",
    "src": "orig[01]"
   },
   {
@@ -334,7 +334,7 @@
     "money_h1"
    ],
    "flag": "power",
-   "desc": "资金恒为 10 万、电力消耗归零（不缺电）",
+   "desc": "电力消耗归零、永不缺电；资金同步锁定为 10 万",
    "src": "orig[02]"
   },
   {
@@ -349,7 +349,7 @@
     "money_h3"
    ],
    "flag": "scpoints",
-   "desc": "秘密协议点数恒为 15（FINAL3同款）",
+   "desc": "秘密协议点数保持 15 点，可以把协议树点满",
    "src": "orig[03]"
   },
   {
@@ -364,14 +364,14 @@
     "money_h4"
    ],
    "flag": "allproto",
-   "desc": "解锁全部秘密协议技能",
+   "desc": "立即解锁全部秘密协议技能，无需逐步升级",
    "src": "orig[04]"
   },
   {
    "id": "fastbuild",
    "no": "05",
    "name": "快速建造",
-   "group": "建造",
+   "group": "建造与生产",
    "kind": "toggle",
    "hotkey": "Ctrl+F5",
    "icon": "🏗",
@@ -381,30 +381,76 @@
     "power"
    ],
    "flag": "fastbuild",
-   "desc": "建筑与单位生产都大幅加速（原版[05]即同时覆盖两者）且建造期间不断电",
+   "desc": "建筑和单位的生产速度大幅提升，建造期间也不会断电",
    "src": "orig[05]"
   },
   {
-   "id": "instantready",
-   "no": "06",
-   "name": "协议/超武立即就绪",
-   "group": "建造",
+   "id": "build_anywhere",
+   "no": "30",
+   "name": "随地建造",
+   "group": "建造与生产",
    "kind": "toggle",
-   "hotkey": "Ctrl+F6",
-   "icon": "❄",
+   "hotkey": "Alt+B",
+   "icon": "🏗",
+   "hooks": [],
+   "private": {
+    "site": "1.12=0x128df5;1.13=0x111955"
+   },
+   "desc": "建筑不再限制在基地范围内，满足地形的格子可直接建造。地形、障碍、碰撞检查仍然有效；随时可开关，修改器退出时自动还原",
+   "src": "orig FINAL3 随地建造（放置 gate '范围外返回失败码2' 分支 jne→jmp；EA 0x4E7565 ↔ 1.13 0x511955 ↔ 1.12 0x528DF5，三版同字节；2026-10-12 Steam 1.13 实测放置成功）"
+  },
+  {
+   "id": "aiblock",
+   "no": "34",
+   "name": "禁止电脑建造",
+   "group": "建造与生产",
+   "kind": "toggle",
+   "hotkey": "F10",
+   "icon": "⛔",
    "hooks": [
-    "build_power",
-    "build_hp_a"
+    "aiblock"
    ],
-   "flag": "instantready",
-   "desc": "仅本地阵营：协议技能与超级武器立即就绪（修正属主判定与冷却链表查询，待实战复测）",
-   "src": "orig[06]"
+   "flag": "aiblock",
+   "desc": "电脑（包括盟友）的单位与建筑生产停滞，永远造不出来；己方不受影响，关闭后电脑恢复",
+   "src": "FINAL3 F10"
+  },
+  {
+   "id": "godmode",
+   "no": "35",
+   "name": "玩家无敌",
+   "group": "战斗",
+   "kind": "toggle",
+   "hotkey": "F11",
+   "icon": "🛡",
+   "hooks": [
+    "godmode"
+   ],
+   "flag": "godmode",
+   "desc": "己方单位与建筑受到伤害后立刻回满；关闭后恢复正常掉血",
+   "src": "FINAL3 F11"
+  },
+  {
+   "id": "onekill",
+   "no": "36",
+   "name": "一击必杀",
+   "group": "战斗",
+   "kind": "toggle",
+   "hotkey": "F12",
+   "icon": "💀",
+   "hooks": [
+    "onekill",
+    "onekill_a",
+    "onekill_b"
+   ],
+   "flag": "onekill",
+   "desc": "敌方单位受到任意伤害即被秒杀（对盟友同样生效）；己方不受影响",
+   "src": "FINAL3 F12"
   },
   {
    "id": "freezeenemy",
    "no": "07",
    "name": "冻结敌方技能",
-   "group": "建造",
+   "group": "战斗",
    "kind": "toggle",
    "hotkey": "Ctrl+F7",
    "icon": "🚫",
@@ -415,76 +461,30 @@
     "sidebar_pts"
    ],
    "flag": "freezeenemy",
-   "desc": "延后非本地阵营的协议/超武冷却（含盟友；不冻结普通生产，待实战验证）",
+   "desc": "敌方（含盟友）的协议技能与超级武器冷却被冻结，始终无法就绪；不影响普通生产",
    "src": "orig[07]"
   },
   {
-   "id": "aiblock",
-   "no": "34",
-   "name": "禁止电脑建造",
-   "group": "建造",
+   "id": "instantready",
+   "no": "06",
+   "name": "协议/超武立即就绪",
+   "group": "战斗",
    "kind": "toggle",
-   "hotkey": "F10",
-   "icon": "⛔",
+   "hotkey": "Ctrl+F6",
+   "icon": "❄",
    "hooks": [
-    "aiblock"
+    "build_power",
+    "build_hp_a"
    ],
-   "flag": "aiblock",
-   "desc": "电脑阵营的生产进度被钉在每拍 1：任何单位/建筑都造不完（FINAL3 F10 同款语义；含盟友，不影响己方）",
-   "src": "FINAL3 F10"
-  },
-  {
-   "id": "godmode",
-   "no": "35",
-   "name": "玩家无敌",
-   "group": "建造",
-   "kind": "toggle",
-   "hotkey": "F11",
-   "icon": "🛡",
-   "hooks": [
-    "godmode"
-   ],
-   "flag": "godmode",
-   "desc": "己方单位/建筑的生命在血条刷新时被重置为 100 万（FINAL3 F11 同款：掉血一帧内回满）；关闭后恢复正常掉血",
-   "src": "FINAL3 F11"
-  },
-  {
-   "id": "onekill",
-   "no": "36",
-   "name": "一击必杀",
-   "group": "建造",
-   "kind": "toggle",
-   "hotkey": "F12",
-   "icon": "💀",
-   "hooks": [
-    "onekill",
-    "onekill_a",
-    "onekill_b"
-   ],
-   "flag": "onekill",
-   "desc": "任何敌方单位受到伤害即刻死亡（当前与上限 HP 双清零；FINAL3 F12 三钩子同款，含盟友，不影响己方）",
-   "src": "FINAL3 F12"
-  },
-  {
-   "id": "zoomlimit",
-   "no": "08",
-   "name": "无限缩放",
-   "group": "建造",
-   "kind": "toggle",
-   "hotkey": "Ctrl+F8",
-   "icon": "🔍",
-   "hooks": [
-    "power_cool"
-   ],
-   "flag": "zoom",
-   "desc": "绕过镜头范围钳制（修正 ZF 分支控制，待实战复测）",
-   "src": "orig[06/08]"
+   "flag": "instantready",
+   "desc": "己方的协议技能与超级武器立即就绪，无需等待冷却",
+   "src": "orig[06]"
   },
   {
    "id": "revealmap",
    "no": "09",
    "name": "地图全开",
-   "group": "视野",
+   "group": "视野与镜头",
    "kind": "toggle",
    "hotkey": "Ctrl+F9",
    "icon": "🗺",
@@ -492,8 +492,23 @@
     "unit_lv"
    ],
    "flag": "revealmap",
-   "desc": "战争迷雾消散；进图后开启需建造建筑/重部署MCV刷新（原版同款行为）",
+   "desc": "战争迷雾消散，全地图可见。进图后才开启的话，需要建造一个建筑或重新部署基地车来刷新显示",
    "src": "orig[09]"
+  },
+  {
+   "id": "zoomlimit",
+   "no": "08",
+   "name": "无限缩放",
+   "group": "视野与镜头",
+   "kind": "toggle",
+   "hotkey": "Ctrl+F8",
+   "icon": "🔍",
+   "hooks": [
+    "power_cool"
+   ],
+   "flag": "zoom",
+   "desc": "镜头可以拉得更高更远、也能贴近地面，不受原版缩放限制",
+   "src": "orig[06/08]"
   },
   {
    "id": "sel_lv",
@@ -504,7 +519,7 @@
    "hotkey": "Alt+P",
    "icon": "🌟",
    "action": "lv",
-   "desc": "选中单位直接晋升三星（FINAL3 P 键同款 rank(3,1,0)，走晋级桥，支持多目标；需 rank-bridge.enable）",
+   "desc": "选中的单位直接晋升三星，支持框选多个一起升",
    "src": "orig[10] FINAL3 P"
   },
   {
@@ -519,7 +534,7 @@
     "weapon_clip"
    ],
    "flag": "ammo",
-   "desc": "本地选中单位开火后回填真实弹夹容量；不改变连发计数，待实战复测",
+   "desc": "选中的单位开火后弹药自动补满（按真实弹夹容量回填，不影响连发节奏）",
    "src": "orig[18]"
   },
   {
@@ -531,7 +546,7 @@
    "hotkey": "Alt+-",
    "icon": "🏃",
    "action": "speed1",
-   "desc": "当前移动模式基础速度设为 500；保留游戏减速与速度上限",
+   "desc": "选中单位的移动速度大幅提升（基础速度设为 500）",
    "src": "orig[11]"
   },
   {
@@ -543,7 +558,7 @@
    "hotkey": "Alt+=",
    "icon": "🏃‍♀️",
    "action": "speed2",
-   "desc": "当前移动模式基础速度设为 10；FINAL3低速意图，保留原速度以便恢复",
+   "desc": "选中单位移动速度降为 10，可当慢动作用；再用高速即可改回",
    "src": "orig[12] FINAL3 slow"
   },
   {
@@ -555,7 +570,7 @@
    "hotkey": "Alt+PgUp",
    "icon": "🧊",
    "action": "freeze1",
-   "desc": "当前模式基础速度置 0；编队速度覆盖可能影响效果，待实战复测",
+   "desc": "选中单位原地定住无法移动；已编队的单位效果可能被编队速度覆盖",
    "src": "orig[13]"
   },
   {
@@ -567,7 +582,7 @@
    "hotkey": "Alt+PgDn",
    "icon": "🧊",
    "action": "speedrestore",
-   "desc": "仅恢复本会话记录、且Locomotor实例未重建的原始速度",
+   "desc": "恢复选中单位被修改过的移动速度（高速/低速/冻结都可撤销）",
    "src": "orig[14] FINAL3 restore"
   },
   {
@@ -579,7 +594,7 @@
    "hotkey": "Alt+[",
    "icon": "❤️",
    "action": "hpmax",
-   "desc": "[+33C]→[+4]=[+C]=999999",
+   "desc": "选中目标的生命值与上限都拉满到 999999",
    "src": "orig[15]"
   },
   {
@@ -591,7 +606,7 @@
    "hotkey": "Alt+]",
    "icon": "💀",
    "action": "hpmin",
-   "desc": "[+4]=1（濒死）",
+   "desc": "选中目标生命降到 1 点（濒死但不会死亡）",
    "src": "orig[16]"
   },
   {
@@ -603,7 +618,7 @@
    "hotkey": "Alt+\\",
    "icon": "🩹",
    "action": "hpnormal",
-   "desc": "恢复基准生命上限并治疗，撤销生命上限修改（FINAL3同款）",
+   "desc": "撤销生命上限修改，恢复该单位的正常生命上限并治疗",
    "src": "orig[17]"
   },
   {
@@ -615,7 +630,7 @@
    "hotkey": "Alt+H",
    "icon": "🏥",
    "action": "heal",
-   "desc": "治疗至当前有效上限，保留生命上限修改",
+   "desc": "把选中的目标治疗到满血",
    "src": "modern"
   },
   {
@@ -627,7 +642,7 @@
    "hotkey": "Alt+O",
    "icon": "🏹",
    "action": "capture",
-   "desc": "经游戏线程调用完整归属切换函数俘虏目标（需 bridges.enable；仅非己方目标）",
+   "desc": "把选中的敌方单位或建筑变成己方（对己方目标无效）",
    "src": "orig[19] FINAL3 ChangeID（完整流程版）"
   },
   {
@@ -639,73 +654,8 @@
    "hotkey": "Alt+Del",
    "icon": "☠️",
    "action": "destroy",
-   "desc": "经游戏线程用 HP 调整函数施加致死伤害（完整死亡流程+通知；需 bridges.enable）",
+   "desc": "立刻摧毁选中的目标，带完整死亡动画",
    "src": "orig[20] FINAL3 KillSelectUnit（adjust 重推导）"
-  },
-  {
-   "id": "threat_max",
-   "no": "21",
-   "name": "威胁等级最大",
-   "group": "其他",
-   "kind": "toggle",
-   "hotkey": "Alt+T",
-   "icon": "🔺",
-   "hooks": [
-    "ammo",
-    "ammo_2",
-    "ammo_3",
-    "ammo_4",
-    "ammo_5",
-    "ammo_6"
-   ],
-   "flag": "threatmax",
-   "desc": "所有单位威胁分量持续写 50000（FINAL3 Danger Max 同款；与归零同开时最大优先）",
-   "src": "orig[21] FINAL3 Danger Max"
-  },
-  {
-   "id": "threat_zero",
-   "no": "22",
-   "name": "威胁等级归零",
-   "group": "其他",
-   "kind": "toggle",
-   "hotkey": "Alt+Shift+T",
-   "icon": "🔻",
-   "hooks": [
-    "ammo",
-    "ammo_2",
-    "ammo_3",
-    "ammo_4",
-    "ammo_5",
-    "ammo_6"
-   ],
-   "flag": "threatzero",
-   "desc": "所有单位威胁分量持续写 0（FINAL3 Danger Min 同款）",
-   "src": "orig[22] FINAL3 Danger Min"
-  },
-  {
-   "id": "threat_normal",
-   "no": "23",
-   "name": "威胁等级恢复",
-   "group": "其他",
-   "kind": "action",
-   "hotkey": "Alt+N",
-   "icon": "↩️",
-   "action": "threatnormal",
-   "desc": "关闭最大/归零覆盖，威胁等级交还游戏自然重算（FINAL3 同款：不保存旧值）",
-   "src": "orig[23] FINAL3 Danger Normal"
-  },
-  {
-   "id": "oremine",
-   "no": "24",
-   "name": "矿脉恢复满量",
-   "group": "其他",
-   "kind": "action",
-   "hotkey": "Alt+M",
-   "icon": "⛏",
-   "hooks": [],
-   "action": "oreminerestore",
-   "desc": "恢复选中的矿脉至 100000 并清零已采量（活体验证链 body+0x398→状态→容器+8）",
-   "src": "orig[24] FINAL3 RestoreOreMine（选中版）"
   },
   {
    "id": "sel_copy",
@@ -717,7 +667,7 @@
    "icon": "📋",
    "hooks": [],
    "action": "selcopy",
-   "desc": "经游戏线程生成 wrapper 在鼠标位置为玩家复制每个选中单位/建筑（需 spawn-bridge.enable；模板取自选中链）",
+   "desc": "在鼠标位置复制选中的每个单位或建筑",
    "src": "orig[21] FINAL3 CopySelectUnit（map-start spawn wrapper 重配对）"
   },
   {
@@ -735,7 +685,7 @@
    },
    "hooks": [],
    "action": "spawnhash",
-   "desc": "在鼠标位置生成一辆盟军基地车（需 spawn-bridge.enable；哈希 0x28DA574E 取自游戏字符串哈希表）",
+   "desc": "在鼠标位置生成一辆盟军基地车",
    "src": "orig FINAL3 Base（hash=AlliedMCV）"
   },
   {
@@ -753,7 +703,7 @@
    },
    "hooks": [],
    "action": "spawnhash",
-   "desc": "在鼠标位置生成一辆苏军基地车（需 spawn-bridge.enable；哈希 0xAF4C0DA5）",
+   "desc": "在鼠标位置生成一辆苏军基地车",
    "src": "orig FINAL3 Base（hash=SovietMCV）"
   },
   {
@@ -771,7 +721,7 @@
    },
    "hooks": [],
    "action": "spawnhash",
-   "desc": "在鼠标位置生成一辆升阳帝国基地车（需 spawn-bridge.enable；哈希 0x1C2EF767）",
+   "desc": "在鼠标位置生成一辆升阳帝国基地车",
    "src": "orig FINAL3 Base（hash=JapanMCV）"
   },
   {
@@ -791,23 +741,73 @@
    },
    "hooks": [],
    "action": "spawnhash",
-   "desc": "从内置单位表选择（📋），或输入单位名/8 位十六进制代码（如 6586A5A0），围绕鼠标一次生成 8 个并经晋级桥全部升星（需 spawn-bridge + rank-bridge）",
+   "desc": "点 📋 从内置单位表选择（支持中文搜索），或手动输入代码；在鼠标周围一次生成 8 个并全部升为三星",
    "src": "orig[22] FINAL3 WeNeedBack（批量 8+升星对齐 MustCode2+B00 循环；位置改为圆形分布防叠放）"
   },
   {
-   "id": "build_anywhere",
-   "no": "30",
-   "name": "随地建造",
-   "group": "战场增援",
+   "id": "threat_max",
+   "no": "21",
+   "name": "威胁等级最大",
+   "group": "其他",
    "kind": "toggle",
-   "hotkey": "Alt+B",
-   "icon": "🏗",
+   "hotkey": "Alt+T",
+   "icon": "🔺",
+   "hooks": [
+    "ammo",
+    "ammo_2",
+    "ammo_3",
+    "ammo_4",
+    "ammo_5",
+    "ammo_6"
+   ],
+   "flag": "threatmax",
+   "desc": "所有单位的威胁值持续锁定为最大值",
+   "src": "orig[21] FINAL3 Danger Max"
+  },
+  {
+   "id": "threat_zero",
+   "no": "22",
+   "name": "威胁等级归零",
+   "group": "其他",
+   "kind": "toggle",
+   "hotkey": "Alt+Shift+T",
+   "icon": "🔻",
+   "hooks": [
+    "ammo",
+    "ammo_2",
+    "ammo_3",
+    "ammo_4",
+    "ammo_5",
+    "ammo_6"
+   ],
+   "flag": "threatzero",
+   "desc": "所有单位的威胁值持续锁定为零",
+   "src": "orig[22] FINAL3 Danger Min"
+  },
+  {
+   "id": "threat_normal",
+   "no": "23",
+   "name": "威胁等级恢复",
+   "group": "其他",
+   "kind": "action",
+   "hotkey": "Alt+N",
+   "icon": "↩️",
+   "action": "threatnormal",
+   "desc": "威胁值恢复由游戏自然计算（先关闭最大/归零两个开关）",
+   "src": "orig[23] FINAL3 Danger Normal"
+  },
+  {
+   "id": "oremine",
+   "no": "24",
+   "name": "矿脉恢复满量",
+   "group": "其他",
+   "kind": "action",
+   "hotkey": "Alt+M",
+   "icon": "⛏",
    "hooks": [],
-   "private": {
-    "site": "1.12=0x128df5;1.13=0x111955"
-   },
-   "desc": "解除建筑放置的范围限制（FINAL3 同款 2 字节分支 patch）：有效范围外的灰色格子也可直接点击建造；地形/占用/碰撞检查保留。对局中随时开关，切换对局不需重开，修改器脱离时自动还原",
-   "src": "orig FINAL3 随地建造（放置 gate '范围外返回失败码2' 分支 jne→jmp；EA 0x4E7565 ↔ 1.13 0x511955 ↔ 1.12 0x528DF5，三版同字节；2026-10-12 Steam 1.13 实测放置成功）"
+   "action": "oreminerestore",
+   "desc": "把选中的矿脉恢复到满储量并清零已采量（矿节点可直接点击选中）",
+   "src": "orig[24] FINAL3 RestoreOreMine（选中版）"
   }
  ],
  "references": {

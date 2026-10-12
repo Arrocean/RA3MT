@@ -32,7 +32,7 @@
       </Style>
 
       <Style x:Key="Chip" TargetType="Border">
-        <Setter Property="CornerRadius" Value="99" />
+        <Setter Property="CornerRadius" Value="10" />
         <Setter Property="Padding" Value="9,3" />
         <Setter Property="Background" Value="#1a2233" />
         <Setter Property="BorderBrush" Value="{StaticResource Line}" />
@@ -132,7 +132,9 @@
           <Setter.Value>
             <ControlTemplate TargetType="ToggleButton">
               <Grid>
-                <Border x:Name="tr" Background="#242f45" BorderBrush="#303c58" BorderThickness="1" CornerRadius="99" />
+                <!-- capsule track: radius must be exactly height/2 — WPF does
+                     not clamp CornerRadius, so 99 renders a distorted ellipse -->
+                <Border x:Name="tr" Background="#242f45" BorderBrush="#303c58" BorderThickness="1" CornerRadius="11" />
                 <Ellipse x:Name="dot" Width="16" Height="16" Fill="#77839c"
                          HorizontalAlignment="Left" Margin="3,0,0,0" />
               </Grid>

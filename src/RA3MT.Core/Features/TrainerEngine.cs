@@ -261,12 +261,17 @@ public sealed class TrainerEngine : IDisposable
             mouseObjGlobal, mouseTransform);
     }
 
+    /// <summary>Quiet process probe for the start-and-auto-attach flow: true
+    /// when a supported game process exists. Never throws or logs, so the UI
+    /// can poll it while waiting for the player to launch the game.</summary>
+    public bool ProbeGameRunning() =>
+        !Attached && ProcessMemory.FindGame(_data.Game.ModuleNames) is not null;
+
     public void Attach()
     {
         if (Attached) throw new InvalidOperationException("已附加");
         var found = ProcessMemory.FindGame(_data.Game.ModuleNames)
                     ?? throw new InvalidOperationException("未找到运行中的红警3进程（ra3_1.12/1.13.game）");
-
         var mem = new ProcessMemory(found.pid);
         MasterCode? pendingMaster = null;
         try
