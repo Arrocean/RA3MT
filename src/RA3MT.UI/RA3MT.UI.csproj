@@ -17,10 +17,12 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
-  <!-- No .pdb sidecars in single-file publish output (debug symbols are
-       meaningless to players and bloat the folder). -->
+  <!-- Single-file publish uses the official distribution name; dev/debug
+       builds keep the plain RA3MT.UI name. Keep this version in sync with
+       MainVM.AppVersion (both bump every release). -->
   <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
     <DebugType>none</DebugType>
+    <AssemblyName>Red Alert 3 Modern Trainer v261013-6</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
