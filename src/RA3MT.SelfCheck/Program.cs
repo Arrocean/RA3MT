@@ -35,7 +35,7 @@ if (args.Length == 2 && args[0] == "stubdump")
     File.WriteAllBytes(Path.Combine(args[1], "capture_dispatcher.bin"),
         CaptureDispatcher.Emit(0x40001280, 0x40000000, 0x7B5DF0, 0x400000));
     File.WriteAllBytes(Path.Combine(args[1], "kill_dispatcher.bin"),
-        KillDispatcher.Emit(0x40001400, 0x40000000, 0x78CB30, 0x7513F0, 0x400000));
+        KillDispatcher.Emit(0x40001400, 0x40000000, 0x7C7190, 0x400000));
     File.WriteAllBytes(Path.Combine(args[1], "spawn_dispatcher.bin"),
         SpawnDispatcher.Emit(0x40001580, 0x40000000, 0x62E3E0, 0x80D5B0, 0xCF0108, 0x400000));
     File.WriteAllBytes(Path.Combine(args[1], "money_h2_spawn_bridge.bin"),
@@ -53,13 +53,14 @@ if (args.Length == 1 && args[0] == "bridgetest")
         var image = new StaticImage(Path.Combine(rankDataDir, $"ra3_{version}.game"));
         var rank = RA3MT.Core.Target.RankApiResolver.Resolve(version, 0x400000, (rva, len) => image.GetRva(rva, len));
         var capture = RA3MT.Core.Target.CaptureApiResolver.Resolve(version, 0x400000, (rva, len) => image.GetRva(rva, len));
-        var (kill, killMarker) = RA3MT.Core.Target.KillApiResolver.Resolve(version, 0x400000, (rva, len) => image.GetRva(rva, len));
-        Console.WriteLine($"PASS {version} rank 0x{rank:X} capture 0x{capture:X} kill 0x{kill:X} marker 0x{killMarker:X}");
+        var (kill, killMarker, killDamage) = RA3MT.Core.Target.KillApiResolver.Resolve(version, 0x400000, (rva, len) => image.GetRva(rva, len));
+        Console.WriteLine($"PASS {version} rank 0x{rank:X} capture 0x{capture:X} kill-damage 0x{killDamage:X} marker 0x{killMarker:X}");
         foreach (var (name, resolve, altered) in new (string, Func<object>, int)[]
                  {
                      ("rank", () => RA3MT.Core.Target.RankApiResolver.Resolve(version, 0x400000, (r, l) => Alter(image, r, l, 0)), 0),
                      ("capture", () => RA3MT.Core.Target.CaptureApiResolver.Resolve(version, 0x400000, (r, l) => Alter(image, r, l, 1)), 1),
-                     ("kill", () => RA3MT.Core.Target.KillApiResolver.Resolve(version, 0x400000, (r, l) => Alter(image, r, l, 0xA)), 0xA),
+                     ("kill-damage", () => RA3MT.Core.Target.KillApiResolver.Resolve(version, 0x400000, (r, l) => Alter(image, r, l, 0xA)), 0xA),
+                     ("kill-adjust", () => RA3MT.Core.Target.KillApiResolver.Resolve(version, 0x400000, (r, l) => Alter(image, r, l, 0x2)), 0x2),
                  })
         {
             var refused = false;

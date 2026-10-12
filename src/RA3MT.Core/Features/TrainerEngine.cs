@@ -186,7 +186,7 @@ public sealed class TrainerEngine : IDisposable
     /// requested or its contract did not verify. A zero address means "bridge off",
     /// which is exactly how <see cref="MasterCode"/> decides what to install.</summary>
     private readonly record struct BridgeApis(
-        nuint Rank, nuint Capture, nuint Kill, nuint KillDeathMarker,
+        nuint Rank, nuint Capture, nuint KillDamageEntry, nuint KillDeathMarker,
         nuint SpawnWrapper, nuint HashLookup, nuint HashTableGlobal);
 
     /// <summary>Resolve every optional bridge capability. Each resolver is
@@ -216,7 +216,7 @@ public sealed class TrainerEngine : IDisposable
                 () => Target.KillApiResolver.Resolve(version, imageBase, image),
                 resolved =>
                 {
-                    kill = resolved.adjust;
+                    kill = resolved.damageEntry;
                     marker = resolved.deathMarker;
                 },
                 reason => Log?.Invoke($"摧毁桥：{reason}，功能不可用"));
@@ -245,7 +245,7 @@ public sealed class TrainerEngine : IDisposable
         if (capture != 0)
             Log?.Invoke($"俘虏桥：归属切换函数校验通过 0x{capture:X}");
         if (kill != 0)
-            Log?.Invoke($"摧毁桥：HP 调整 0x{kill:X}，死亡标记 0x{marker:X}");
+            Log?.Invoke($"摧毁桥：完整伤害入口 0x{kill:X}，死亡标记 0x{marker:X}");
         if (spawnWrapper != 0)
             Log?.Invoke($"生成桥：生成 wrapper 校验通过 0x{spawnWrapper:X}，" +
                         $"哈希查找 0x{hashLookup:X}，模板表全局 0x{hashTableGlobal:X}");
@@ -284,7 +284,7 @@ public sealed class TrainerEngine : IDisposable
             var bridges = ResolveBridgeApis(found.version, baseAddr, image);
 
             var mc = new MasterCode(mem, baseAddr, baseAddr + rootRva, sites, _data.Hooks, Log,
-                bridges.Rank, bridges.Capture, bridges.Kill, bridges.KillDeathMarker,
+                bridges.Rank, bridges.Capture, bridges.KillDamageEntry, bridges.KillDeathMarker,
                 bridges.SpawnWrapper, bridges.HashLookup, bridges.HashTableGlobal);
             pendingMaster = mc;
             mc.Install();

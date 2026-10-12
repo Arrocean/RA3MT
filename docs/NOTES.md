@@ -1,5 +1,25 @@
 # 逆向笔记（重打包版 1.12/1.13）
 
+## v20（摧毁 v3 实装：kill 桥改走完整伤害入口，publish-v20，待实测）
+
+- **KillDispatcher 全重写**：从"底层 HP adjust(0x38CB30) + 手工 Die 镜像（vt[0x270] kick + 死亡标记）"改为**调完整伤害入口**（FINAL3 同款 thiscall Body + push 6/0x13/0，ret 0xC 被调方清栈）——死亡决策/动画分发/模型回收全部走游戏自己的管线。旧 Die 镜像序列与邮箱静态 DamageInfo（+0x10/+0x18/+0x1C）全部删除（类型常量直接进桩指令），新桩 236B（旧 283B，仍 <0x180 槽）。
+- **KillApiResolver 三值契约**：(adjust, deathMarker, **damageEntry**)。damageEntry=1.13 RVA 0x3C7190 / 1.12 RVA 0x3DCDF0（EA 0x39EA50 对称，两段字节契约跳过版本化标签/call + ret 0xC@+0xB7 验证）。adjust/marker 契约保留（身份交叉验证+marker 仍参与 KillBridgeEnabled 判定）。bridgetest 增加 kill-adjust 篡改拒绝用例（共 4 契约）。
+- **调用链更新**：BridgeApis.Kill→KillDamageEntry；KillBridgeConsumer(damageEntryVa, rootVa)（marker 不再进 consumer）；TrainerEngine 日志改"完整伤害入口"。
+- **测试**：test_bridge_dispatchers.py run_kill 重写（mock 断言 ecx=Body、栈参 6/0x13/0、(sp+16)%16==0、ret 0xC；删 marker/death-seq fake——60 用例过）；BridgeMailboxChecks 邮箱发布序去掉类型字段；stubdump 重新生成+同步 stubs 目录+**baseline_stubs 刷新**（kill 桩 283B→236B 为预期变化，--freeze 后 28 桩 0 差异）。全套：42/42+13 套件+Unicorn 全绿。
+- **publish-v20 已发布**。待实测：摧毁选中敌兵应见**死亡动画+模型消失**（对比之前"实体死但模型残留"）。若对局内崩溃→伤害入口有前置条件未满足（回退方案：git revert 本节，保留旧 kill 桩）。
+- 施工队列（v19c 排序）：①摧毁 ✓→②J 增援批量 8+升级→③F10/F11/F12→④P 三星接桥。
+
+## v19c（FINAL3 行为级全量复核 + 摧毁修复定位完成）
+
+- **复核方法**：盗版 EA 1.12（FINAL3 可正常运行）+ script_00 全解读 = 行为级对照。结论：MT 多 9 项增强、缺 4 项、1 项重大实现偏差（摧毁）、2 项行为差异、1 项伪差异。
+- **★摧毁偏差根因与修复定位（用户点名）**：FINAL3 Delete 调 **EA 0x79EA50 完整伤害入口**（thiscall ecx=Body + push 6/19/0：伤害类型 6、死亡类型 0x13；函数开头 sub esp,0x9C 构造 DamageInfo→[Body+0x33C] HP 对象完整管线→死亡决策→动画+模型回收）。MT kill 桥=底层 adjust(0x38CB30)+手工 Die 镜像=无上游管线=无动画。**Steam 对称已定位（三特征+逐指令同构验证）：1.13=VA 0x7C7190（RVA 0x3C7190）、1.12=VA 0x7DCDF0（RVA 0x3DCDF0）**——与 EA 逐指令同构（仅 .rdata 标签 0xBF3138/0xBF276C 与构造 callee 0x500FD0 随版本不同；兄弟函数 0x7D49B0 写死 6/8 不是它）。**修复方案：KillDispatcher 改调伤害入口（ecx=Body, push 6/0x13/0），DamageInfo 邮箱可简化；FINAL3 实测此路径有完整死亡动画**。v18i"push 0/0x13/6 call 模式静态穷尽无命中"的结论作废——当时没有 EA 映像，现在有了。
+- **缺 4 项**（同 v19b 审计）：F10 禁电脑建造（EA 0x30F530/1.13 0x3387D0 已定位）、F11 玩家无敌（EA 0x12EEDF）、F12 一击必杀敌方（EA 0x3651AE+3FE714+2E24E3）、P 三星（FINAL3=call 晋级(3,1,0)，MT rank 桥有等价能力未接）。
+- **行为差异 2 项**：①J 增援——FINAL3 一次生成 **8 个**+每个升一级（MustCode2+B00 循环），MT 生成 1 个；②F1 资金——FINAL3 一次性 +100000 可连按（另钉上限 99999999），MT 持续开关制（更强，无需改）。
+- **伪差异澄清**：①sel_copy 位置——当前代码已是鼠标优先（回退选中锚点），与 FINAL3 一致（v18h 时期"叠放"已被 v18g/v18j 修复）；②F9 迷雾——桩值与 FINAL3 完全相同（[ebp+260]=100000.0），用户报告的"高度迷雾残留"非实现差异，待实机对比（可能是版本渲染差异）。
+- **俘虏六 hash**（95D6E965/FD87E82A/856C9DD6/D20552E1/1AFC9A6E/D6D22475，FINAL3 俘虏时对六种模板跳过裸改属主）在 WBStringHashes.big 的十进制/十六进制两查均无命中=非标准模板哈希空间，身份未识别；不影响 MT（capture 桥走完整归属函数+context 校验）。
+- **MT 增强清单（FINAL3 无）**：资金防爆上限、弹药回填真实容量（vs 钉 21 亿）、俘虏完整归属切换（vs 裸改字段）、任意 hash 增援、治疗/经验动作、威胁分离开关、诊断采集、现代化 UI/热键/脱离自动还原/对局切换保持。
+- **优先级建议**：①摧毁修复实装（定位已完成）→②J 增援批量+升级→③F10/F11/F12→④P 三星接桥。
+
 ## v19（★随地建造正式落地：实测成功 → 修改器开关实现，publish-v19）
 
 - **用户实测成功（2026-10-12，Steam 1.13）**：patchtest 0x511955 `75 0C→EB 0C` 后灰色格子直接点击放置成功——v18s 的 patch 点定案无误，FINAL3 随地建造语义完整复刻。

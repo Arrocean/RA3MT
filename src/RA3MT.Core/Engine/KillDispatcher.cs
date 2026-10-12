@@ -3,10 +3,14 @@ using RA3MT.Core.Memory;
 
 namespace RA3MT.Core.Engine;
 
-/// <summary>Game-thread destroy consumer: applies a lethal damage delta through the
-/// game's own HP adjust function, so clamping and the death notification both run.
-/// Modern re-derivation of FINAL3's destroy (whose EA call target was never located
-/// for the repack) — adjust runs the complete death path on [hp+4] reaching zero.</summary>
+/// <summary>Game-thread destroy consumer: routes the kill through the game's
+/// FULL damage entry (thiscall Body, args damage-type 6 / death-type 0x13 / 0,
+/// ret 0xC) — the same call FINAL3's destroy uses (EA 1.12 RVA 0x39EA50,
+/// live-verified with death animations). The entry constructs a DamageInfo and
+/// drives [Body+0x33C]'s complete pipeline, so the death decision, animation
+/// dispatch and model recycling all run inside the game's own path. The
+/// previous implementation called the bottom-level HP adjust and mirrored the
+/// Die executor by hand, which left the body dead with no death animation.</summary>
 public static class KillDispatcher
 {
     public const uint MailboxOffset = 0x1880;
@@ -14,25 +18,19 @@ public static class KillDispatcher
     public const uint BodyOffset = MailboxOffset + 4;
     public const uint DrawableOffset = MailboxOffset + 8;
     public const uint HpOffset = MailboxOffset + 0xC;
-    // Static DamageInfo the stub passes as the adjust() context. A null context
-    // skips the game's damage-processing segment (0x3781A0 modifier pass and the
-    // attacker-aware path), which leaves the body dead but with no death event
-    // (model stays, unit unselectable). The game only reads ctx+8/ctx+0xC here
-    // (damage-type / death-type pair FINAL3 passes as 6 / 0x13); unmatched
-    // pairs simply bypass armor modifiers and still run the full death flow.
-    public const uint DamageInfoOffset = MailboxOffset + 0x10;  // ctx points here
-    public const uint DamageTypeOffset = MailboxOffset + 0x18;  // ctx+8  = 6
-    public const uint DeathTypeOffset = MailboxOffset + 0x1C;   // ctx+0xC = 0x13
     public const uint Idle = 0, Pending = 1, Executing = 2, Success = 3, Reject = 4;
 
     public const uint CodeOffset = 0x1400;
 
-    private const uint LethalDelta = 0xFF7FFFFF; // float -3.4028234e38
+    // FINAL3's destroy argument triple: damage type 6, death type 0x13, 0.
+    private const uint DamageType = 6;
+    private const uint DeathType = 0x13;
 
-    public static byte[] Emit(nuint stubVA, nuint blockVA, nuint adjustVA, nuint deathMarkerVA, nuint rootVA)
+    public static byte[] Emit(nuint stubVA, nuint blockVA, nuint damageEntryVA, nuint rootVA)
     {
         uint start = checked((uint)stubVA), block = checked((uint)blockVA);
-        uint api = checked((uint)adjustVA), marker = checked((uint)deathMarkerVA), root = checked((uint)rootVA);
+        uint api = checked((uint)damageEntryVA), root = checked((uint)rootVA);
+        _ = root; // reserved: consumer layout passes the player root uniformly
         uint Slot(uint offset) => checked(block + offset);
         var a = new Asm();
         var labels = new Dictionary<int, int>();
@@ -64,40 +62,24 @@ public static class KillDispatcher
         a.MovRegAbs(R.Eax, Slot(HpOffset)); NonNull(R.Eax);
         a.CmpRegMRegDisp32(R.Eax, R.Esi, 0x33C);        // hp == [body+0x33C]?
         Branch(0x85, Rejected);
-        a.Db(0x8B, Asm.Modrm(3, R.Ebx, R.Eax));         // mov ebx,eax : keep hp pointer across the call
 
+        // Full damage entry call. Callee is thiscall(ecx = Body) with three
+        // stack args and ret 0xC (verified contract), so we only align and
+        // push: FXSAVE area first (SSE safe), then args in push order
+        // (0, death-type, damage-type).
         a.Db(0x89, 0xE0);                               // old pushad ESP
         a.Db(0x81, 0xEC, 0x14, 0x02, 0, 0);             // reserve FX area + saved ESP
         a.Db(0x83, 0xE4, 0xF0);                         // stack alignment
         a.Db(0x89, 0x84, 0x24, 0, 0x02, 0, 0);          // [esp+200] = old ESP
         a.Db(0x0F, 0xAE, 0x04, 0x24);                   // fxsave [esp]
         a.Db(0xFC);                                     // CLD
-        a.Db(0x83, 0xEC, 0x04);                         // pad: 2 args + ret = 12 → callee entry aligned
-        a.Db(0x68); a.Db(BitConverter.GetBytes(Slot(DamageInfoOffset))); // arg2 = static DamageInfo
-        a.Db(0x68); a.Db(BitConverter.GetBytes(LethalDelta));            // push delta (float bits)
-        a.Db(0x8B, Asm.Modrm(3, R.Ecx, R.Ebx));         // mov ecx,ebx : this = hp object
-        a.Db(0xE8);                                     // CALL rel32
+        a.Db(0x6A, 0x00);                               // push 0        (arg3)
+        a.Db(0x68); a.Db(BitConverter.GetBytes(DeathType));  // push 0x13    (arg2)
+        a.Db(0x68); a.Db(BitConverter.GetBytes(DamageType)); // push 6       (arg1)
+        a.Db(0x8B, Asm.Modrm(3, R.Ecx, R.Esi));         // mov ecx,esi : this = Body
+        a.Db(0xE8);                                     // CALL rel32 (ret 0xC: callee cleans)
         int callDisp = a.Length; a.Db(0, 0, 0, 0);
-        a.Db(0x83, 0xC4, 0x04);                         // add esp,4: undo pad, esp back at FX base
-
-        // Death sequence — mirror the game's Die executor (1.13 0x417D10 /
-        // 1.12 0x42E5B0, byte-identical): kick [body+0x374]->vt[0x270] (the
-        // death-animation/slow-death dispatch the plain HP adjust never runs),
-        // then the idempotent death marker. Without this the body dies but the
-        // model stays and no death event fires (live-captured issue).
-        a.MovRegAbs(R.Ebx, Slot(BodyOffset));           // reload body after adjust clobbered all
-        a.MovRegRegDisp32(R.Eax, R.Ebx, 0x374);         // eax = [body+0x374]
-        a.TestRegReg(R.Eax, R.Eax);
-        a.JeShort(2);
-        a.Db(0x8B, Asm.Modrm(0, R.Edx, R.Eax));         // mov edx,[eax] : vtable
-        a.Db(0x8B, Asm.Modrm(3, R.Ecx, R.Eax));         // mov ecx,eax : this = [body+0x374]
-        a.Db(0x8B, Asm.Modrm(2, R.Eax, R.Edx)); a.Db(BitConverter.GetBytes(0x270u)); // eax = vt[0x270]
-        a.Db(0xFF, 0xD0);                               // call eax (thiscall, no stack args)
-        a.Label(2);
-        a.MovRegAbs(R.Ecx, Slot(BodyOffset));           // this = body
-        a.Push8(1);                                     // arg: dead = true
-        a.Db(0xE8);                                     // CALL rel32 (ret 4: callee cleans)
-        int markerDisp = a.Length; a.Db(0, 0, 0, 0);
+        // esp is back at the FX base: the callee removed its 3 args itself.
 
         a.MovRegAbs(R.Ebx, Slot(HpOffset));              // reload after callee clobber
         a.CmpM32RegDisp8Imm32(R.Ebx, 0x04, 0);          // current hp == 0 ?
@@ -117,8 +99,6 @@ public static class KillDispatcher
         var bytes = a.Build(start);
         BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(callDisp, 4),
             unchecked((int)(api - (start + (uint)(callDisp + 4)))));
-        BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(markerDisp, 4),
-            unchecked((int)(marker - (start + (uint)(markerDisp + 4)))));
         foreach (var (position, label) in patches)
             BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(position, 4),
                 checked(labels[label] - (position + 4)));
@@ -147,10 +127,9 @@ public sealed class KillRequestMailbox : RequestMailbox
         WriteU32(4, request.Body);
         WriteU32(8, request.Drawable);
         WriteU32(0xC, request.Third);
-        // Static DamageInfo payload: adjust() reads ctx+8/ctx+0xC only.
-        // FINAL3 passes damage type 6 / death type 0x13 for its destroy.
-        WriteU32(0x18, 6u);
-        WriteU32(0x1C, 0x13u);
+        // Damage-type / death-type are stub constants (6 / 0x13, FINAL3's
+        // triple) — the full damage entry takes them as immediate stack args,
+        // so no static DamageInfo lives in the mailbox anymore.
     }
 
     public void Submit(uint body, uint drawable, uint hp) =>

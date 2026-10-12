@@ -121,7 +121,7 @@ public sealed class MasterCode
         var consumers = new List<IBridgeConsumer>();
         if (RankBridgeEnabled) consumers.Add(new RankBridgeConsumer(_rankApi, _rootVa));
         if (CaptureBridgeEnabled) consumers.Add(new CaptureBridgeConsumer(_captureApi, _rootVa));
-        if (KillBridgeEnabled) consumers.Add(new KillBridgeConsumer(_killApi, _killDeathMarkerApi, _rootVa));
+        if (KillBridgeEnabled) consumers.Add(new KillBridgeConsumer(_killApi, _rootVa));
         if (SpawnBridgeEnabled)
             consumers.Add(new SpawnBridgeConsumer(_spawnWrapperApi, _hashLookupApi, _hashTableGlobalVa, _rootVa));
         return new BridgeConsumerSet(consumers);

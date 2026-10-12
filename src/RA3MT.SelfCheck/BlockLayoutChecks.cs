@@ -57,7 +57,7 @@ public static class BlockLayoutChecks
         {
             ("Rank", RankDispatcher.Emit(block + 0x1100, block, (nuint)0x785600, root).Length),
             ("Capture", CaptureDispatcher.Emit(block + 0x1280, block, (nuint)0x7B5DF0, root).Length),
-            ("Kill", KillDispatcher.Emit(block + 0x1400, block, (nuint)0x78CB30, (nuint)0x7513F0, root).Length),
+            ("Kill", KillDispatcher.Emit(block + 0x1400, block, (nuint)0x7C7190, root).Length),
             ("Spawn", SpawnDispatcher.Emit(block + 0x1580, block, (nuint)0x62E3E0, (nuint)0x80D5B0,
                 (nuint)0xCF0108, root).Length),
         };

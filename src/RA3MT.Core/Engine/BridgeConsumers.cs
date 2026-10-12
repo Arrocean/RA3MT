@@ -38,9 +38,10 @@ public sealed class CaptureBridgeConsumer(nuint captureFunctionVa, nuint rootVa)
         new CaptureRequestMailbox(memory, blockVa);
 }
 
-/// <summary>Kill bridge: routes destruction through the health adjust path so the
-/// engine's own clamping and death notification run.</summary>
-public sealed class KillBridgeConsumer(nuint adjustFunctionVa, nuint deathMarkerVa, nuint rootVa) : IBridgeConsumer
+/// <summary>Kill bridge: routes destruction through the game's FULL damage entry
+/// so the death decision, animation dispatch and model recycling all run inside
+/// the game's own path (FINAL3-identical call).</summary>
+public sealed class KillBridgeConsumer(nuint damageEntryVa, nuint rootVa) : IBridgeConsumer
 {
     public BridgeId Id => BridgeId.Kill;
     public string DisplayName => "摧毁桥";
@@ -50,7 +51,7 @@ public sealed class KillBridgeConsumer(nuint adjustFunctionVa, nuint deathMarker
     public void Declare(BlockLayout layout) => BlockLayoutCatalog.DeclareBridge(layout, "Kill");
 
     public byte[] EmitDispatcher(nuint dispatcherVa, nuint blockVa) =>
-        KillDispatcher.Emit(dispatcherVa, blockVa, adjustFunctionVa, deathMarkerVa, rootVa);
+        KillDispatcher.Emit(dispatcherVa, blockVa, damageEntryVa, rootVa);
 
     public IBridgeMailbox CreateMailbox(IInjectionMemory memory, nuint blockVa) =>
         new KillRequestMailbox(memory, blockVa);

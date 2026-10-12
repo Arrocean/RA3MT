@@ -71,8 +71,7 @@ public static class BridgeMailboxChecks
             {
                 if (!memory.Writes.SequenceEqual(new nuint[]
                         { block + KillDispatcher.BodyOffset, block + KillDispatcher.DrawableOffset,
-                          block + KillDispatcher.HpOffset, block + KillDispatcher.DamageTypeOffset,
-                          block + KillDispatcher.DeathTypeOffset, block + KillDispatcher.StateOffset }))
+                          block + KillDispatcher.HpOffset, block + KillDispatcher.StateOffset }))
                     throw new Exception("Kill request not published last");
             }
             else if (memory.Writes.Count != 0) throw new Exception("Outstanding kill request overwritten");
