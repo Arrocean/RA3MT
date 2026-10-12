@@ -98,7 +98,7 @@ public sealed class MainVM : ObservableObject
     /// <summary>Single source of truth for the displayed version. Scheme
     /// (from v261013): date + per-day sequence — vYYMMDD-N, N counts the
     /// releases of that calendar day.</summary>
-    public const string AppVersion = "v261013-2";
+    public const string AppVersion = "v261013-3";
     public string BannerText => $"{AppVersion} · 现代重制版";
 
     public TrainerEngine Engine { get; } = new();

@@ -274,6 +274,7 @@ public sealed class TrainerEngine : IDisposable
                     ?? throw new InvalidOperationException("未找到运行中的红警3进程（ra3_1.12/1.13.game）");
         var mem = new ProcessMemory(found.pid);
         MasterCode? pendingMaster = null;
+        var version = found.version;
         try
         {
             var main = System.Diagnostics.Process.GetProcessById(found.pid).MainModule
@@ -282,11 +283,14 @@ public sealed class TrainerEngine : IDisposable
 
             // ra3_1.12.game is the module name of both the Steam repack and the
             // EA original; classify by content before resolving any hook.
-            var version = found.version == "1.12" ? Discriminate112(mem, baseAddr) : found.version;
-            if (version != found.version)
-                Log?.Invoke("识别为 EA 原版 1.12（Ultimate Collection 重打包之外的原版布局）");
+            if (version == "1.12")
+            {
+                version = Discriminate112(mem, baseAddr);
+                if (version != found.version)
+                    Log?.Invoke($"识别为 EA 原版 1.12（{found.modulePath}）");
+            }
 
-            Log?.Invoke($"附加 {Path.GetFileName(found.modulePath)} (PID {found.pid}) 基址 0x{baseAddr:X}");
+            Log?.Invoke($"附加 {found.modulePath} (PID {found.pid}) 基址 0x{baseAddr:X}");
             var image = new Target.DelegateImageReader((rva, len) => mem.Read(baseAddr + rva, len));
             var text = mem.Read(baseAddr + 0x1000, 0x7D0000);
             var sites = HookResolver.ResolveAll(
@@ -334,7 +338,7 @@ public sealed class TrainerEngine : IDisposable
                 _mc = pendingMaster;
                 Attached = true;
                 RecoveryRequired = true;
-                Version = found.version;
+                Version = version;
                 Pid = found.pid;
                 ProcessPath = found.modulePath;
                 StateChanged?.Invoke();
@@ -345,28 +349,36 @@ public sealed class TrainerEngine : IDisposable
         }
     }
 
-    /// <summary>Both builds ship a module named ra3_1.12.game, but the money
-    /// chain lives at different addresses with identical instruction bytes.
-    /// Read the EA slot first: a match proves the EA original; anything else
-    /// keeps the repack answer so an unknown build fails loudly in the hook
-    /// verifier instead of guessing here.</summary>
+    /// <summary>Both builds ship a module named ra3_1.12.game, but whole code
+    /// regions live at different addresses with identical instruction bytes.
+    /// Two independent anchors (money chain + zoom/selection iterator, 14
+    /// bytes total) must both match the EA slots to classify as the EA
+    /// original; anything else keeps the repack answer so an unknown build
+    /// fails loudly in the hook verifier instead of guessing here.</summary>
     private string Discriminate112(Memory.ProcessMemory mem, nuint baseAddr)
     {
-        if (!_data.Hooks.TryGetValue("money_h1", out var def))
-            return "1.12";
-        var want = def.DisplacedBytes();
-        try
+        foreach (var id in new[] { moneyProbeId, zoomProbeId })
         {
-            var probe = mem.Read(baseAddr + def.RvaFor("1.12ea"), want.Length);
-            if (probe.AsSpan().SequenceEqual(want))
-                return "1.12ea";
+            if (!_data.Hooks.TryGetValue(id, out var def) || !def.Rva.TryGetValue("1.12ea", out var rvaStr))
+                return "1.12";
+            var want = def.DisplacedBytes();
+            try
+            {
+                var probe = mem.Read(baseAddr + Convert.ToUInt32(rvaStr, 16), want.Length);
+                if (!probe.AsSpan().SequenceEqual(want))
+                    return "1.12";
+            }
+            catch
+            {
+                // unreadable probe — let the repack path surface the real error
+                return "1.12";
+            }
         }
-        catch
-        {
-            // unreadable probe — let the repack path surface the real error
-        }
-        return "1.12";
+        return "1.12ea";
     }
+
+    private const string moneyProbeId = "money_h1";
+    private const string zoomProbeId = "zoom_unit_xp";
 
     public void Detach()
     {

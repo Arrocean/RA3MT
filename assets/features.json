@@ -217,8 +217,8 @@
    "displaced": "8B8178120000",
    "displacedLen": 6,
    "asm": null,
-   "pattern": "CC CC CC CC CC CC CC CC CC CC CC CC 8B 81 78 12 00 00 85 C0 74 07 8B 40 04 8A 40 5A C3 32 C0 C3 CC CC CC CC CC CC CC CC CC CC CC CC 8B 44 24 04",
-   "patternSiteOffset": 12,
+   "pattern": "8B 81 78 12 00 00 85 C0 74 04 8A 40 1C C3 32 C0 C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 8B 81",
+   "patternSiteOffset": 0,
    "stub": "ammo",
    "note": "6-caller main accessor (old EA site equivalent)"
   },
