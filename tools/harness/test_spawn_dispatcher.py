@@ -5,7 +5,9 @@ Requires unicorn; no process access, remote calls, game writes or native threads
 Covers: mailbox claim gating, hash-lookup vs direct-holder template paths,
 owner resolution through the playerRoot global, wrapper cdecl ABI
 (five args, caller-cleans), callee-clobber/GPR/FX preservation, stack
-alignment at the wrapper entry, and every rejection gate.
+alignment at the wrapper entry, every rejection gate, and the mouse mode:
+the transform must receive the RAW INT pixels from the mouse object
+(not fxsave residue), and its failure must fall back to the staged pos.
 """
 from pathlib import Path
 import argparse
@@ -18,6 +20,7 @@ BLOCK, GLOBAL = 0x40000000, 0x400000
 STACK, DATA = 0x200000, 0x300000
 SPAWN = BLOCK + 0x1580
 WRAPPER, LOOKUP, TABLE_GLOBAL = 0x62E3E0, 0x80D5B0, 0xCF0108
+TRANSFORM, MOUSE_GLOBAL, MOUSE_OBJ = 0x60ECF0, 0xCE43BC, DATA + 0x8000
 CALLER = GLOBAL + 0x800
 HOLDER, DESC, CONTROLLER, SIDE, NEWBODY, HASHROW = (
     DATA, DATA + 0x1000, DATA + 0x2000, DATA + 0x3000, DATA + 0x4000, DATA + 0x5000)
@@ -27,6 +30,8 @@ REGS = [UC_X86_REG_EAX, UC_X86_REG_EBX, UC_X86_REG_ECX, UC_X86_REG_EDX,
 XMM = [UC_X86_REG_XMM0, UC_X86_REG_XMM1, UC_X86_REG_XMM2, UC_X86_REG_XMM3,
        UC_X86_REG_XMM4, UC_X86_REG_XMM5, UC_X86_REG_XMM6, UC_X86_REG_XMM7]
 POS = (117.5, -42.25, 305.0)
+MOUSE_PX = (0x511, 0x437)          # integer screen pixels, as the live object stores them
+TRANSFORMED = (2161.0, 190.0, 5000.0)
 
 
 def put(vm, addr, value):
@@ -50,7 +55,8 @@ def base_machine(align):
     vm = Uc(UC_ARCH_X86, UC_MODE_32)
     for addr, size in [(BLOCK, 0x2000), (GLOBAL, 0x1000), (DATA, 0x20000),
                        (STACK, 0x10000), (WRAPPER & ~0xfff, 0x1000),
-                       (LOOKUP & ~0xfff, 0x1000), (TABLE_GLOBAL & ~0xfff, 0x1000)]:
+                       (LOOKUP & ~0xfff, 0x1000), (TABLE_GLOBAL & ~0xfff, 0x1000),
+                       (TRANSFORM & ~0xfff, 0x1000), (MOUSE_GLOBAL & ~0xfff, 0x1000)]:
         vm.mem_map(addr, size)
     vm.mem_write(CALLER, b'\xE8' + struct.pack('<i', SPAWN - (CALLER + 5)) + b'\x90')
     vm.mem_write(GLOBAL + 0xa00, bytes.fromhex('db e3 d9 e8 d9 eb'))
@@ -105,9 +111,35 @@ def fake_wrapper(vm, calls, result):
     vm.hook_add(UC_HOOK_CODE, hook, begin=WRAPPER, end=WRAPPER + 1)
 
 
+def fake_transform(vm, calls, out_xyz, result=True):
+    """cdecl(int2* pixels, float3* out, 0, 0) → al. Mirrors the game's own
+    callers: raw int pixels in, float3 world out, flags 0/0, caller cleans.
+    Unlike the wrapper fake, this must respect the cdecl convention and
+    preserve EBX/ESI/EDI/EBP — the stub keeps its template/owner in EDI/EBP
+    across the call, as it may with any real game function."""
+    def hook(machine, address, size, _):
+        sp = machine.reg_read(UC_X86_REG_ESP)
+        args = [get(machine, sp + 4 * i) for i in range(1, 5)]
+        pixels = struct.unpack('<II', machine.mem_read(args[0], 8))
+        calls.append(('transform', pixels, args[1], args[2], args[3]))
+        assert args[2] == 0 and args[3] == 0, 'transform flags must be 0/0'
+        if result:
+            machine.mem_write(args[1], struct.pack('<fff', *out_xyz))
+        for reg in (UC_X86_REG_EAX, UC_X86_REG_ECX, UC_X86_REG_EDX):
+            machine.reg_write(reg, 0x66660000)
+        for i, reg in enumerate(XMM):
+            machine.reg_write(reg, (0x0badf00d0badf00d << 64) | 0xfeedfacefeedface)
+        machine.reg_write(UC_X86_REG_EFLAGS, 0x246)
+        machine.reg_write(UC_X86_REG_EAX, 1 if result else 0)
+        machine.reg_write(UC_X86_REG_EIP, get(machine, sp))
+        machine.reg_write(UC_X86_REG_ESP, sp + 4)  # cdecl: caller cleans args
+    vm.hook_add(UC_HOOK_CODE, hook, begin=TRANSFORM, end=TRANSFORM + 1)
+
+
 def run(blob, align=0, state=1, mutation=None, lookup_result=HOLDER,
         wrapper_result=NEWBODY, owner=0, hash_value=0xAF4C0DA5,
-        table_owner=CONTROLLER, expect_wrapper=True, expect_lookup=True):
+        table_owner=CONTROLLER, expect_wrapper=True, expect_lookup=True,
+        mouse=False, transform_result=True, expect_transform=True):
     vm = base_machine(align)
     vm.mem_write(SPAWN, blob)
     shared_entries(vm)
@@ -117,6 +149,11 @@ def run(blob, align=0, state=1, mutation=None, lookup_result=HOLDER,
     put(vm, MAIL + 4, hash_value)
     put(vm, MAIL + 8, HOLDER if hash_value == 0 else 0)
     put(vm, MAIL + 0x18, owner)
+    put(vm, MAIL + 0x24, 1 if mouse else 0)
+    if mouse:
+        put(vm, MOUSE_GLOBAL, MOUSE_OBJ)
+        put(vm, MOUSE_OBJ + 0x3C, MOUSE_PX[0])
+        put(vm, MOUSE_OBJ + 0x40, MOUSE_PX[1])
     put(vm, MAIL, state)
     if mutation:
         mutation(vm)
@@ -124,9 +161,19 @@ def run(blob, align=0, state=1, mutation=None, lookup_result=HOLDER,
     calls = []
     fake_lookup(vm, calls, lookup_result)
     fake_wrapper(vm, calls, wrapper_result)
+    if mouse:
+        fake_transform(vm, calls, TRANSFORMED, transform_result)
     vm.emu_start(CALLER, CALLER + 5, count=100000)
     assert all(vm.reg_read(r) == v for r, v in regs_before.items()), 'GPR/ESP/EFLAGS changed'
     assert fx_image(vm) == fx_before, 'FX image changed'
+    transforms = [c for c in calls if c[0] == 'transform']
+    if mouse and expect_transform:
+        assert len(transforms) == 1, f'transform calls: {len(transforms)}'
+        _, pixels, out_ptr, flag3, flag4 = transforms[0]
+        assert pixels == MOUSE_PX, f'transform got {pixels}, want raw ints {MOUSE_PX}'
+        assert out_ptr == MAIL + 0xC, f'out 0x{out_ptr:X} is not the mailbox pos'
+    else:
+        assert not transforms, 'unexpected transform call'
     lookups = [c for c in calls if c[0] == 'lookup']
     wrappers = [c for c in calls if c[0] == 'wrapper']
     if expect_lookup:
@@ -139,7 +186,8 @@ def run(blob, align=0, state=1, mutation=None, lookup_result=HOLDER,
         assert len(wrappers) == 1, f'wrapper calls: {len(wrappers)}'
         _, holder_arg, owner_arg, xyz, entry = wrappers[0]
         assert holder_arg == (HOLDER if hash_value == 0 else lookup_result)
-        assert xyz == POS, f'position mismatch: {xyz}'
+        expected_xyz = TRANSFORMED if (mouse and transform_result) else POS
+        assert xyz == expected_xyz, f'position mismatch: {xyz} != {expected_xyz}'
         expected_owner = SIDE if owner == 0 else owner
         assert owner_arg == expected_owner, f'owner {owner_arg:X} != {expected_owner:X}'
     else:
@@ -246,6 +294,7 @@ def main():
     put(vm, MAIL + 4, 0xAF4C0DA5)
     put(vm, MAIL + 8, 0)
     put(vm, MAIL + 0x18, 0)
+    put(vm, MAIL + 0x24, 0)
     fake_lookup(vm, [], HOLDER)
     fake_wrapper(vm, [], NEWBODY)
     put(vm, MAIL, 3)  # previous success → Submit may republish
@@ -254,8 +303,34 @@ def main():
     assert get(vm, MAIL) == 3
     cases += 1
 
+    # 15) mouse mode: transform receives the RAW INT pixels, wrapper spawns at
+    # the transformed world position (regression for the fxsave-residue lea bug)
+    vm, calls = run(blob, mouse=True)
+    assert get(vm, MAIL) == 3
+    cases += 1
+
+    # 16) mouse mode under both stack parities
+    for align in (4, 12):
+        vm, _ = run(blob, align=align, mouse=True)
+        assert get(vm, MAIL) == 3, f'mouse align {align} failed'
+        cases += 1
+
+    # 17) transform failure falls back to the staged mailbox position
+    vm, calls = run(blob, mouse=True, transform_result=False)
+    assert get(vm, MAIL) == 3, 'fallback after transform failure must still spawn'
+    cases += 1
+
+    # 18) mouse object global null → reject after lookup, before transform/wrapper
+    # (must exit through the FX-restore path: the frame was already reserved)
+    def null_mouse(vm_):
+        put(vm_, MOUSE_GLOBAL, 0)
+    vm, _ = run(blob, mouse=True, mutation=null_mouse,
+                expect_wrapper=False, expect_transform=False)
+    assert get(vm, MAIL) == 4
+    cases += 1
+
     print(f'PASS {cases} spawn dispatcher Unicorn cases '
-          '(claim/hash/direct/owner/ABI/clobber/FX/alignment gates)')
+          '(claim/hash/direct/owner/ABI/clobber/FX/alignment/mouse gates)')
 
 
 if __name__ == '__main__':

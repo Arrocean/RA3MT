@@ -64,7 +64,6 @@ def machine(blob, align, flags):
                         (GLOBAL, CONTROLLER), (CONTROLLER+0x28, SIDE), (TRACKER+4, WRAPPER),
                         (WRAPPER+0x14, TEMPLATE), (TRACKER+0x24, 7)]:
         put(vm, addr, value)
-    vm.mem_write(DRAWABLE+0x13d, b'\x40')
     vm.mem_write(TEMPLATE+0x245, b'\x01')
     return vm
 
@@ -134,8 +133,9 @@ def main():
                 (MAIL+4, MAIL+8, MAIL+12, GLOBAL, CONTROLLER+0x28, TRACKER+4, WRAPPER+0x14)]
     invalid += [lambda vm, addr=addr: put(vm, addr, DATA+0x7000) for addr in
                 (BODY+0xf4, DRAWABLE+0x138, BODY+0x3cc, BODY+0x418)]
-    invalid += [lambda vm: vm.mem_write(DRAWABLE+0x13d, b'\xBF'),
-                lambda vm: vm.mem_write(TEMPLATE+0x245, b'\x00')]
+    invalid += [lambda vm: vm.mem_write(TEMPLATE+0x245, b'\x00')]
+    # NOTE: no "selected" gate exists — FINAL3 ranks freshly spawned
+    # (unselected) reinforcement units, so 0x13D.6 must NOT be validated.
     for mutation in invalid:
         run(blob, mutation=mutation); cases += 1
     run(blob, recursive=True); cases += 1

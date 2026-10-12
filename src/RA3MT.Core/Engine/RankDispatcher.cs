@@ -8,6 +8,11 @@ namespace RA3MT.Core.Engine;
 /// drawable and tracker fields before state Pending, and must not reset/reuse
 /// the mailbox until a terminal state. Null and relationship checks cannot make
 /// stale non-null pointers safe if the game destroys objects concurrently.
+///
+/// There is deliberately NO "currently selected" gate: FINAL3 promotes any
+/// locally-owned unit, and the reinforcement flow ranks units it just spawned
+/// (never selected). Liveness is covered by the body/drawable/tracker
+/// cross-links, the local-owner check and the XP-tracker eligibility byte.
 /// </remarks>
 public static class RankDispatcher
 {
@@ -69,8 +74,6 @@ public static class RankDispatcher
         a.MovRegAbs(R.Ecx, Slot(TrackerOffset)); NonNull(R.Ecx);
         a.CmpRegMRegDisp32(R.Edi, R.Esi, 0xF4); Branch(0x85, Rejected);
         a.CmpRegMRegDisp32(R.Esi, R.Edi, 0x138); Branch(0x85, Rejected);
-        a.Db(0xF6, 0x87, 0x3D, 0x01, 0, 0, 0x40);       // selected bit 13D40
-        Branch(0x84, Rejected);
         a.CmpRegMRegDisp32(R.Ecx, R.Esi, 0x3CC); Branch(0x85, Rejected);
         a.MovRegAbs(R.Eax, root); NonNull(R.Eax);
         a.MovRegRegDisp8(R.Eax, R.Eax, 0x28); NonNull(R.Eax);

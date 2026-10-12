@@ -99,30 +99,37 @@ public static class SpawnDispatcher
         a.Db(0x89, 0x84, 0x24, 0, 0x02, 0, 0);          // [esp+200] = old ESP
         a.Db(0x0F, 0xAE, 0x04, 0x24);                   // fxsave [esp]
         a.Db(0xFC);                                     // CLD
-        // ---- mouse mode: FINAL3-style live mouse → world on the game thread ----
-        // MouseMode != 0: read the mouse object's integer screen pixels
-        // (+0x3C/+0x40), convert to floats at [esp+0x204..0x20B] (inside the
-        // reserved FX area, above the saved old-ESP), call the game's own
-        // screen->world transform cdecl(screenXY*, out*, 0, 0; ret al), and
-        // let it overwrite the mailbox position float3 the wrapper consumes.
+        // ---- mouse mode: live mouse -> world on the game thread ----
+        // MouseMode != 0: copy the mouse object's INTEGER screen pixels
+        // (+0x3C/+0x40) into the scratch slot at [esp+0x204..0x20B] and call
+        // the game's own screen->world transform. The repacked Steam
+        // transform takes RAW INT pixels — its own screen-center caller
+        // stores shr'd ints with no z at +8/+0xC — unlike EA's float
+        // variant that FINAL3 fed (fild + a +0x44 depth). If the transform
+        // fails, fall through: the mailbox still holds the staged fallback.
         a.MovRegAbs(R.Eax, Slot(MouseModeOffset));
         a.TestRegReg(R.Eax, R.Eax);
         Branch(0x84, MouseSkip);                        // not mouse mode: keep mailbox pos
-        a.MovRegAbs(R.Eax, mouseObj); NonNull(R.Eax);
-        a.Db(0xDF, 0x40, 0x3C);                         // fild dword [eax+0x3C]
-        a.Db(0xD9, 0x5C, 0x24, 0x04);                   // fstp dword [esp+0x204]
-        a.Db(0xDF, 0x40, 0x40);                         // fild dword [eax+0x40]
-        a.Db(0xD9, 0x5C, 0x24, 0x08);                   // fstp dword [esp+0x208]
+        a.MovRegAbs(R.Eax, mouseObj);
+        a.CmpR32Imm32(R.Eax, 0x10000);
+        Branch(0x82, FxReject);                         // null mouse: reject via the FX restore path
+        a.Db(0x8B, 0x40, 0x3C);                         // mov eax,[eax+0x3C]  (int x)
+        a.Db(0x89, 0x84, 0x24, 0x04, 0x02, 0x00, 0x00); // mov [esp+0x204], eax
+        a.MovRegAbs(R.Eax, mouseObj);
+        a.CmpR32Imm32(R.Eax, 0x10000);
+        Branch(0x82, FxReject);                         // re-check after the reload
+        a.Db(0x8B, 0x40, 0x40);                         // mov eax,[eax+0x40]  (int y)
+        a.Db(0x89, 0x84, 0x24, 0x08, 0x02, 0x00, 0x00); // mov [esp+0x208], eax
         a.Push8(0);
         a.Push8(0);
         a.Db(0x68); a.Db(BitConverter.GetBytes(Slot(PosXOffset)));  // out = mailbox pos float3
-        a.Db(0x8D, 0x44, 0x24, 0x14);                   // lea eax,[esp+0x14] = &screenXY
-        a.Db(0x50);                                     // push &screenXY
+        a.Db(0x8D, 0x84, 0x24, 0x10, 0x02, 0x00, 0x00); // lea eax,[esp+0x210] = &pixels
+        a.Db(0x50);                                     // push &pixels
         a.Db(0xE8);                                     // CALL rel32 transform
         int transformDisp = a.Length; a.Db(0, 0, 0, 0);
         a.Db(0x83, 0xC4, 0x10);                         // cdecl: caller cleans 4 args
         a.TestRegReg(R.Eax, R.Eax);
-        Branch(0x84, FxReject);                         // transform failed -> reject
+        Branch(0x84, MouseSkip);                        // transform failed: keep fallback pos
         Mark(MouseSkip);
         a.Db(0x83, 0xEC, 0x08);                         // pad: 5 args + ret = 24 → wrapper entry esp%16 == 0
         a.Push8(0);                                     // arg5: wrapper ignores it (FINAL3 passes [side+0x10])
