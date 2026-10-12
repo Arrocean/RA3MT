@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="..\..\assets\features.json" Link="Data\features.json" />
+    <EmbeddedResource Include="..\..\assets\reinforcement_codes.json" Link="Data\reinforcement_codes.json" />
   </ItemGroup>
 
 </Project>

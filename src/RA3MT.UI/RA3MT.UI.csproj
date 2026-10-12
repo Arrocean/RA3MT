@@ -10,7 +10,12 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>RA3MT.UI</RootNamespace>
+    <ApplicationIcon>..\..\assets\app.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="..\..\assets\app.ico" Link="app.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\RA3MT.Core\RA3MT.Core.csproj" />

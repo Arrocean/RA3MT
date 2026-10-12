@@ -85,6 +85,11 @@ public sealed class FeatureArg
     /// <summary>Where the value comes from: "text" (inline box) or "fixed".</summary>
     [JsonPropertyName("bind")] public string Bind { get; set; } = "fixed";
 
+    /// <summary>Named suggestion source for "code" args, e.g.
+    /// "reinforcement" = the built-in unit code table. When set, the UI adds
+    /// a picker button next to the text box.</summary>
+    [JsonPropertyName("suggest")] public string? Suggest { get; set; }
+
     /// <summary>True when the user must type the argument.</summary>
     public bool NeedsText => Kind == "code" || Bind == "text";
 }

@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="RA3 Trainer · 现代重制版" Width="1240" Height="840"
-        MinWidth="1080" MinHeight="700"
+        MinWidth="1080" MinHeight="700" Icon="app.ico"
         Background="#0d1117" WindowStartupLocation="CenterScreen"
         UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
   <shell:WindowChrome.WindowChrome>

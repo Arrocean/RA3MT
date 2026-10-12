@@ -1,5 +1,6 @@
 using RA3MT.Core.Features.Abstractions;
 using RA3MT.Core.Features.Host;
+using RA3MT.Core.Model;
 
 namespace RA3MT.Core.Features.Actions;
 
@@ -79,11 +80,14 @@ public sealed class SpawnActionFeature(string id, SpawnActionKind kind) : IFeatu
 
         private FeatureResult SpawnHash(ISpawnGateway gateway, string? arg)
         {
-            if (!SpawnActions.TryParseHash(arg ?? "", out var hash) || hash == 0)
-                return FeatureResult.Failure("无效的增援代码（应为 8 位十六进制，如 6586A5A0）");
+            // The embedded table resolves unit names (and localized names);
+            // raw community-guide codes still go through the hash parser.
+            if (!ReinforcementCatalog.Default.TryResolve(arg, out var hash, out var entry) || hash == 0)
+                return FeatureResult.Failure("无效的增援代码（8 位十六进制，或用输入框旁的 📋 从单位表选择；也可直接输入单位名）");
+            var label = entry is { } e ? $"增援 {e.Zh}（{e.Name}）0x{hash:X8}" : $"增援代码 0x{hash:X8}";
             var mouse = gateway.MouseGround;
             if (mouse is { } m)
-                context.Host.Log($"增援代码 0x{hash:X8}：围绕鼠标地面 0x({m.x:F0}, {m.z:F0}) 生成 8 个并升星");
+                context.Host.Log($"{label}：围绕鼠标地面 0x({m.x:F0}, {m.z:F0}) 生成 8 个并升星");
             else
                 context.Host.Log("增援：鼠标地面坐标不可用（游戏失焦会冻结该值）——请点回游戏画面再按热键；将回退选中单位锚点");
             var anchor = mouse ?? gateway.SelectionAnchor;

@@ -1,821 +1,822 @@
 {
-  "schema": 1,
-  "game": {
-    "moduleNames": [
-      "ra3_1.12.game",
-      "ra3_1.13.game"
-    ],
-    "processName": "ra3_1.12.game",
-    "imageBase": "0x400000",
-    "bits": 32
-  },
-  "hooks": {
-    "money_h2": {
-      "rva": {
-        "1.12": "0x664e9e",
-        "1.13": "0x6699ce"
-      },
-      "displaced": "0378048B11",
-      "displacedLen": 5,
-      "asm": "add edi,[eax+4]; mov edx,[ecx]",
-      "pattern": "8B CF E8 ?? ?? ?? ?? 8B 78 14 8B 8E 08 07 00 00 03 78 04 8B 11 8B 42 0C 57 FF D0 6A 01 8B 8E 08 07 00 00 8B 11 8B 42 04 FF D0 8B 96 10 07 00 00",
-      "patternSiteOffset": 16
-    },
-    "money_h1": {
-      "rva": {
-        "1.12": "0x664dad",
-        "1.13": "0x6698dd"
-      },
-      "displaced": "8B40048B8EB0030000",
-      "displacedLen": 9,
-      "asm": "mov eax,[eax+4]; mov ecx,[esi+3B0]",
-      "pattern": "8D 48 20 39 09 5B 74 04 33 C0 EB 03 8B 40 04 8B 8E B0 03 00 00 8B 39 52 8B 57 0C 50 FF D2 8D 8E B8 03 00 00 E8 ?? ?? ?? ?? 8D 8E 30 06 00 00 E8",
-      "patternSiteOffset": 12
-    },
-    "proto_cool_b": {
-      "rva": {
-        "1.12": "0x34d81e",
-        "1.13": "0x3386ce"
-      },
-      "displaced": "F30F2C461C",
-      "displacedLen": 5,
-      "asm": "cvttss2si eax,[esi+1C]",
-      "pattern": "F3 0F 58 46 60 F3 0F 2C C0 5E 59 C3 F3 0F 2C 46 1C 5E 59 C3 CC CC CC CC CC CC CC CC CC CC 83 EC 08 55 8B 6C 24 10 85 ED 56 8B F1 75 0A 5E 32 C0",
-      "patternSiteOffset": 12
-    },
-    "proto_cool_a": {
-      "rva": {
-        "1.12": "0x34d77c",
-        "1.13": "0x33862c"
-      },
-      "displaced": "D9461C89465C",
-      "displacedLen": 6,
-      "asm": "fld [esi+1C]; mov [esi+5C],eax",
-      "pattern": "CC CC CC CC 51 56 8B F1 8B 46 04 85 C0 74 0F 8B ?? ?? ?? ?? 00 3B 46 18 75 04 B0 01 EB 02 32 C0 ?? ?? ?? ?? 0F 85 ?? ?? ?? ?? 84 C0 0F 84 B0 00",
-      "patternSiteOffset": 64
-    },
-    "aiblock": {
-      "rva": {
-        "1.12": "0x34d920",
-        "1.13": "0x3387d0"
-      },
-      "displaced": "0350043BD7",
-      "displacedLen": 5,
-      "asm": "add edx,[eax+4]; cmp edx,edi",
-      "pattern": "03 50 04 3B D7",
-      "patternSiteOffset": 0
-    },
-    "godmode": {
-      "rva": {
-        "1.12": "0x1705df",
-        "1.13": "0x1588ff"
-      },
-      "displaced": "8B503C8BCE",
-      "displacedLen": 5,
-      "asm": "mov edx,[eax+3C]; mov ecx,esi",
-      "pattern": "D9 5C 24 08 8B 06 8B 50 3C 8B CE",
-      "patternSiteOffset": 6
-    },
-    "onekill": {
-      "rva": {
-        "1.12": "0x3a366e",
-        "1.13": "0x38cb4e"
-      },
-      "displaced": "F30F114604",
-      "displacedLen": 5,
-      "asm": "movss [esi+4],xmm0",
-      "pattern": "F3 0F 10 46 04 F3 0F 11 46 08 F3 0F 58 C1 57 F3 0F 11 46 04 74",
-      "patternSiteOffset": 15
-    },
-    "onekill_a": {
-      "rva": {
-        "1.12": "0x43c964",
-        "1.13": "0x427b34"
-      },
-      "displaced": "8B8E3C030000",
-      "displacedLen": 6,
-      "asm": "mov ecx,[esi+0x33C]",
-      "pattern": "8B 8E 3C 03 00 00 8B 95 80 00 00 00",
-      "patternSiteOffset": 0
-    },
-    "onekill_b": {
-      "rva": {
-        "1.12": "0x320963",
-        "1.13": "0x30b6c3"
-      },
-      "displaced": "8B893C030000",
-      "displacedLen": 6,
-      "asm": "mov ecx,[ecx+0x33C]",
-      "pattern": "8B 4C 24 0C 8B 89 3C 03 00 00",
-      "patternSiteOffset": 4
-    },
-    "build_hp_b": {
-      "rva": {
-        "1.12": "0x47cc16",
-        "1.13": "0x468056"
-      },
-      "displaced": "8B51503B500C",
-      "displacedLen": 6,
-      "asm": "mov edx,[ecx+50]; cmp edx,[eax+0C]",
-      "pattern": "00 CC CC CC CC CC CC CC CC CC 8B 44 24 04 8B 50 08 8B 02 8B 50 04 8B 81 18 02 00 00 81 C1 18 02 00 00 3B C1 74 0F 8D ?? ?? ?? ?? 50 08 74 0B 8B",
-      "patternSiteOffset": 64
-    },
-    "zoom_unit_xp": {
-      "rva": {
-        "1.12": "0x169d85",
-        "1.13": "0x152115"
-      },
-      "displaced": "8B0CBA85C9",
-      "displacedLen": 5,
-      "asm": "mov ecx,[edx+edi*4]; test ecx,ecx",
-      "pattern": "24 10 0F 8E ?? ?? ?? ?? 8B 74 24 44 8B 0C BA 85 C9 0F 84 ?? ?? ?? ?? 8B 41 04 8B 40 04 83 B8 B8 00 00 00 02 0F 85 ?? ?? ?? ?? 8B ?? ?? ?? ?? E8",
-      "patternSiteOffset": 12
-    },
-    "money_h3": {
-      "rva": {
-        "1.12": "0x664F0C",
-        "1.13": "0x669a3c"
-      },
-      "displaced": "8B78348B4E3C",
-      "displacedLen": 6,
-      "asm": null,
-      "sibling": "money_h2"
-    },
-    "build_hp_a": {
-      "rva": {
-        "1.12": "0x47CB89",
-        "1.13": "0x467fc9"
-      },
-      "displaced": "8B70508B01",
-      "displacedLen": 5,
-      "asm": null,
-      "sibling": "build_hp_b"
-    },
-    "sidebar_pts": {
-      "rva": {
-        "1.12": "0x348A06",
-        "1.13": "0x333886"
-      },
-      "displaced": "8B48503B4E20",
-      "displacedLen": 6,
-      "asm": null,
-      "sibling": "proto_cool_b"
-    },
-    "unit_lv": {
-      "rva": {
-        "1.12": "0x4005BC",
-        "1.13": "0x3eb50c"
-      },
-      "displaced": "F30F118560020000",
-      "displacedLen": 8,
-      "asm": null
-    },
-    "power_cool": {
-      "rva": {
-        "1.12": "0x22B82D",
-        "1.13": "0x216C7D"
-      },
-      "displaced": "F30F114644",
-      "displacedLen": 5,
-      "asm": null,
-      "note": "old trainer [08] Zoom site (camera ctx confirmed: ebp=camera obj)"
-    },
-    "build_power": {
-      "rva": {
-        "1.12": "0x329f19",
-        "1.13": "0x314d19"
-      },
-      "displaced": "8B9818040000",
-      "displacedLen": 6,
-      "asm": null,
-      "pattern": "F6 C1 01 74 06 D9 EE 5F 5E 59 C3 53 8B 98 18 04 00 00 85 DB 74 2D 8B 16 8B 42 1C 8B CE FF D0 8B 48 08 8B 51 1C C1 EA 0C F6 C2 01 74 16 8B 06 8B",
-      "patternSiteOffset": 12
-    },
-    "ammo": {
-      "rva": {
-        "1.12": "0x477090",
-        "1.13": "0x4622E0"
-      },
-      "displaced": "8B8178120000",
-      "displacedLen": 6,
-      "asm": null,
-      "pattern": "CC CC CC CC CC CC CC CC CC CC CC CC 8B 81 78 12 00 00 85 C0 74 07 8B 40 04 8A 40 5A C3 32 C0 C3 CC CC CC CC CC CC CC CC CC CC CC CC 8B 44 24 04",
-      "patternSiteOffset": 12,
-      "stub": "ammo",
-      "note": "6-caller main accessor (old EA site equivalent)"
-    },
-    "power": {
-      "rva": {
-        "1.12": "0x33511F",
-        "1.13": "0x31FEDF"
-      },
-      "displaced": "D986BC010000",
-      "displacedLen": 6,
-      "asm": "fld [esi+1BC]"
-    },
-    "money_h4": {
-      "rva": {
-        "1.12": "0x664F55",
-        "1.13": "0x669A85"
-      },
-      "displaced": "F30F10472C",
-      "displacedLen": 5,
-      "asm": "movss xmm0,[edi+2C]"
-    },
-    "ammo_2": {
-      "rva": {
-        "1.12": "0x477070",
-        "1.13": "0x4622C0"
-      },
-      "displaced": "8B8178120000",
-      "displacedLen": 6,
-      "stub": "ammo",
-      "asm": "mov eax,[ecx+1278]"
-    },
-    "ammo_3": {
-      "rva": {
-        "1.12": "0x4770B0",
-        "1.13": "0x462300"
-      },
-      "displaced": "8B8178120000",
-      "displacedLen": 6,
-      "stub": "ammo",
-      "asm": "mov eax,[ecx+1278]"
-    },
-    "ammo_4": {
-      "rva": {
-        "1.12": "0x479DC0",
-        "1.13": "0x4651B0"
-      },
-      "displaced": "8B8178120000",
-      "displacedLen": 6,
-      "stub": "ammo",
-      "asm": "mov eax,[ecx+1278]"
-    },
-    "ammo_5": {
-      "rva": {
-        "1.12": "0x479DE0",
-        "1.13": "0x4651D0"
-      },
-      "displaced": "8B8178120000",
-      "displacedLen": 6,
-      "stub": "ammo",
-      "asm": "mov eax,[ecx+1278]"
-    },
-    "weapon_clip": {
-      "rva": {
-        "1.12": "0x3CF271",
-        "1.13": "0x3B9171"
-      },
-      "displaced": "83C8FF01461C",
-      "displacedLen": 6,
-      "asm": "or eax,-1; add [esi+1C],eax",
-      "pattern": "83 C8 FF 01 46 1C 01 46 24 01 46 2C 83 7E 2C 00",
-      "patternSiteOffset": 0
-    },
-    "ammo_6": {
-      "rva": {
-        "1.12": "0x479E00",
-        "1.13": "0x4651F0"
-      },
-      "displaced": "8B8178120000",
-      "displacedLen": 6,
-      "stub": "ammo",
-      "asm": "mov eax,[ecx+1278]"
-    }
-  },
-  "globals": {
-    "selectionList": {
-      "rva": {
-        "1.12": "0x8E08DC",
-        "1.13": "0x8E4BFC"
-      },
-      "note": "[root]+0x5C=count,+0x50=head linked list; node+8->wrapper+0x138->body; body+0x418=side pointer"
-    },
-    "playerRoot": {
-      "rva": {
-        "1.12": "0x8ede2c",
-        "1.13": "0x8f214c"
-      },
-      "note": "[root]+0x28 = 本地阵营指针；两版 side getter 与调用点静态确认，1.13 活体 owner 匹配（不是玩家索引）"
-    },
-    "mouseGround": {
-      "rva": {
-        "1.13": "0x8e15b8"
-      },
-      "note": "鼠标地面交点 float3：+0=x, +4=z, +8=地面高度 y——UI 每帧更新的 .data 静态副本，任意时刻跟随鼠标（放置/悬停/命令共用），活体差分验证。1.12 对应待活体扫描（无静态引用，运行时指针访问）。"
-    }
-  },
-  "features": [
-    {
-      "id": "money",
-      "no": "01",
-      "name": "无限资金",
-      "group": "资源",
-      "kind": "toggle",
-      "hotkey": "Ctrl+F1",
-      "icon": "💰",
-      "hooks": [
-        "money_h2"
-      ],
-      "flag": "money",
-      "desc": "每次资金结算额外 +100000，且电力上限拉满",
-      "src": "orig[01]"
-    },
-    {
-      "id": "power",
-      "no": "02",
-      "name": "无限电力",
-      "group": "资源",
-      "kind": "toggle",
-      "hotkey": "Ctrl+F2",
-      "icon": "⚡",
-      "hooks": [
-        "money_h1"
-      ],
-      "flag": "power",
-      "desc": "资金恒为 10 万、电力消耗归零（不缺电）",
-      "src": "orig[02]"
-    },
-    {
-      "id": "scpoints",
-      "no": "03",
-      "name": "无限协议点数",
-      "group": "资源",
-      "kind": "toggle",
-      "hotkey": "Ctrl+F3",
-      "icon": "🎖",
-      "hooks": [
-        "money_h3"
-      ],
-      "flag": "scpoints",
-      "desc": "秘密协议点数恒为 15（FINAL3同款）",
-      "src": "orig[03]"
-    },
-    {
-      "id": "allproto",
-      "no": "04",
-      "name": "解锁全部协议",
-      "group": "资源",
-      "kind": "toggle",
-      "hotkey": "Ctrl+F4",
-      "icon": "🔓",
-      "hooks": [
-        "money_h4"
-      ],
-      "flag": "allproto",
-      "desc": "解锁全部秘密协议技能",
-      "src": "orig[04]"
-    },
-    {
-      "id": "fastbuild",
-      "no": "05",
-      "name": "快速建造",
-      "group": "建造",
-      "kind": "toggle",
-      "hotkey": "Ctrl+F5",
-      "icon": "🏗",
-      "hooks": [
-        "proto_cool_a",
-        "proto_cool_b",
-        "power"
-      ],
-      "flag": "fastbuild",
-      "desc": "建筑与单位生产都大幅加速（原版[05]即同时覆盖两者）且建造期间不断电",
-      "src": "orig[05]"
-    },
-    {
-      "id": "instantready",
-      "no": "06",
-      "name": "协议/超武立即就绪",
-      "group": "建造",
-      "kind": "toggle",
-      "hotkey": "Ctrl+F6",
-      "icon": "❄",
-      "hooks": [
-        "build_power",
-        "build_hp_a"
-      ],
-      "flag": "instantready",
-      "desc": "仅本地阵营：协议技能与超级武器立即就绪（修正属主判定与冷却链表查询，待实战复测）",
-      "src": "orig[06]"
-    },
-    {
-      "id": "freezeenemy",
-      "no": "07",
-      "name": "冻结敌方技能",
-      "group": "建造",
-      "kind": "toggle",
-      "hotkey": "Ctrl+F7",
-      "icon": "🚫",
-      "hooks": [
-        "build_power",
-        "build_hp_a",
-        "build_hp_b",
-        "sidebar_pts"
-      ],
-      "flag": "freezeenemy",
-      "desc": "延后非本地阵营的协议/超武冷却（含盟友；不冻结普通生产，待实战验证）",
-      "src": "orig[07]"
-    },
-    {
-      "id": "aiblock",
-      "no": "34",
-      "name": "禁止电脑建造",
-      "group": "建造",
-      "kind": "toggle",
-      "hotkey": "F10",
-      "icon": "⛔",
-      "hooks": [
-        "aiblock"
-      ],
-      "flag": "aiblock",
-      "desc": "电脑阵营的生产进度被钉在每拍 1：任何单位/建筑都造不完（FINAL3 F10 同款语义；含盟友，不影响己方）",
-      "src": "FINAL3 F10"
-    },
-    {
-      "id": "godmode",
-      "no": "35",
-      "name": "玩家无敌",
-      "group": "建造",
-      "kind": "toggle",
-      "hotkey": "F11",
-      "icon": "🛡",
-      "hooks": [
-        "godmode"
-      ],
-      "flag": "godmode",
-      "desc": "己方单位/建筑的生命在血条刷新时被重置为 100 万（FINAL3 F11 同款：掉血一帧内回满）；关闭后恢复正常掉血",
-      "src": "FINAL3 F11"
-    },
-    {
-      "id": "onekill",
-      "no": "36",
-      "name": "一击必杀",
-      "group": "建造",
-      "kind": "toggle",
-      "hotkey": "F12",
-      "icon": "💀",
-      "hooks": [
-        "onekill",
-        "onekill_a",
-        "onekill_b"
-      ],
-      "flag": "onekill",
-      "desc": "任何敌方单位受到伤害即刻死亡（当前与上限 HP 双清零；FINAL3 F12 三钩子同款，含盟友，不影响己方）",
-      "src": "FINAL3 F12"
-    },
-    {
-      "id": "zoomlimit",
-      "no": "08",
-      "name": "无限缩放",
-      "group": "建造",
-      "kind": "toggle",
-      "hotkey": "Ctrl+F8",
-      "icon": "🔍",
-      "hooks": [
-        "power_cool"
-      ],
-      "flag": "zoom",
-      "desc": "绕过镜头范围钳制（修正 ZF 分支控制，待实战复测）",
-      "src": "orig[06/08]"
-    },
-    {
-      "id": "revealmap",
-      "no": "09",
-      "name": "地图全开",
-      "group": "视野",
-      "kind": "toggle",
-      "hotkey": "Ctrl+F9",
-      "icon": "🗺",
-      "hooks": [
-        "unit_lv"
-      ],
-      "flag": "revealmap",
-      "desc": "战争迷雾消散；进图后开启需建造建筑/重部署MCV刷新（原版同款行为）",
-      "src": "orig[09]"
-    },
-    {
-      "id": "sel_lv",
-      "no": "10",
-      "name": "选中单位瞬升三星",
-      "group": "选中单位",
-      "kind": "action",
-      "hotkey": "Alt+P",
-      "icon": "🌟",
-      "action": "lv",
-      "desc": "选中单位直接晋升三星（FINAL3 P 键同款 rank(3,1,0)，走晋级桥，支持多目标；需 rank-bridge.enable）",
-      "src": "orig[10] FINAL3 P"
-    },
-    {
-      "id": "ammo",
-      "no": "18",
-      "name": "选中单位无限弹药",
-      "group": "选中单位",
-      "kind": "toggle",
-      "hotkey": "Ctrl+;",
-      "icon": "💣",
-      "hooks": [
-        "weapon_clip"
-      ],
-      "flag": "ammo",
-      "desc": "本地选中单位开火后回填真实弹夹容量；不改变连发计数，待实战复测",
-      "src": "orig[18]"
-    },
-    {
-      "id": "sel_speed",
-      "no": "11",
-      "name": "选中单位高速移动",
-      "group": "选中单位",
-      "kind": "action",
-      "hotkey": "Alt+-",
-      "icon": "🏃",
-      "action": "speed1",
-      "desc": "当前移动模式基础速度设为 500；保留游戏减速与速度上限",
-      "src": "orig[11]"
-    },
-    {
-      "id": "sel_speed2",
-      "no": "12",
-      "name": "选中单位低速移动",
-      "group": "选中单位",
-      "kind": "action",
-      "hotkey": "Alt+=",
-      "icon": "🏃‍♀️",
-      "action": "speed2",
-      "desc": "当前移动模式基础速度设为 10；FINAL3低速意图，保留原速度以便恢复",
-      "src": "orig[12] FINAL3 slow"
-    },
-    {
-      "id": "sel_freeze",
-      "no": "13",
-      "name": "冻结选中单位",
-      "group": "选中单位",
-      "kind": "action",
-      "hotkey": "Alt+PgUp",
-      "icon": "🧊",
-      "action": "freeze1",
-      "desc": "当前模式基础速度置 0；编队速度覆盖可能影响效果，待实战复测",
-      "src": "orig[13]"
-    },
-    {
-      "id": "sel_freeze2",
-      "no": "14",
-      "name": "恢复选中单位速度",
-      "group": "选中单位",
-      "kind": "action",
-      "hotkey": "Alt+PgDn",
-      "icon": "🧊",
-      "action": "speedrestore",
-      "desc": "仅恢复本会话记录、且Locomotor实例未重建的原始速度",
-      "src": "orig[14] FINAL3 restore"
-    },
-    {
-      "id": "sel_hpmax",
-      "no": "15",
-      "name": "选中目标生命拉满",
-      "group": "选中单位",
-      "kind": "action",
-      "hotkey": "Alt+[",
-      "icon": "❤️",
-      "action": "hpmax",
-      "desc": "[+33C]→[+4]=[+C]=999999",
-      "src": "orig[15]"
-    },
-    {
-      "id": "sel_hpmin",
-      "no": "16",
-      "name": "选中目标生命归一",
-      "group": "选中单位",
-      "kind": "action",
-      "hotkey": "Alt+]",
-      "icon": "💀",
-      "action": "hpmin",
-      "desc": "[+4]=1（濒死）",
-      "src": "orig[16]"
-    },
-    {
-      "id": "sel_hpnormal",
-      "no": "17",
-      "name": "恢复选中目标正常生命",
-      "group": "选中单位",
-      "kind": "action",
-      "hotkey": "Alt+\\",
-      "icon": "🩹",
-      "action": "hpnormal",
-      "desc": "恢复基准生命上限并治疗，撤销生命上限修改（FINAL3同款）",
-      "src": "orig[17]"
-    },
-    {
-      "id": "sel_heal",
-      "no": "17b",
-      "name": "治疗选中目标",
-      "group": "选中单位",
-      "kind": "action",
-      "hotkey": "Alt+H",
-      "icon": "🏥",
-      "action": "heal",
-      "desc": "治疗至当前有效上限，保留生命上限修改",
-      "src": "modern"
-    },
-    {
-      "id": "sel_capture",
-      "no": "19",
-      "name": "俘虏选中目标",
-      "group": "选中单位",
-      "kind": "action",
-      "hotkey": "Alt+O",
-      "icon": "🏹",
-      "action": "capture",
-      "desc": "经游戏线程调用完整归属切换函数俘虏目标（需 bridges.enable；仅非己方目标）",
-      "src": "orig[19] FINAL3 ChangeID（完整流程版）"
-    },
-    {
-      "id": "sel_destroy",
-      "no": "20",
-      "name": "摧毁选中目标",
-      "group": "选中单位",
-      "kind": "action",
-      "hotkey": "Alt+Del",
-      "icon": "☠️",
-      "action": "destroy",
-      "desc": "经游戏线程用 HP 调整函数施加致死伤害（完整死亡流程+通知；需 bridges.enable）",
-      "src": "orig[20] FINAL3 KillSelectUnit（adjust 重推导）"
-    },
-    {
-      "id": "threat_max",
-      "no": "21",
-      "name": "威胁等级最大",
-      "group": "其他",
-      "kind": "toggle",
-      "hotkey": "Alt+T",
-      "icon": "🔺",
-      "hooks": [
-        "ammo",
-        "ammo_2",
-        "ammo_3",
-        "ammo_4",
-        "ammo_5",
-        "ammo_6"
-      ],
-      "flag": "threatmax",
-      "desc": "所有单位威胁分量持续写 50000（FINAL3 Danger Max 同款；与归零同开时最大优先）",
-      "src": "orig[21] FINAL3 Danger Max"
-    },
-    {
-      "id": "threat_zero",
-      "no": "22",
-      "name": "威胁等级归零",
-      "group": "其他",
-      "kind": "toggle",
-      "hotkey": "Alt+Shift+T",
-      "icon": "🔻",
-      "hooks": [
-        "ammo",
-        "ammo_2",
-        "ammo_3",
-        "ammo_4",
-        "ammo_5",
-        "ammo_6"
-      ],
-      "flag": "threatzero",
-      "desc": "所有单位威胁分量持续写 0（FINAL3 Danger Min 同款）",
-      "src": "orig[22] FINAL3 Danger Min"
-    },
-    {
-      "id": "threat_normal",
-      "no": "23",
-      "name": "威胁等级恢复",
-      "group": "其他",
-      "kind": "action",
-      "hotkey": "Alt+N",
-      "icon": "↩️",
-      "action": "threatnormal",
-      "desc": "关闭最大/归零覆盖，威胁等级交还游戏自然重算（FINAL3 同款：不保存旧值）",
-      "src": "orig[23] FINAL3 Danger Normal"
-    },
-    {
-      "id": "oremine",
-      "no": "24",
-      "name": "矿脉恢复满量",
-      "group": "其他",
-      "kind": "action",
-      "hotkey": "Alt+M",
-      "icon": "⛏",
-      "hooks": [],
-      "action": "oreminerestore",
-      "desc": "恢复选中的矿脉至 100000 并清零已采量（活体验证链 body+0x398→状态→容器+8）",
-      "src": "orig[24] FINAL3 RestoreOreMine（选中版）"
-    },
-    {
-      "id": "sel_copy",
-      "no": "25",
-      "name": "复制选中单位",
-      "group": "选中单位",
-      "kind": "action",
-      "hotkey": "Alt+C",
-      "icon": "📋",
-      "hooks": [],
-      "action": "selcopy",
-      "desc": "经游戏线程生成 wrapper 在鼠标位置为玩家复制每个选中单位/建筑（需 spawn-bridge.enable；模板取自选中链）",
-      "src": "orig[21] FINAL3 CopySelectUnit（map-start spawn wrapper 重配对）"
-    },
-    {
-      "id": "mcv_allied",
-      "no": "26",
-      "name": "盟军基地车",
-      "group": "战场增援",
-      "kind": "action",
-      "hotkey": "Alt+F1",
-      "icon": "🛻",
-      "arg": {
-        "kind": "choice",
-        "label": "阵营",
-        "value": "allied"
-      },
-      "hooks": [],
-      "action": "spawnhash",
-      "desc": "在鼠标位置生成一辆盟军基地车（需 spawn-bridge.enable；哈希 0x28DA574E 取自游戏字符串哈希表）",
-      "src": "orig FINAL3 Base（hash=AlliedMCV）"
-    },
-    {
-      "id": "mcv_soviet",
-      "no": "27",
-      "name": "苏军基地车",
-      "group": "战场增援",
-      "kind": "action",
-      "hotkey": "Alt+F2",
-      "icon": "🚚",
-      "arg": {
-        "kind": "choice",
-        "label": "阵营",
-        "value": "soviet"
-      },
-      "hooks": [],
-      "action": "spawnhash",
-      "desc": "在鼠标位置生成一辆苏军基地车（需 spawn-bridge.enable；哈希 0xAF4C0DA5）",
-      "src": "orig FINAL3 Base（hash=SovietMCV）"
-    },
-    {
-      "id": "mcv_japan",
-      "no": "28",
-      "name": "帝国基地车",
-      "group": "战场增援",
-      "kind": "action",
-      "hotkey": "Alt+F3",
-      "icon": "🚛",
-      "arg": {
-        "kind": "choice",
-        "label": "阵营",
-        "value": "japan"
-      },
-      "hooks": [],
-      "action": "spawnhash",
-      "desc": "在鼠标位置生成一辆升阳帝国基地车（需 spawn-bridge.enable；哈希 0x1C2EF767）",
-      "src": "orig FINAL3 Base（hash=JapanMCV）"
-    },
-    {
-      "id": "reinforce_code",
-      "no": "29",
-      "name": "战场增援代码",
-      "group": "战场增援",
-      "kind": "action",
-      "hotkey": "Alt+R",
-      "icon": "📡",
-      "arg": {
-        "kind": "code",
-        "label": "增援代码",
-        "placeholder": "例如 6586A5A0",
-        "bind": "text"
-      },
-      "hooks": [],
-      "action": "spawnhash",
-      "desc": "输入 8 位十六进制增援代码（如 6586A5A0），围绕鼠标位置一次生成 8 个并经晋级桥全部升星（FINAL3 We-need-back 语义；需 spawn-bridge + rank-bridge）",
-      "src": "orig[22] FINAL3 WeNeedBack（批量 8+升星对齐 MustCode2+B00 循环；位置改为圆形分布防叠放）"
-    },
-    {
-      "id": "build_anywhere",
-      "no": "30",
-      "name": "随地建造",
-      "group": "战场增援",
-      "kind": "toggle",
-      "hotkey": "Alt+B",
-      "icon": "🏗",
-      "hooks": [],
-      "private": {
-        "site": "1.12=0x128df5;1.13=0x111955"
-      },
-      "desc": "解除建筑放置的范围限制（FINAL3 同款 2 字节分支 patch）：有效范围外的灰色格子也可直接点击建造；地形/占用/碰撞检查保留。对局中随时开关，切换对局不需重开，修改器脱离时自动还原",
-      "src": "orig FINAL3 随地建造（放置 gate '范围外返回失败码2' 分支 jne→jmp；EA 0x4E7565 ↔ 1.13 0x511955 ↔ 1.12 0x528DF5，三版同字节；2026-10-12 Steam 1.13 实测放置成功）"
-    }
+ "schema": 1,
+ "game": {
+  "moduleNames": [
+   "ra3_1.12.game",
+   "ra3_1.13.game"
   ],
-  "references": {
-    "threatFn": {
-      "rva": {
-        "1.12": "0x39ECB0",
-        "1.13": "0x39E3E0"
-      },
-      "status": "suspect-region-delta-0; verify in game"
-    }
+  "processName": "ra3_1.12.game",
+  "imageBase": "0x400000",
+  "bits": 32
+ },
+ "hooks": {
+  "money_h2": {
+   "rva": {
+    "1.12": "0x664e9e",
+    "1.13": "0x6699ce"
+   },
+   "displaced": "0378048B11",
+   "displacedLen": 5,
+   "asm": "add edi,[eax+4]; mov edx,[ecx]",
+   "pattern": "8B CF E8 ?? ?? ?? ?? 8B 78 14 8B 8E 08 07 00 00 03 78 04 8B 11 8B 42 0C 57 FF D0 6A 01 8B 8E 08 07 00 00 8B 11 8B 42 04 FF D0 8B 96 10 07 00 00",
+   "patternSiteOffset": 16
+  },
+  "money_h1": {
+   "rva": {
+    "1.12": "0x664dad",
+    "1.13": "0x6698dd"
+   },
+   "displaced": "8B40048B8EB0030000",
+   "displacedLen": 9,
+   "asm": "mov eax,[eax+4]; mov ecx,[esi+3B0]",
+   "pattern": "8D 48 20 39 09 5B 74 04 33 C0 EB 03 8B 40 04 8B 8E B0 03 00 00 8B 39 52 8B 57 0C 50 FF D2 8D 8E B8 03 00 00 E8 ?? ?? ?? ?? 8D 8E 30 06 00 00 E8",
+   "patternSiteOffset": 12
+  },
+  "proto_cool_b": {
+   "rva": {
+    "1.12": "0x34d81e",
+    "1.13": "0x3386ce"
+   },
+   "displaced": "F30F2C461C",
+   "displacedLen": 5,
+   "asm": "cvttss2si eax,[esi+1C]",
+   "pattern": "F3 0F 58 46 60 F3 0F 2C C0 5E 59 C3 F3 0F 2C 46 1C 5E 59 C3 CC CC CC CC CC CC CC CC CC CC 83 EC 08 55 8B 6C 24 10 85 ED 56 8B F1 75 0A 5E 32 C0",
+   "patternSiteOffset": 12
+  },
+  "proto_cool_a": {
+   "rva": {
+    "1.12": "0x34d77c",
+    "1.13": "0x33862c"
+   },
+   "displaced": "D9461C89465C",
+   "displacedLen": 6,
+   "asm": "fld [esi+1C]; mov [esi+5C],eax",
+   "pattern": "CC CC CC CC 51 56 8B F1 8B 46 04 85 C0 74 0F 8B ?? ?? ?? ?? 00 3B 46 18 75 04 B0 01 EB 02 32 C0 ?? ?? ?? ?? 0F 85 ?? ?? ?? ?? 84 C0 0F 84 B0 00",
+   "patternSiteOffset": 64
+  },
+  "aiblock": {
+   "rva": {
+    "1.12": "0x34d920",
+    "1.13": "0x3387d0"
+   },
+   "displaced": "0350043BD7",
+   "displacedLen": 5,
+   "asm": "add edx,[eax+4]; cmp edx,edi",
+   "pattern": "03 50 04 3B D7",
+   "patternSiteOffset": 0
+  },
+  "godmode": {
+   "rva": {
+    "1.12": "0x1705df",
+    "1.13": "0x1588ff"
+   },
+   "displaced": "8B503C8BCE",
+   "displacedLen": 5,
+   "asm": "mov edx,[eax+3C]; mov ecx,esi",
+   "pattern": "D9 5C 24 08 8B 06 8B 50 3C 8B CE",
+   "patternSiteOffset": 6
+  },
+  "onekill": {
+   "rva": {
+    "1.12": "0x3a366e",
+    "1.13": "0x38cb4e"
+   },
+   "displaced": "F30F114604",
+   "displacedLen": 5,
+   "asm": "movss [esi+4],xmm0",
+   "pattern": "F3 0F 10 46 04 F3 0F 11 46 08 F3 0F 58 C1 57 F3 0F 11 46 04 74",
+   "patternSiteOffset": 15
+  },
+  "onekill_a": {
+   "rva": {
+    "1.12": "0x43c964",
+    "1.13": "0x427b34"
+   },
+   "displaced": "8B8E3C030000",
+   "displacedLen": 6,
+   "asm": "mov ecx,[esi+0x33C]",
+   "pattern": "8B 8E 3C 03 00 00 8B 95 80 00 00 00",
+   "patternSiteOffset": 0
+  },
+  "onekill_b": {
+   "rva": {
+    "1.12": "0x320963",
+    "1.13": "0x30b6c3"
+   },
+   "displaced": "8B893C030000",
+   "displacedLen": 6,
+   "asm": "mov ecx,[ecx+0x33C]",
+   "pattern": "8B 4C 24 0C 8B 89 3C 03 00 00",
+   "patternSiteOffset": 4
+  },
+  "build_hp_b": {
+   "rva": {
+    "1.12": "0x47cc16",
+    "1.13": "0x468056"
+   },
+   "displaced": "8B51503B500C",
+   "displacedLen": 6,
+   "asm": "mov edx,[ecx+50]; cmp edx,[eax+0C]",
+   "pattern": "00 CC CC CC CC CC CC CC CC CC 8B 44 24 04 8B 50 08 8B 02 8B 50 04 8B 81 18 02 00 00 81 C1 18 02 00 00 3B C1 74 0F 8D ?? ?? ?? ?? 50 08 74 0B 8B",
+   "patternSiteOffset": 64
+  },
+  "zoom_unit_xp": {
+   "rva": {
+    "1.12": "0x169d85",
+    "1.13": "0x152115"
+   },
+   "displaced": "8B0CBA85C9",
+   "displacedLen": 5,
+   "asm": "mov ecx,[edx+edi*4]; test ecx,ecx",
+   "pattern": "24 10 0F 8E ?? ?? ?? ?? 8B 74 24 44 8B 0C BA 85 C9 0F 84 ?? ?? ?? ?? 8B 41 04 8B 40 04 83 B8 B8 00 00 00 02 0F 85 ?? ?? ?? ?? 8B ?? ?? ?? ?? E8",
+   "patternSiteOffset": 12
+  },
+  "money_h3": {
+   "rva": {
+    "1.12": "0x664F0C",
+    "1.13": "0x669a3c"
+   },
+   "displaced": "8B78348B4E3C",
+   "displacedLen": 6,
+   "asm": null,
+   "sibling": "money_h2"
+  },
+  "build_hp_a": {
+   "rva": {
+    "1.12": "0x47CB89",
+    "1.13": "0x467fc9"
+   },
+   "displaced": "8B70508B01",
+   "displacedLen": 5,
+   "asm": null,
+   "sibling": "build_hp_b"
+  },
+  "sidebar_pts": {
+   "rva": {
+    "1.12": "0x348A06",
+    "1.13": "0x333886"
+   },
+   "displaced": "8B48503B4E20",
+   "displacedLen": 6,
+   "asm": null,
+   "sibling": "proto_cool_b"
+  },
+  "unit_lv": {
+   "rva": {
+    "1.12": "0x4005BC",
+    "1.13": "0x3eb50c"
+   },
+   "displaced": "F30F118560020000",
+   "displacedLen": 8,
+   "asm": null
+  },
+  "power_cool": {
+   "rva": {
+    "1.12": "0x22B82D",
+    "1.13": "0x216C7D"
+   },
+   "displaced": "F30F114644",
+   "displacedLen": 5,
+   "asm": null,
+   "note": "old trainer [08] Zoom site (camera ctx confirmed: ebp=camera obj)"
+  },
+  "build_power": {
+   "rva": {
+    "1.12": "0x329f19",
+    "1.13": "0x314d19"
+   },
+   "displaced": "8B9818040000",
+   "displacedLen": 6,
+   "asm": null,
+   "pattern": "F6 C1 01 74 06 D9 EE 5F 5E 59 C3 53 8B 98 18 04 00 00 85 DB 74 2D 8B 16 8B 42 1C 8B CE FF D0 8B 48 08 8B 51 1C C1 EA 0C F6 C2 01 74 16 8B 06 8B",
+   "patternSiteOffset": 12
+  },
+  "ammo": {
+   "rva": {
+    "1.12": "0x477090",
+    "1.13": "0x4622E0"
+   },
+   "displaced": "8B8178120000",
+   "displacedLen": 6,
+   "asm": null,
+   "pattern": "CC CC CC CC CC CC CC CC CC CC CC CC 8B 81 78 12 00 00 85 C0 74 07 8B 40 04 8A 40 5A C3 32 C0 C3 CC CC CC CC CC CC CC CC CC CC CC CC 8B 44 24 04",
+   "patternSiteOffset": 12,
+   "stub": "ammo",
+   "note": "6-caller main accessor (old EA site equivalent)"
+  },
+  "power": {
+   "rva": {
+    "1.12": "0x33511F",
+    "1.13": "0x31FEDF"
+   },
+   "displaced": "D986BC010000",
+   "displacedLen": 6,
+   "asm": "fld [esi+1BC]"
+  },
+  "money_h4": {
+   "rva": {
+    "1.12": "0x664F55",
+    "1.13": "0x669A85"
+   },
+   "displaced": "F30F10472C",
+   "displacedLen": 5,
+   "asm": "movss xmm0,[edi+2C]"
+  },
+  "ammo_2": {
+   "rva": {
+    "1.12": "0x477070",
+    "1.13": "0x4622C0"
+   },
+   "displaced": "8B8178120000",
+   "displacedLen": 6,
+   "stub": "ammo",
+   "asm": "mov eax,[ecx+1278]"
+  },
+  "ammo_3": {
+   "rva": {
+    "1.12": "0x4770B0",
+    "1.13": "0x462300"
+   },
+   "displaced": "8B8178120000",
+   "displacedLen": 6,
+   "stub": "ammo",
+   "asm": "mov eax,[ecx+1278]"
+  },
+  "ammo_4": {
+   "rva": {
+    "1.12": "0x479DC0",
+    "1.13": "0x4651B0"
+   },
+   "displaced": "8B8178120000",
+   "displacedLen": 6,
+   "stub": "ammo",
+   "asm": "mov eax,[ecx+1278]"
+  },
+  "ammo_5": {
+   "rva": {
+    "1.12": "0x479DE0",
+    "1.13": "0x4651D0"
+   },
+   "displaced": "8B8178120000",
+   "displacedLen": 6,
+   "stub": "ammo",
+   "asm": "mov eax,[ecx+1278]"
+  },
+  "weapon_clip": {
+   "rva": {
+    "1.12": "0x3CF271",
+    "1.13": "0x3B9171"
+   },
+   "displaced": "83C8FF01461C",
+   "displacedLen": 6,
+   "asm": "or eax,-1; add [esi+1C],eax",
+   "pattern": "83 C8 FF 01 46 1C 01 46 24 01 46 2C 83 7E 2C 00",
+   "patternSiteOffset": 0
+  },
+  "ammo_6": {
+   "rva": {
+    "1.12": "0x479E00",
+    "1.13": "0x4651F0"
+   },
+   "displaced": "8B8178120000",
+   "displacedLen": 6,
+   "stub": "ammo",
+   "asm": "mov eax,[ecx+1278]"
   }
+ },
+ "globals": {
+  "selectionList": {
+   "rva": {
+    "1.12": "0x8E08DC",
+    "1.13": "0x8E4BFC"
+   },
+   "note": "[root]+0x5C=count,+0x50=head linked list; node+8->wrapper+0x138->body; body+0x418=side pointer"
+  },
+  "playerRoot": {
+   "rva": {
+    "1.12": "0x8ede2c",
+    "1.13": "0x8f214c"
+   },
+   "note": "[root]+0x28 = 本地阵营指针；两版 side getter 与调用点静态确认，1.13 活体 owner 匹配（不是玩家索引）"
+  },
+  "mouseGround": {
+   "rva": {
+    "1.13": "0x8e15b8"
+   },
+   "note": "鼠标地面交点 float3：+0=x, +4=z, +8=地面高度 y——UI 每帧更新的 .data 静态副本，任意时刻跟随鼠标（放置/悬停/命令共用），活体差分验证。1.12 对应待活体扫描（无静态引用，运行时指针访问）。"
+  }
+ },
+ "features": [
+  {
+   "id": "money",
+   "no": "01",
+   "name": "无限资金",
+   "group": "资源",
+   "kind": "toggle",
+   "hotkey": "Ctrl+F1",
+   "icon": "💰",
+   "hooks": [
+    "money_h2"
+   ],
+   "flag": "money",
+   "desc": "每次资金结算额外 +100000，且电力上限拉满",
+   "src": "orig[01]"
+  },
+  {
+   "id": "power",
+   "no": "02",
+   "name": "无限电力",
+   "group": "资源",
+   "kind": "toggle",
+   "hotkey": "Ctrl+F2",
+   "icon": "⚡",
+   "hooks": [
+    "money_h1"
+   ],
+   "flag": "power",
+   "desc": "资金恒为 10 万、电力消耗归零（不缺电）",
+   "src": "orig[02]"
+  },
+  {
+   "id": "scpoints",
+   "no": "03",
+   "name": "无限协议点数",
+   "group": "资源",
+   "kind": "toggle",
+   "hotkey": "Ctrl+F3",
+   "icon": "🎖",
+   "hooks": [
+    "money_h3"
+   ],
+   "flag": "scpoints",
+   "desc": "秘密协议点数恒为 15（FINAL3同款）",
+   "src": "orig[03]"
+  },
+  {
+   "id": "allproto",
+   "no": "04",
+   "name": "解锁全部协议",
+   "group": "资源",
+   "kind": "toggle",
+   "hotkey": "Ctrl+F4",
+   "icon": "🔓",
+   "hooks": [
+    "money_h4"
+   ],
+   "flag": "allproto",
+   "desc": "解锁全部秘密协议技能",
+   "src": "orig[04]"
+  },
+  {
+   "id": "fastbuild",
+   "no": "05",
+   "name": "快速建造",
+   "group": "建造",
+   "kind": "toggle",
+   "hotkey": "Ctrl+F5",
+   "icon": "🏗",
+   "hooks": [
+    "proto_cool_a",
+    "proto_cool_b",
+    "power"
+   ],
+   "flag": "fastbuild",
+   "desc": "建筑与单位生产都大幅加速（原版[05]即同时覆盖两者）且建造期间不断电",
+   "src": "orig[05]"
+  },
+  {
+   "id": "instantready",
+   "no": "06",
+   "name": "协议/超武立即就绪",
+   "group": "建造",
+   "kind": "toggle",
+   "hotkey": "Ctrl+F6",
+   "icon": "❄",
+   "hooks": [
+    "build_power",
+    "build_hp_a"
+   ],
+   "flag": "instantready",
+   "desc": "仅本地阵营：协议技能与超级武器立即就绪（修正属主判定与冷却链表查询，待实战复测）",
+   "src": "orig[06]"
+  },
+  {
+   "id": "freezeenemy",
+   "no": "07",
+   "name": "冻结敌方技能",
+   "group": "建造",
+   "kind": "toggle",
+   "hotkey": "Ctrl+F7",
+   "icon": "🚫",
+   "hooks": [
+    "build_power",
+    "build_hp_a",
+    "build_hp_b",
+    "sidebar_pts"
+   ],
+   "flag": "freezeenemy",
+   "desc": "延后非本地阵营的协议/超武冷却（含盟友；不冻结普通生产，待实战验证）",
+   "src": "orig[07]"
+  },
+  {
+   "id": "aiblock",
+   "no": "34",
+   "name": "禁止电脑建造",
+   "group": "建造",
+   "kind": "toggle",
+   "hotkey": "F10",
+   "icon": "⛔",
+   "hooks": [
+    "aiblock"
+   ],
+   "flag": "aiblock",
+   "desc": "电脑阵营的生产进度被钉在每拍 1：任何单位/建筑都造不完（FINAL3 F10 同款语义；含盟友，不影响己方）",
+   "src": "FINAL3 F10"
+  },
+  {
+   "id": "godmode",
+   "no": "35",
+   "name": "玩家无敌",
+   "group": "建造",
+   "kind": "toggle",
+   "hotkey": "F11",
+   "icon": "🛡",
+   "hooks": [
+    "godmode"
+   ],
+   "flag": "godmode",
+   "desc": "己方单位/建筑的生命在血条刷新时被重置为 100 万（FINAL3 F11 同款：掉血一帧内回满）；关闭后恢复正常掉血",
+   "src": "FINAL3 F11"
+  },
+  {
+   "id": "onekill",
+   "no": "36",
+   "name": "一击必杀",
+   "group": "建造",
+   "kind": "toggle",
+   "hotkey": "F12",
+   "icon": "💀",
+   "hooks": [
+    "onekill",
+    "onekill_a",
+    "onekill_b"
+   ],
+   "flag": "onekill",
+   "desc": "任何敌方单位受到伤害即刻死亡（当前与上限 HP 双清零；FINAL3 F12 三钩子同款，含盟友，不影响己方）",
+   "src": "FINAL3 F12"
+  },
+  {
+   "id": "zoomlimit",
+   "no": "08",
+   "name": "无限缩放",
+   "group": "建造",
+   "kind": "toggle",
+   "hotkey": "Ctrl+F8",
+   "icon": "🔍",
+   "hooks": [
+    "power_cool"
+   ],
+   "flag": "zoom",
+   "desc": "绕过镜头范围钳制（修正 ZF 分支控制，待实战复测）",
+   "src": "orig[06/08]"
+  },
+  {
+   "id": "revealmap",
+   "no": "09",
+   "name": "地图全开",
+   "group": "视野",
+   "kind": "toggle",
+   "hotkey": "Ctrl+F9",
+   "icon": "🗺",
+   "hooks": [
+    "unit_lv"
+   ],
+   "flag": "revealmap",
+   "desc": "战争迷雾消散；进图后开启需建造建筑/重部署MCV刷新（原版同款行为）",
+   "src": "orig[09]"
+  },
+  {
+   "id": "sel_lv",
+   "no": "10",
+   "name": "选中单位瞬升三星",
+   "group": "选中单位",
+   "kind": "action",
+   "hotkey": "Alt+P",
+   "icon": "🌟",
+   "action": "lv",
+   "desc": "选中单位直接晋升三星（FINAL3 P 键同款 rank(3,1,0)，走晋级桥，支持多目标；需 rank-bridge.enable）",
+   "src": "orig[10] FINAL3 P"
+  },
+  {
+   "id": "ammo",
+   "no": "18",
+   "name": "选中单位无限弹药",
+   "group": "选中单位",
+   "kind": "toggle",
+   "hotkey": "Ctrl+;",
+   "icon": "💣",
+   "hooks": [
+    "weapon_clip"
+   ],
+   "flag": "ammo",
+   "desc": "本地选中单位开火后回填真实弹夹容量；不改变连发计数，待实战复测",
+   "src": "orig[18]"
+  },
+  {
+   "id": "sel_speed",
+   "no": "11",
+   "name": "选中单位高速移动",
+   "group": "选中单位",
+   "kind": "action",
+   "hotkey": "Alt+-",
+   "icon": "🏃",
+   "action": "speed1",
+   "desc": "当前移动模式基础速度设为 500；保留游戏减速与速度上限",
+   "src": "orig[11]"
+  },
+  {
+   "id": "sel_speed2",
+   "no": "12",
+   "name": "选中单位低速移动",
+   "group": "选中单位",
+   "kind": "action",
+   "hotkey": "Alt+=",
+   "icon": "🏃‍♀️",
+   "action": "speed2",
+   "desc": "当前移动模式基础速度设为 10；FINAL3低速意图，保留原速度以便恢复",
+   "src": "orig[12] FINAL3 slow"
+  },
+  {
+   "id": "sel_freeze",
+   "no": "13",
+   "name": "冻结选中单位",
+   "group": "选中单位",
+   "kind": "action",
+   "hotkey": "Alt+PgUp",
+   "icon": "🧊",
+   "action": "freeze1",
+   "desc": "当前模式基础速度置 0；编队速度覆盖可能影响效果，待实战复测",
+   "src": "orig[13]"
+  },
+  {
+   "id": "sel_freeze2",
+   "no": "14",
+   "name": "恢复选中单位速度",
+   "group": "选中单位",
+   "kind": "action",
+   "hotkey": "Alt+PgDn",
+   "icon": "🧊",
+   "action": "speedrestore",
+   "desc": "仅恢复本会话记录、且Locomotor实例未重建的原始速度",
+   "src": "orig[14] FINAL3 restore"
+  },
+  {
+   "id": "sel_hpmax",
+   "no": "15",
+   "name": "选中目标生命拉满",
+   "group": "选中单位",
+   "kind": "action",
+   "hotkey": "Alt+[",
+   "icon": "❤️",
+   "action": "hpmax",
+   "desc": "[+33C]→[+4]=[+C]=999999",
+   "src": "orig[15]"
+  },
+  {
+   "id": "sel_hpmin",
+   "no": "16",
+   "name": "选中目标生命归一",
+   "group": "选中单位",
+   "kind": "action",
+   "hotkey": "Alt+]",
+   "icon": "💀",
+   "action": "hpmin",
+   "desc": "[+4]=1（濒死）",
+   "src": "orig[16]"
+  },
+  {
+   "id": "sel_hpnormal",
+   "no": "17",
+   "name": "恢复选中目标正常生命",
+   "group": "选中单位",
+   "kind": "action",
+   "hotkey": "Alt+\\",
+   "icon": "🩹",
+   "action": "hpnormal",
+   "desc": "恢复基准生命上限并治疗，撤销生命上限修改（FINAL3同款）",
+   "src": "orig[17]"
+  },
+  {
+   "id": "sel_heal",
+   "no": "17b",
+   "name": "治疗选中目标",
+   "group": "选中单位",
+   "kind": "action",
+   "hotkey": "Alt+H",
+   "icon": "🏥",
+   "action": "heal",
+   "desc": "治疗至当前有效上限，保留生命上限修改",
+   "src": "modern"
+  },
+  {
+   "id": "sel_capture",
+   "no": "19",
+   "name": "俘虏选中目标",
+   "group": "选中单位",
+   "kind": "action",
+   "hotkey": "Alt+O",
+   "icon": "🏹",
+   "action": "capture",
+   "desc": "经游戏线程调用完整归属切换函数俘虏目标（需 bridges.enable；仅非己方目标）",
+   "src": "orig[19] FINAL3 ChangeID（完整流程版）"
+  },
+  {
+   "id": "sel_destroy",
+   "no": "20",
+   "name": "摧毁选中目标",
+   "group": "选中单位",
+   "kind": "action",
+   "hotkey": "Alt+Del",
+   "icon": "☠️",
+   "action": "destroy",
+   "desc": "经游戏线程用 HP 调整函数施加致死伤害（完整死亡流程+通知；需 bridges.enable）",
+   "src": "orig[20] FINAL3 KillSelectUnit（adjust 重推导）"
+  },
+  {
+   "id": "threat_max",
+   "no": "21",
+   "name": "威胁等级最大",
+   "group": "其他",
+   "kind": "toggle",
+   "hotkey": "Alt+T",
+   "icon": "🔺",
+   "hooks": [
+    "ammo",
+    "ammo_2",
+    "ammo_3",
+    "ammo_4",
+    "ammo_5",
+    "ammo_6"
+   ],
+   "flag": "threatmax",
+   "desc": "所有单位威胁分量持续写 50000（FINAL3 Danger Max 同款；与归零同开时最大优先）",
+   "src": "orig[21] FINAL3 Danger Max"
+  },
+  {
+   "id": "threat_zero",
+   "no": "22",
+   "name": "威胁等级归零",
+   "group": "其他",
+   "kind": "toggle",
+   "hotkey": "Alt+Shift+T",
+   "icon": "🔻",
+   "hooks": [
+    "ammo",
+    "ammo_2",
+    "ammo_3",
+    "ammo_4",
+    "ammo_5",
+    "ammo_6"
+   ],
+   "flag": "threatzero",
+   "desc": "所有单位威胁分量持续写 0（FINAL3 Danger Min 同款）",
+   "src": "orig[22] FINAL3 Danger Min"
+  },
+  {
+   "id": "threat_normal",
+   "no": "23",
+   "name": "威胁等级恢复",
+   "group": "其他",
+   "kind": "action",
+   "hotkey": "Alt+N",
+   "icon": "↩️",
+   "action": "threatnormal",
+   "desc": "关闭最大/归零覆盖，威胁等级交还游戏自然重算（FINAL3 同款：不保存旧值）",
+   "src": "orig[23] FINAL3 Danger Normal"
+  },
+  {
+   "id": "oremine",
+   "no": "24",
+   "name": "矿脉恢复满量",
+   "group": "其他",
+   "kind": "action",
+   "hotkey": "Alt+M",
+   "icon": "⛏",
+   "hooks": [],
+   "action": "oreminerestore",
+   "desc": "恢复选中的矿脉至 100000 并清零已采量（活体验证链 body+0x398→状态→容器+8）",
+   "src": "orig[24] FINAL3 RestoreOreMine（选中版）"
+  },
+  {
+   "id": "sel_copy",
+   "no": "25",
+   "name": "复制选中单位",
+   "group": "选中单位",
+   "kind": "action",
+   "hotkey": "Alt+C",
+   "icon": "📋",
+   "hooks": [],
+   "action": "selcopy",
+   "desc": "经游戏线程生成 wrapper 在鼠标位置为玩家复制每个选中单位/建筑（需 spawn-bridge.enable；模板取自选中链）",
+   "src": "orig[21] FINAL3 CopySelectUnit（map-start spawn wrapper 重配对）"
+  },
+  {
+   "id": "mcv_allied",
+   "no": "26",
+   "name": "盟军基地车",
+   "group": "战场增援",
+   "kind": "action",
+   "hotkey": "Alt+F1",
+   "icon": "🛻",
+   "arg": {
+    "kind": "choice",
+    "label": "阵营",
+    "value": "allied"
+   },
+   "hooks": [],
+   "action": "spawnhash",
+   "desc": "在鼠标位置生成一辆盟军基地车（需 spawn-bridge.enable；哈希 0x28DA574E 取自游戏字符串哈希表）",
+   "src": "orig FINAL3 Base（hash=AlliedMCV）"
+  },
+  {
+   "id": "mcv_soviet",
+   "no": "27",
+   "name": "苏军基地车",
+   "group": "战场增援",
+   "kind": "action",
+   "hotkey": "Alt+F2",
+   "icon": "🚚",
+   "arg": {
+    "kind": "choice",
+    "label": "阵营",
+    "value": "soviet"
+   },
+   "hooks": [],
+   "action": "spawnhash",
+   "desc": "在鼠标位置生成一辆苏军基地车（需 spawn-bridge.enable；哈希 0xAF4C0DA5）",
+   "src": "orig FINAL3 Base（hash=SovietMCV）"
+  },
+  {
+   "id": "mcv_japan",
+   "no": "28",
+   "name": "帝国基地车",
+   "group": "战场增援",
+   "kind": "action",
+   "hotkey": "Alt+F3",
+   "icon": "🚛",
+   "arg": {
+    "kind": "choice",
+    "label": "阵营",
+    "value": "japan"
+   },
+   "hooks": [],
+   "action": "spawnhash",
+   "desc": "在鼠标位置生成一辆升阳帝国基地车（需 spawn-bridge.enable；哈希 0x1C2EF767）",
+   "src": "orig FINAL3 Base（hash=JapanMCV）"
+  },
+  {
+   "id": "reinforce_code",
+   "no": "29",
+   "name": "战场增援代码",
+   "group": "战场增援",
+   "kind": "action",
+   "hotkey": "Alt+R",
+   "icon": "📡",
+   "arg": {
+    "kind": "code",
+    "label": "增援代码",
+    "placeholder": "单位名 / 代码，如 維和步兵",
+    "bind": "text",
+    "suggest": "reinforcement"
+   },
+   "hooks": [],
+   "action": "spawnhash",
+   "desc": "从内置单位表选择（📋），或输入单位名/8 位十六进制代码（如 6586A5A0），围绕鼠标一次生成 8 个并经晋级桥全部升星（需 spawn-bridge + rank-bridge）",
+   "src": "orig[22] FINAL3 WeNeedBack（批量 8+升星对齐 MustCode2+B00 循环；位置改为圆形分布防叠放）"
+  },
+  {
+   "id": "build_anywhere",
+   "no": "30",
+   "name": "随地建造",
+   "group": "战场增援",
+   "kind": "toggle",
+   "hotkey": "Alt+B",
+   "icon": "🏗",
+   "hooks": [],
+   "private": {
+    "site": "1.12=0x128df5;1.13=0x111955"
+   },
+   "desc": "解除建筑放置的范围限制（FINAL3 同款 2 字节分支 patch）：有效范围外的灰色格子也可直接点击建造；地形/占用/碰撞检查保留。对局中随时开关，切换对局不需重开，修改器脱离时自动还原",
+   "src": "orig FINAL3 随地建造（放置 gate '范围外返回失败码2' 分支 jne→jmp；EA 0x4E7565 ↔ 1.13 0x511955 ↔ 1.12 0x528DF5，三版同字节；2026-10-12 Steam 1.13 实测放置成功）"
+  }
+ ],
+ "references": {
+  "threatFn": {
+   "rva": {
+    "1.12": "0x39ECB0",
+    "1.13": "0x39E3E0"
+   },
+   "status": "suspect-region-delta-0; verify in game"
+  }
+ }
 }

@@ -1,0 +1,654 @@
+{
+ "source": "RA3 WBStringHashes.big + static manifest + ChineseT.big（自动提取，与手动解包法等价）",
+ "categories": [
+  {
+   "id": "allied",
+   "name": "盟军",
+   "items": [
+    {
+     "n": "AlliedAirfield",
+     "zh": "空軍基地",
+     "code": "5B3008B7"
+    },
+    {
+     "n": "AlliedAntiAirShip",
+     "zh": "水翼船",
+     "code": "2E211A99"
+    },
+    {
+     "n": "AlliedAntiAirVehicleTech1",
+     "zh": "多功能步兵戰鬥車",
+     "code": "BB06395A"
+    },
+    {
+     "n": "AlliedAntiGroundAircraft",
+     "zh": "維和轟炸機",
+     "code": "B74F8348"
+    },
+    {
+     "n": "AlliedAntiInfantryInfantry",
+     "zh": "維和步兵",
+     "code": "139CBC97"
+    },
+    {
+     "n": "AlliedAntiInfantryVehicle",
+     "zh": "激流ACV",
+     "code": "1C331EB6"
+    },
+    {
+     "n": "AlliedAntiNavalScout",
+     "zh": "海豚",
+     "code": "8ACA3F75"
+    },
+    {
+     "n": "AlliedAntiNavyShipTech1",
+     "zh": "突襲驅逐艦",
+     "code": "5AE534FC"
+    },
+    {
+     "n": "AlliedAntiStructureShip",
+     "zh": "航空母艦",
+     "code": "09705D80"
+    },
+    {
+     "n": "AlliedAntiStructureVehicle",
+     "zh": "雅典娜砲",
+     "code": "D48ED838"
+    },
+    {
+     "n": "AlliedAntiVehicleInfantry",
+     "zh": "標槍兵",
+     "code": "9C5D3BB8"
+    },
+    {
+     "n": "AlliedAntiVehicleVehicleTech1",
+     "zh": "守護者坦克",
+     "code": "07B91527"
+    },
+    {
+     "n": "AlliedAntiVehicleVehicleTech3",
+     "zh": "幻影坦克",
+     "code": "52BFE9C5"
+    },
+    {
+     "n": "AlliedBarracks",
+     "zh": "新兵訓練營",
+     "code": "509BD329"
+    },
+    {
+     "n": "AlliedBaseDefense",
+     "zh": "多功能步兵砲塔",
+     "code": "EE3E07BD"
+    },
+    {
+     "n": "AlliedBaseDefenseAdvanced",
+     "zh": "電磁波塔",
+     "code": "69B62705"
+    },
+    {
+     "n": "AlliedBomberAircraft",
+     "zh": "世紀轟炸機",
+     "code": "83D5A86B"
+    },
+    {
+     "n": "AlliedCommandoTech1",
+     "zh": "譚雅",
+     "code": "53E0EB12"
+    },
+    {
+     "n": "AlliedConstructionYard",
+     "zh": "建築工廠",
+     "code": "61A093F6"
+    },
+    {
+     "n": "AlliedEngineer",
+     "zh": "工兵",
+     "code": "E1E9179B"
+    },
+    {
+     "n": "AlliedFighterAircraft",
+     "zh": "阿波羅戰機",
+     "code": "3C82B910"
+    },
+    {
+     "n": "AlliedInfiltrationInfantry",
+     "zh": "間諜",
+     "code": "4AA5D515"
+    },
+    {
+     "n": "AlliedMCV",
+     "zh": "MCV",
+     "code": "28DA574E"
+    },
+    {
+     "n": "AlliedMiner",
+     "zh": "探礦車",
+     "code": "2A196E71"
+    },
+    {
+     "n": "AlliedNavalYard",
+     "zh": "海港",
+     "code": "7848F598"
+    },
+    {
+     "n": "AlliedOutpost",
+     "zh": "指揮中心",
+     "code": "0C3040FF"
+    },
+    {
+     "n": "AlliedPowerPlant",
+     "zh": "發電廠",
+     "code": "89B86E3D"
+    },
+    {
+     "n": "AlliedPowerPlantTurbine",
+     "zh": "渦輪",
+     "code": "E6A2CCE9"
+    },
+    {
+     "n": "AlliedRefinery",
+     "zh": "礦石精煉廠",
+     "code": "8ECE261C"
+    },
+    {
+     "n": "AlliedScoutInfantry",
+     "zh": "警犬",
+     "code": "DDFC28DE"
+    },
+    {
+     "n": "AlliedSuperWeapon",
+     "zh": "超時空傳送儀",
+     "code": "FD87E82A"
+    },
+    {
+     "n": "AlliedSuperWeaponAdvanced",
+     "zh": "質子撞擊砲",
+     "code": "95D6E965"
+    },
+    {
+     "n": "AlliedSupportAircraft",
+     "zh": "冰凍直升機",
+     "code": "509D5101"
+    },
+    {
+     "n": "AlliedTechStructure",
+     "zh": "科技中心",
+     "code": "CA9257EB"
+    },
+    {
+     "n": "AlliedWallPiece",
+     "zh": "圍牆",
+     "code": "296799CF"
+    },
+    {
+     "n": "AlliedWarFactory",
+     "zh": "裝甲工廠",
+     "code": "8209C058"
+    }
+   ]
+  },
+  {
+   "id": "soviet",
+   "name": "苏军",
+   "items": [
+    {
+     "n": "SovietAirfield",
+     "zh": "機場",
+     "code": "D25BB962"
+    },
+    {
+     "n": "SovietAntiAirShip",
+     "zh": "牛蛙載具",
+     "code": "CCBD2C91"
+    },
+    {
+     "n": "SovietAntiGroundAircraft",
+     "zh": "雙刃直升機",
+     "code": "40ACAD6D"
+    },
+    {
+     "n": "SovietAntiInfantryInfantry",
+     "zh": "徵召兵",
+     "code": "19AB11AF"
+    },
+    {
+     "n": "SovietAntiInfantryVehicle",
+     "zh": "鐮刀機甲",
+     "code": "60F0B4E9"
+    },
+    {
+     "n": "SovietAntiNavyShipTech1",
+     "zh": "磁爆快艇",
+     "code": "AFF62E78"
+    },
+    {
+     "n": "SovietAntiNavyShipTech2",
+     "zh": "阿庫拉潛艇",
+     "code": "8D0A384A"
+    },
+    {
+     "n": "SovietAntiStructureShip",
+     "zh": "無畏戰艦",
+     "code": "BCEF51B9"
+    },
+    {
+     "n": "SovietAntiStructureVehicle",
+     "zh": "V4火箭發射車",
+     "code": "821381DE"
+    },
+    {
+     "n": "SovietAntiVehicleInfantry",
+     "zh": "防空部隊",
+     "code": "2C358C61"
+    },
+    {
+     "n": "SovietAntiVehicleVehicleTech1",
+     "zh": "鐵鎚坦克",
+     "code": "94B3590B"
+    },
+    {
+     "n": "SovietAntiVehicleVehicleTech2",
+     "zh": "磁爆坦克",
+     "code": "911C7E98"
+    },
+    {
+     "n": "SovietAntiVehicleVehicleTech3",
+     "zh": "天啟坦克",
+     "code": "9E45383C"
+    },
+    {
+     "n": "SovietBarracks",
+     "zh": "軍營",
+     "code": "80D4EA1E"
+    },
+    {
+     "n": "SovietBaseDefenseAdvanced",
+     "zh": "磁爆線圈",
+     "code": "FA1F6466"
+    },
+    {
+     "n": "SovietBaseDefenseAir",
+     "zh": "高射砲",
+     "code": "1769BE29"
+    },
+    {
+     "n": "SovietBaseDefenseGround",
+     "zh": "哨兵槍",
+     "code": "4DF5F9C1"
+    },
+    {
+     "n": "SovietBomberAircraft",
+     "zh": "基洛夫飛船",
+     "code": "FFA811AE"
+    },
+    {
+     "n": "SovietBunker",
+     "zh": "戰鬥碉堡",
+     "code": "E980BF64"
+    },
+    {
+     "n": "SovietCommandoTech1",
+     "zh": "娜塔莎",
+     "code": "174F874F"
+    },
+    {
+     "n": "SovietConstructionYard",
+     "zh": "建築工廠",
+     "code": "C16FF13F"
+    },
+    {
+     "n": "SovietCrane",
+     "zh": "壓碎廠起重機",
+     "code": "A01D437D"
+    },
+    {
+     "n": "SovietEngineer",
+     "zh": "戰鬥工兵",
+     "code": "A08AABD3"
+    },
+    {
+     "n": "SovietFighterAircraft",
+     "zh": "米格戰機",
+     "code": "7F54CED1"
+    },
+    {
+     "n": "SovietHeavyAntiVehicleInfantry",
+     "zh": "磁爆部隊",
+     "code": "3E11865D"
+    },
+    {
+     "n": "SovietMCV",
+     "zh": "MCV",
+     "code": "AF4C0DA5"
+    },
+    {
+     "n": "SovietMiner",
+     "zh": "採礦車",
+     "code": "F6DAC2A4"
+    },
+    {
+     "n": "SovietNavalYard",
+     "zh": "海軍船塢",
+     "code": "6E1ABB35"
+    },
+    {
+     "n": "SovietOutpost",
+     "zh": "前哨基地",
+     "code": "09442731"
+    },
+    {
+     "n": "SovietPowerPlant",
+     "zh": "反應爐",
+     "code": "CF8D9F20"
+    },
+    {
+     "n": "SovietPowerPlantAdvanced",
+     "zh": "超級反應爐",
+     "code": "524BBD01"
+    },
+    {
+     "n": "SovietRefinery",
+     "zh": "礦石精煉廠",
+     "code": "C45AAEAB"
+    },
+    {
+     "n": "SovietScoutInfantry",
+     "zh": "戰熊",
+     "code": "33026FA1"
+    },
+    {
+     "n": "SovietScoutVehicle",
+     "zh": "恐怖機械人",
+     "code": "D741D327"
+    },
+    {
+     "n": "SovietSuperWeapon",
+     "zh": "鐵幕",
+     "code": "D20552E1"
+    },
+    {
+     "n": "SovietSuperWeaponAdvanced",
+     "zh": "真空內爆彈",
+     "code": "856C9DD6"
+    },
+    {
+     "n": "SovietSurveyor",
+     "zh": "史普尼克勘查車",
+     "code": "BB686AE1"
+    },
+    {
+     "n": "SovietTechStructure",
+     "zh": "戰鬥研究所",
+     "code": "B7377639"
+    },
+    {
+     "n": "SovietWallPiece",
+     "zh": "圍牆",
+     "code": "A82CF003"
+    },
+    {
+     "n": "SovietWarFactory",
+     "zh": "戰爭工廠",
+     "code": "D50C222E"
+    }
+   ]
+  },
+  {
+   "id": "japan",
+   "name": "升阳帝国",
+   "items": [
+    {
+     "n": "JapanAntiAirShip",
+     "zh": "海翼/天翼",
+     "code": "B142DEC6"
+    },
+    {
+     "n": "JapanAntiAirVehicleTech1",
+     "zh": "打擊者-VX/直升機-VX",
+     "code": "6E8C5FFF"
+    },
+    {
+     "n": "JapanAntiInfantryInfantry",
+     "zh": "帝國武士",
+     "code": "0FB02C55"
+    },
+    {
+     "n": "JapanAntiInfantryVehicle",
+     "zh": "機甲天狗/噴射天狗",
+     "code": "C3986ED4"
+    },
+    {
+     "n": "JapanAntiStructureShip",
+     "zh": "將軍戰艦",
+     "code": "FC5E3314"
+    },
+    {
+     "n": "JapanAntiStructureVehicle",
+     "zh": "波能坦克",
+     "code": "90B81D3C"
+    },
+    {
+     "n": "JapanAntiVehicleInfantry",
+     "zh": "坦克殺手",
+     "code": "7D0549DD"
+    },
+    {
+     "n": "JapanAntiVehicleInfantryTech3",
+     "zh": "火箭天使",
+     "code": "D81C1012"
+    },
+    {
+     "n": "JapanAntiVehicleShip",
+     "zh": "薙刀巡洋艦",
+     "code": "1A2CA9AB"
+    },
+    {
+     "n": "JapanAntiVehicleVehicleTech1",
+     "zh": "海嘯坦克",
+     "code": "CEB7DA1F"
+    },
+    {
+     "n": "JapanAntiVehicleVehicleTech3",
+     "zh": "鬼王",
+     "code": "59908E62"
+    },
+    {
+     "n": "JapanBarracks",
+     "zh": "瞬息道場",
+     "code": "04F32965"
+    },
+    {
+     "n": "JapanBarracksEgg",
+     "zh": "道場核心",
+     "code": "57F07A3A"
+    },
+    {
+     "n": "JapanBaseDefense",
+     "zh": "防衛者-VX",
+     "code": "89AE48EA"
+    },
+    {
+     "n": "JapanBaseDefenseAdvanced",
+     "zh": "波能塔",
+     "code": "2D795EEA"
+    },
+    {
+     "n": "JapanBaseDefenseAdvancedEgg",
+     "zh": "塔樓核心",
+     "code": "2412FB82"
+    },
+    {
+     "n": "JapanBaseDefenseEgg",
+     "zh": "防衛者核心",
+     "code": "1F496B6B"
+    },
+    {
+     "n": "JapanCommandoTech1",
+     "zh": "奧米茄百合子",
+     "code": "6586A5A0"
+    },
+    {
+     "n": "JapanConstructionYard",
+     "zh": "建築工廠",
+     "code": "356FA3A9"
+    },
+    {
+     "n": "JapanEngineer",
+     "zh": "工兵",
+     "code": "20DBDFCC"
+    },
+    {
+     "n": "JapanInfiltrationInfantry",
+     "zh": "忍者",
+     "code": "A768E216"
+    },
+    {
+     "n": "JapanLightTransportVehicle",
+     "zh": "迅雷運輸載具",
+     "code": "1791E072"
+    },
+    {
+     "n": "JapanMCV",
+     "zh": "MCV",
+     "code": "1C2EF767"
+    },
+    {
+     "n": "JapanMiner",
+     "zh": "採礦車",
+     "code": "92CDE50F"
+    },
+    {
+     "n": "JapanNavalYard",
+     "zh": "帝國碼頭",
+     "code": "263DA9AF"
+    },
+    {
+     "n": "JapanNavalYardEgg",
+     "zh": "碼頭核心",
+     "code": "F0455D99"
+    },
+    {
+     "n": "JapanNavyScoutShip",
+     "zh": "長槍迷你潛艇",
+     "code": "CEDA61FD"
+    },
+    {
+     "n": "JapanPowerPlant",
+     "zh": "瞬息發電機",
+     "code": "309480DD"
+    },
+    {
+     "n": "JapanPowerPlantEgg",
+     "zh": "發電機核心",
+     "code": "C6B3F8AA"
+    },
+    {
+     "n": "JapanPowerPlantTurbine",
+     "zh": "渦輪機",
+     "code": "80C3022B"
+    },
+    {
+     "n": "JapanRefinery",
+     "zh": "礦石精煉廠",
+     "code": "5D02B20C"
+    },
+    {
+     "n": "JapanRefineryEgg",
+     "zh": "礦石精煉廠核心",
+     "code": "FF4A8B60"
+    },
+    {
+     "n": "JapanScoutInfantry",
+     "zh": "爆裂機械人",
+     "code": "12E7D7A4"
+    },
+    {
+     "n": "JapanSuperWeapon",
+     "zh": "奈米蟲群巢穴",
+     "code": "D6D22475"
+    },
+    {
+     "n": "JapanSuperWeaponAdvanced",
+     "zh": "超能波毀滅裝置",
+     "code": "1AFC9A6E"
+    },
+    {
+     "n": "JapanSuperWeaponAdvancedEgg",
+     "zh": "毀滅裝置核心",
+     "code": "5C1C0F0F"
+    },
+    {
+     "n": "JapanSuperWeaponEgg",
+     "zh": "奈米蟲群核心",
+     "code": "5FC93021"
+    },
+    {
+     "n": "JapanTechStructure",
+     "zh": "奈米科技電腦主機",
+     "code": "D20CC8DE"
+    },
+    {
+     "n": "JapanTechStructureEgg",
+     "zh": "電腦主機核心",
+     "code": "78D3E32C"
+    },
+    {
+     "n": "JapanWallPiece",
+     "zh": "圍牆",
+     "code": "F8C50039"
+    },
+    {
+     "n": "JapanWarFactory",
+     "zh": "機甲工廠",
+     "code": "A689B39A"
+    },
+    {
+     "n": "JapanWarFactoryEgg",
+     "zh": "機甲工廠核心",
+     "code": "A02E31D3"
+    }
+   ]
+  },
+  {
+   "id": "neutral",
+   "name": "中立与趣味",
+   "items": [
+    {
+     "n": "AttributeCrate",
+     "zh": "屬性箱",
+     "code": "0CD4D09B"
+    },
+    {
+     "n": "BombCrate",
+     "zh": "炸彈箱",
+     "code": "6C65E68F"
+    },
+    {
+     "n": "ExplodingBarrel",
+     "zh": "醒目桶子",
+     "code": "F5D1D72F"
+    },
+    {
+     "n": "MoneyCrate",
+     "zh": "現金箱",
+     "code": "ADDBE2E3"
+    },
+    {
+     "n": "RandomCrate",
+     "zh": "神秘箱",
+     "code": "5292FE6A"
+    },
+    {
+     "n": "UnitCrate",
+     "zh": "部隊箱",
+     "code": "3FA3F32C"
+    },
+    {
+     "n": "VeterancyCrate",
+     "zh": "經驗箱",
+     "code": "71ED78EE"
+    }
+   ]
+  }
+ ]
+}
