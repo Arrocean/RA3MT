@@ -64,6 +64,10 @@ public sealed class MasterCode
     public const uint OneKillHealth = 0x34;   // 数据钩子捕获的健康模块
     public const uint OneKillZero = 0x3C;     // 0.0f 常量（块内存零初始化保证）
     // onekill 功能标志在 Flags["onekill"]=0x38
+    // 诊断计数（桩区与捕获区之间的空闲区，0x600..0xF00）：区分"站点没跑/
+    // 捕获不匹配/门失败"各级卡点（v30 主基地不能秒杀的调查工具）
+    public const uint OneKillSiteHits = 0x900;
+    public const uint OneKillKills = 0x904;
 
     public nuint Block { get; private set; }
     public bool Installed { get; private set; }
@@ -685,6 +689,7 @@ public static class StubGen
         a.Db(0x0F, 0x2F, 0x0D);                           // comiss xmm1,[block+0x3C]（0.0f）
         a.Db(BitConverter.GetBytes((uint)(block + MasterCode.OneKillZero)));
         a.JaeShort(1);                                    // 增量≥0（治疗/修理）→ 放行
+        a.IncM32Abs((uint)(block + MasterCode.OneKillSiteHits));  // 诊断：真伤害到达计数
         a.MovRegAbs(R.Eax, (uint)(block + MasterCode.OneKillHealth));
         a.Db(0x39, 0xF0);                                 // cmp eax,esi（≠刚捕获的受害者 → 放行）
         a.JneShort(1);
@@ -704,6 +709,7 @@ public static class StubGen
         a.MovRegRegDisp8(R.Edx, R.Edx, 0x20);             // 本地槽位号
         a.Db(0x39, 0xD0);                                 // cmp eax,edx
         a.JeShort(1);                                     // 己方单位 → 放行
+        a.IncM32Abs((uint)(block + MasterCode.OneKillKills));      // 诊断：击杀分支计数
         a.Db(0x0F, 0x57, 0xC0);                           // xorps xmm0,xmm0（重放将写 0）
         a.MovM32RegDisp8Imm32(R.Esi, 0x04, 0);            // 当前 HP = 0
         a.MovM32RegDisp8Imm32(R.Esi, 0x0C, 0);            // 上限 HP = 0
