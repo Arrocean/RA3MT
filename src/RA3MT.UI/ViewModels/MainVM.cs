@@ -95,6 +95,12 @@ public sealed class FeatureGroupVM
 
 public sealed class MainVM : ObservableObject
 {
+    /// <summary>Single source of truth for the displayed version. Scheme
+    /// (from v261013): date + per-day sequence — vYYMMDD-N, N counts the
+    /// releases of that calendar day.</summary>
+    public const string AppVersion = "v261013-1";
+    public string BannerText => $"{AppVersion} · 现代重制版";
+
     public TrainerEngine Engine { get; } = new();
     public ObservableCollection<FeatureGroupVM> Groups { get; } = new();
     public ObservableCollection<string> LogLines { get; } = new();
@@ -195,7 +201,7 @@ public sealed class MainVM : ObservableObject
             Log("已脱离。");
         }, _ => Attached);
 
-        Log($"RA3 Trainer 现代重制版 v35 就绪 — 支持 1.12 / 1.13（{TotalFeatures} 项功能，{Engine.Data.Hooks.Count} 个挂钩点）");
+        Log($"RA3 Trainer 现代重制版 {AppVersion} 就绪 — 支持 1.12 / 1.13（{TotalFeatures} 项功能，{Engine.Data.Hooks.Count} 个挂钩点）");
         Log("提示：点击「开始游戏」会自动启动游戏并附加；游戏已在运行时点击则直接附加。");
     }
 

@@ -170,7 +170,8 @@
             </Border>
             <StackPanel Margin="11,0,0,0" VerticalAlignment="Center">
               <TextBlock Text="RA3 Trainer" FontSize="15" FontWeight="Bold" />
-              <TextBlock Text="v35 · 现代重制版" FontSize="11" Foreground="{StaticResource Txt2}" Margin="0,2,0,0" />
+              <TextBlock Text="{Binding BannerText}" FontSize="11" Foreground="{StaticResource Txt2}" Margin="0,2,0,0" />
+              <TextBlock Text="by WhiteSprite" FontSize="10" Foreground="{StaticResource Txt3}" Margin="0,2,0,0" />
             </StackPanel>
           </StackPanel>
 
