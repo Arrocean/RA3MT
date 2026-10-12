@@ -14,8 +14,7 @@ namespace RA3MT.Core.Features;
 /// </summary>
 public static class LegacyFeatureCatalog
 {
-    public static FeatureRegistry Build(FeaturesData data, TrainerEngine? engine = null,
-        Func<FeatureResult>? diagnostics = null)
+    public static FeatureRegistry Build(FeaturesData data, TrainerEngine? engine = null)
     {
         var features = new List<IFeature>(data.Features.Count);
         foreach (var def in data.Features)
@@ -90,18 +89,11 @@ public static class LegacyFeatureCatalog
             }
 
             if (kind == FeatureKind.Action && def.Action is not null
-                && def.Action is not ("diag" or "selcopy" or "spawnhash"))
+                && def.Action is not ("selcopy" or "spawnhash"))
             {
                 features.Add(def.Action == "threatnormal"
                     ? new Selection.ThreatNormalFeature()
                     : new Selection.SelectionActionFeature(def.Id, def.Action));
-                continue;
-            }
-
-            if (def.Action == "diag")
-            {
-                features.Add(new Actions.DiagnosticsFeature(def.Id,
-                    diagnostics ?? (() => FeatureResult.Failure("诊断不可用"))));
                 continue;
             }
 

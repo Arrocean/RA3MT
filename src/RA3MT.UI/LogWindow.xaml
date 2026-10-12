@@ -1,0 +1,20 @@
+<Window x:Class="RA3MT.UI.LogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="RA3MT 运行日志 — 检测到错误"
+        Width="780" Height="500" MinWidth="520" MinHeight="300"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="#0a0e15">
+  <DockPanel Margin="12">
+    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+      <Button DockPanel.Dock="Right" Content="复制全部" Padding="14,5" Click="OnCopyAll" />
+      <TextBlock Text="修改器执行中出现了与预期不符的情况，完整日志如下（随修改器关闭自动清空）："
+                 VerticalAlignment="Center" Foreground="#e8b84b" FontSize="12" TextWrapping="Wrap" />
+    </DockPanel>
+    <TextBox x:Name="Text" IsReadOnly="True" Background="#070a10" Foreground="#9fb0c8"
+             BorderBrush="#2a3350" BorderThickness="1" Padding="8"
+             FontFamily="Cascadia Code,Consolas" FontSize="11.5"
+             VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+             TextWrapping="NoWrap" />
+  </DockPanel>
+</Window>

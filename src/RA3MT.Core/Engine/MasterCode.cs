@@ -275,21 +275,6 @@ public sealed class MasterCode
         return outp;
     }
 
-    /// <summary>读取诊断捕获区（Block+0x10..0x30，8 个 dword）。</summary>
-    public (nuint esi, nuint prodEax, nuint prodEsi, uint owner, nuint selEntry, nuint selArr, uint selIdx, nuint weaponEax)? ReadDiagnostics()
-    {
-        if (!Installed) return null;
-        var b = _mem.Read(Block + 0x10, 0x20);
-        return (
-            BitConverter.ToUInt32(b, 0x00),
-            BitConverter.ToUInt32(b, 0x04),
-            BitConverter.ToUInt32(b, 0x08),
-            BitConverter.ToUInt32(b, 0x0C),
-            BitConverter.ToUInt32(b, 0x10),
-            BitConverter.ToUInt32(b, 0x14),
-            BitConverter.ToUInt32(b, 0x18),
-            BitConverter.ToUInt32(b, 0x1C));
-    }
 }
 
 /// <summary>Pure x86 stub factory — byte-exact ports of the original TMK

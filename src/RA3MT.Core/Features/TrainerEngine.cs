@@ -81,7 +81,7 @@ public sealed class TrainerEngine : IDisposable
 
     public TrainerEngine()
     {
-        _registry = LegacyFeatureCatalog.Build(_data, this, RunDiag);
+        _registry = LegacyFeatureCatalog.Build(_data, this);
         _switches = new SwitchBank(_data, WriteFeatureFlag, m => Log?.Invoke(m));
     }
 
@@ -430,13 +430,6 @@ public sealed class TrainerEngine : IDisposable
     // ISpawnGateway; the waiting, logging and per-bridge wording live here.
     // ---------------------------------------------------------------------
 
-    /// <summary>Diagnostics entry point for the feature catalog.</summary>
-    private FeatureResult RunDiag()
-    {
-        var (ok, msg) = DiagDump();
-        return ok ? FeatureResult.Succeeded(msg) : FeatureResult.Failure(msg);
-    }
-
     /// <summary>Submit requests to a game-thread bridge one at a time, waiting for
     /// the settlement stub to consume each before sending the next (the mailbox
     /// allows a single outstanding request).</summary>
@@ -694,51 +687,6 @@ public sealed class TrainerEngine : IDisposable
         return (applied > 0, applied > 0 ? "" : msg);
     }
 
-    private (bool, string) DiagDump()
-    {
-        if (_mc == null || _mem == null) return (false, "未附加");
-        var diag = _mc.ReadDiagnostics();
-        if (diag == null)
-            return (false, "诊断区不可用");
-        var (esi, prodEax, prodEsi, owner, selEntry, selArr, selIdx, weaponEax) = diag.Value;
-        var rootRva = _data.Globals.PlayerRoot.RvaFor(Version!);
-        var root = _mem.ReadU32(Base + rootRva);
-        Log?.Invoke("──── 诊断采集 ────");
-        Log?.Invoke($"MasterCode块=0x{_mc.Block:X}  controller=0x{root:X}  本地阵营={(root >= 0x10000 ? SafeRead(root + 0x28) : "<无上下文>")}");
-        var selected = SelectionActions.ReadSelection(_mem.ReadU32,
-            address => _mem.Read(address, 1)[0], Base + _data.Globals.SelectionList.RvaFor(Version));
-        Log?.Invoke($"真实选中目标={selected.Length}: {string.Join(", ", selected.Select(body => $"0x{body:X}"))}");
-        Log?.Invoke($"money_h1.esi=0x{esi:X}   build_power.eax=0x{prodEax:X} esi=0x{prodEsi:X} [eax+418]={owner}");
-        Log?.Invoke($"UI.weaponEntry=0x{selEntry:X} weaponArray=0x{selArr:X} index={selIdx}");
-        Log?.Invoke($"legacyAccessor.threatComponent=0x{weaponEax:X}");
-        if (prodEax > 0x10000)
-        {
-            Log?.Invoke($"  [prod+0x20]={_mem.ReadU32(prodEax + 0x20)} [prod+0x418]={SafeRead(prodEax + 0x418)}");
-        }
-        if (weaponEax > 0x10000)
-        {
-            Log?.Invoke($"  威胁组件（非弹药）: [+4]={SafeRead(weaponEax + 4)} [+8]={SafeRead(weaponEax + 8)} " +
-                        $"[+0xC]={SafeRead(weaponEax + 0xC)} [+0x10]={SafeRead(weaponEax + 0x10)} [+0x1C]byte={SafeReadByte(weaponEax + 0x1C)}");
-        }
-        if (selEntry > 0x10000)
-        {
-            Log?.Invoke($"  UI武器弹夹[+0x1C]={SafeRead(selEntry + 0x1C)} slot[+8]={SafeRead(selEntry + 8)}");
-        }
-        Log?.Invoke("──────────────");
-        return (true, "");
-    }
-
-    private string SafeReadByte(nuint addr)
-    {
-        try { return $"0x{_mem!.Read(addr, 1)[0]:X2}"; }
-        catch { return "<不可读>"; }
-    }
-
-    private string SafeRead(nuint addr)
-    {
-        try { return $"0x{_mem!.ReadU32(addr):X}"; }
-        catch { return "<不可读>"; }
-    }
 
     public bool IsOn(string featureId) => _switches.IsOn(featureId);
 

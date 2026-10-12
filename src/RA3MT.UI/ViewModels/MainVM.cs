@@ -155,7 +155,7 @@ public sealed class MainVM : ObservableObject
         }, _ => Attached);
         LaunchCmd = new RelayCommand(_ => TryLaunchGame(), _ => NotAttached);
 
-        Log($"RA3 Trainer 现代重制版 v32 就绪 — 支持 1.12 / 1.13（{TotalFeatures} 项功能，{Engine.Data.Hooks.Count} 个挂钩点）");
+        Log($"RA3 Trainer 现代重制版 v33 就绪 — 支持 1.12 / 1.13（{TotalFeatures} 项功能，{Engine.Data.Hooks.Count} 个挂钩点）");
         Log("提示：先启动红警3并进入主菜单，再点击「附加进程」。");
     }
 
@@ -209,7 +209,20 @@ public sealed class MainVM : ObservableObject
         System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
         {
             LogLines.Add(line);
-            while (LogLines.Count > 400) LogLines.RemoveAt(0);
+            while (LogLines.Count > 2000) LogLines.RemoveAt(0);
+            if (IsErrorLine(line))
+                ErrorLogged?.Invoke();
         });
     }
+
+    /// <summary>静默日志只在出错时弹窗：这些行意味着功能与预期不符
+    /// （地址校验未通过/桥拒绝/找不到进程等），其余全部留在后台缓冲。</summary>
+    public static bool IsErrorLine(string line) =>
+        line.Contains("  ⚠") || line.Contains("  ✗")
+        || line.Contains("失败") || line.Contains("未通过") || line.Contains("异常")
+        || line.Contains("找不到") || line.Contains("未找到") || line.Contains("不可用")
+        || line.Contains("被校验拒绝") || line.Contains("无法附加") || line.Contains("未消费");
+
+    /// <summary>每条错误日志进入缓冲时触发（UI 线程）；弹窗窗口自行去重。</summary>
+    public event Action? ErrorLogged;
 }

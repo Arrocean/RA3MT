@@ -708,17 +708,6 @@
       "src": "orig[24] FINAL3 RestoreOreMine（选中版）"
     },
     {
-      "id": "diag",
-      "no": "--",
-      "name": "诊断采集",
-      "group": "其他",
-      "kind": "action",
-      "hotkey": "",
-      "icon": "🩺",
-      "action": "diag",
-      "desc": "采集钩子运行时寄存器到日志（开发用，对局中点击有效）"
-    },
-    {
       "id": "sel_copy",
       "no": "25",
       "name": "复制选中单位",

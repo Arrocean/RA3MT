@@ -10,13 +10,13 @@ public partial class MainWindow : Window
 {
     private readonly MainVM _vm = new();
     private readonly HotkeyManager _hotkeys = new();
-    private Dictionary<string, FeatureVM> _byId = new();
+    private LogWindow? _logWindow;
 
     public MainWindow()
     {
         InitializeComponent();
         DataContext = _vm;
-        _vm.LogLines.CollectionChanged += (_, _) => Dispatcher.BeginInvoke(ScrollLogToEnd);
+        _vm.ErrorLogged += OnErrorLogged;   // 静默日志：仅在错误行出现时弹完整日志窗口
         // hotkey registration is deferred to OnSourceInitialized: RegisterHotKey
         // needs the real window handle — registering against IntPtr.Zero binds
         // the hotkeys to the thread queue where the WndProc hook never sees them
@@ -25,7 +25,6 @@ public partial class MainWindow : Window
 
     private void RegisterHotkeys()
     {
-        _byId = _vm.Groups.SelectMany(g => g.Items).ToDictionary(f => f.Id);
         var ok = 0;
         foreach (var g in _vm.Groups)
         {
@@ -59,10 +58,20 @@ public partial class MainWindow : Window
         _vm.Log($"全局热键已注册 {ok} 个。");
     }
 
-    private void ScrollLogToEnd()
+    private void OnErrorLogged()
     {
-        if (LogList.Items.Count > 0)
-            LogList.ScrollIntoView(LogList.Items[^1]);
+        // 静默日志：只在出现错误行时弹一次完整日志窗口；已打开则仅激活置前。
+        // 窗口 Owner=主窗口 → 随修改器关闭而关闭；缓冲在内存 → 退出即清空。
+        if (_logWindow is null)
+        {
+            _logWindow = new LogWindow(_vm) { Owner = this };
+            _logWindow.Closed += (_, _) => _logWindow = null;
+            _logWindow.Show();
+        }
+        else
+        {
+            _logWindow.Activate();
+        }
     }
 
     private void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -71,55 +80,6 @@ public partial class MainWindow : Window
     {
         _vm.Engine.Detach();
         Close();
-    }
-
-    private void OnToggleLog(object sender, MouseButtonEventArgs e)
-    {
-        LogPanel.Visibility = LogPanel.Visibility == Visibility.Visible
-            ? Visibility.Collapsed
-            : Visibility.Visible;
-    }
-
-    private void OnClearLog(object sender, MouseButtonEventArgs e) => _vm.LogLines.Clear();
-
-    private void OnCopyAllLogs(object sender, RoutedEventArgs e)
-    {
-        if (_vm.LogLines.Count == 0) return;
-        Clipboard.SetText(string.Join(Environment.NewLine, _vm.LogLines));
-        _vm.Log($"已复制 {_vm.LogLines.Count} 行日志到剪贴板");
-    }
-
-    private void OnCopyLogLine(object sender, RoutedEventArgs e)
-    {
-        if (sender is MenuItem { Parent: ContextMenu menu } && menu.PlacementTarget is TextBlock line)
-        {
-            Clipboard.SetText(line.Text);
-            _vm.Log("已复制该行日志");
-        }
-    }
-
-    protected override void OnPreviewKeyDown(KeyEventArgs e)
-    {
-        // Ctrl+C copies the selected log line (unless a text box owns the clipboard copy)
-        if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.Control &&
-            Keyboard.FocusedElement is not TextBox &&
-            LogList.SelectedItem is string selected)
-        {
-            Clipboard.SetText(selected);
-            e.Handled = true;
-        }
-        base.OnPreviewKeyDown(e);
-    }
-
-    private void OnDiagClick(object sender, MouseButtonEventArgs e)
-    {
-        if (!_vm.Attached)
-        {
-            _vm.Log("⚠ 尚未附加游戏进程");
-            return;
-        }
-        if (_byId.TryGetValue("diag", out var f))
-            f.Execute.Execute(null);
     }
 
     protected override void OnSourceInitialized(EventArgs e)
