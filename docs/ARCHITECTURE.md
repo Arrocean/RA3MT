@@ -25,6 +25,13 @@ Core 分四层：
 2. `src/RA3MT.Core/Features/<目录>/` 加一个 `IFeature` 实现。
 3. `Features/LegacyFeatureCatalog.cs`（现为唯一注册点）把 id 接到该实现。
 
+> **`features.json` 是手工维护的源数据**（34 功能+26 挂钩+三版本地址表）。
+> 旧生成器（build_features.py / gen_features.py）停留在 24 功能时代且会覆盖
+> 现有数据，已于 v261013-8 删除；hookdata.json 是其历史输入，无消费者。
+> 仍由工具生成的数据只有两个：`reinforcement_codes.json`
+> （tools/analysis/gen_reinforce_table.py，从游戏文件提取）和桩字节
+> （SelfCheck stubdump）。
+
 `SelfCheck featuretest` 会校验：声明与实现一一对应、id 唯一、kind/flag/action 自洽、
 **每个可运行功能都 `IsMigrated`（不得回落到引擎旧分支）**、卡片有图标、参数声明合法、
 未附加时功能必须 fail-closed。
@@ -58,6 +65,7 @@ dotnet build RA3MT.slnx -c Release
 py tools/harness/stub_regression.py                 # 桩字节零回归闸门
 dotnet run --project src/RA3MT.SelfCheck -c Release -- <mode>
    bridgetest rankmailboxtest ranktest actiontest installertest resolvertest
-   asmtest selectiontest featuretest layouttest spawntest
+   asmtest selectiontest featuretest layouttest spawntest reinforcetest
+   livetest   # 只读活体验证：对运行中的游戏做判别+全钩子/桥解析（不挂钩）
 py tools/harness/test_execution_stubs.py            # 及其余 Unicorn 套件
 ```

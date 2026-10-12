@@ -417,10 +417,11 @@ public sealed class TrainerEngine : IDisposable
     }
 
     // ---------------------------------------------------------------------
-    // Historical implementations. These are the bodies the catalog currently
-    // wraps as features; they disappear as features migrate (M5).
-    // Every stub-flag toggle is already migrated to SwitchFeature, so only the
-    // code-patch toggle is left here.
+    // Unimplemented-feature fallbacks. M5 is complete: every declared feature
+    // has a catalog implementation (SwitchFeature / code-patch / bridge /
+    // spawn / selection actions), so these only answer for a stale UI copy
+    // showing an id the catalog no longer knows. Nothing may be added here —
+    // new features get their own IFeature.
     // ---------------------------------------------------------------------
 
     /// <summary>Fallback toggle dispatch. Every toggle is a catalog feature, so this
