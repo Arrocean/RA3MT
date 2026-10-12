@@ -1,5 +1,9 @@
 # FINAL3 ↔ Final2a ↔ RA3MT 完整对照审计
 
+> **时效性说明**：本文档为历史交付物，写作于 2026-10-11（v16 时期）。
+> 此后的结论演进以 `docs/NOTES.md`（v17 起）为准——特别是 FINAL3 脚本语义（v19b 行为级审计）、
+> 随地建造定案（v19）、摧毁完整伤害入口（v19c/v20）已更新本文档中的相应推测。
+
 日期：2026-10-11。本文档是 `/goal` 的交付物：以 FINAL3（RedAlert3_Trainer_1.12_FINAL3.exe，
 SHA256 `5ddd338e…7e9`，提取自 artifacts/final3/）为主参考，对照 Final2a 转储
 （D:\RA3TrainerWork\scripts_dump.txt）与 RA3MT 当前实现（v16），给出每个脚本/功能/调用路径的
