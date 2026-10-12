@@ -518,7 +518,11 @@ public sealed class TrainerEngine : IDisposable
                 : $"模板 0x{request.Fourth:X} 校验失败，被拒绝")
             : $"{consumer.DisplayName}: 0x{request.Body:X} 校验未通过";
 
-    /// <summary>Selected-unit bridges (rank/capture/kill) share this entry point.</summary>
+    /// <summary>Selected-unit bridges (rank/capture/kill) share this entry point.
+    /// Destroy follows FINAL3's semantics (EA MustCode2+900 takes the single
+    /// [root+0x54] entry): ONE target per invocation — queueing the whole
+    /// selection keeps the mailbox busy across frames and later targets die
+    /// while the player has already moved on (live-reported as stray kills).</summary>
     private (bool, string) SubmitBridgeRequests(string featureName, BridgeId kind)
     {
         var targets = kind switch
@@ -534,6 +538,13 @@ public sealed class TrainerEngine : IDisposable
             return (false, _mc is not null && _mc.Bridges.TryGet(kind, out var consumer)
                 ? consumer.NoTargetMessage
                 : "桥未启用");
+        if (kind == BridgeId.Kill && targets.Count > 1)
+        {
+            var total = targets.Count;
+            targets = targets.GetRange(0, 1);
+            Log?.Invoke($"{featureName}: 选中 {total} 个目标，按 FINAL3 语义一次只摧毁一个" +
+                        $"（剩余 {total - 1} 个，再次执行继续）");
+        }
         return DrainBridge(featureName, kind, targets, perTargetTimeoutMs: 800, totalBudgetMs: 4000);
     }
 
