@@ -1,6 +1,7 @@
-# 架构（M1–M7 重构后）
+# 架构
 
-本文件描述 2026-10 重构后的分层与扩展方式。重构目标是**解耦、模块化、功能之间互相影响最小**，
+本文件描述当前分层与扩展方式（M1–M7 解耦 + v261013-8/9 收尾抛光后的稳态）。
+设计目标是**解耦、模块化、功能之间互相影响最小**，
 每步都以"桩字节零回归 + SelfCheck 全模式 + Unicorn 全套件"为闸门。
 
 ## 分层
@@ -9,11 +10,16 @@
 RA3MT.UI ──► RA3MT.Core ──► RA3MT.SelfCheck（离线验证，引用 Core）
 
 UI 只做渲染：卡片来自 features.json 元数据（icon / arg），不再认识任何 feature id。
-Core 分四层：
-  Abstractions  功能契约与上下文（IFeature / IFeatureState / FeatureContext / ISymbols）
-  Host          功能可用的能力（服务按类型查找，不是宽接口）
-  <功能目录>     每个功能一个实现（Toggles / Selection / Actions / Patches）
-  Engine        机制层：附加、挂钩、块布局、桥、解析器
+Core 分层（依赖严格向下，无环）：
+  Model          数据形状（FeaturesData / ReinforcementCatalog）+ ISymbols 契约
+  Target         字节契约解析器（三构建布局表 + ImageScan 校验原语 + 构建判别器）
+  Engine         机制层：MasterCode 生命周期、StubGen 桩工厂（分文件）、
+                 块布局、四桥分派器、邮箱
+  Features       FeatureCatalog（唯一注册点）→ 34 个功能实现（Toggles / Selection /
+                 Actions / Patches）；BridgeCoordinator 会话级桥编排（提交/等待/措辞）；
+                 TrainerEngine 编排器（附加/脱离/判别/服务装配，447 行）
+  Host           功能可用的能力（服务按类型查找，不是宽接口）
+  Abstractions   功能契约与上下文（IFeature / IFeatureState / FeatureContext）
 ```
 
 ## 扩展一个新功能
@@ -42,14 +48,16 @@ Core 分四层：
 |---|---|---|
 | `IFeature` / `IFeatureState` | `Features/Abstractions` | 功能契约：Kind、Availability、per-session 状态、`IsMigrated` |
 | `FeatureContext` | 同上 | 会话快照 + `ISymbols` + `FeaturesData` + `FeatureHost` |
-| `ISymbols` | 同上 | 共享全局按 `GameGlobalId` 枚举解析，版本化取址唯一入口 |
+| `ISymbols` | `Model` | 共享全局按 `GameGlobalId` 枚举解析，版本化取址唯一入口（Engine/Features 共同向下依赖） |
 | `FeatureServiceRegistry` | `Features/Host` | 能力按**类型**查找；加能力=加服务类，不撑大所有功能 |
 | `IGameMemory` | 同上 | 受保护的读写（指针 < 0x10000 视为 null） |
 | `ISwitchBank` | 同上 | **开关状态的唯一所有者**，功能只请求翻转 |
 | `IBridgeGateway` / `ISpawnGateway` | 同上 | 游戏线程桥的提交入口，功能看不到邮箱细节 |
+| `BridgeCoordinator` | `Features/` | 会话级桥编排：邮箱提交/等待/重试/日志措辞；附加时创建、脱离时销毁 |
 | `BlockLayout` / `BlockLayoutCatalog` | `Engine` | 块内区域的唯一声明处，`Validate()` 一次证明不重叠 |
 | `IBridgeConsumer` / `RequestMailbox` | `Engine` | 一个桥=一个对象；邮箱状态机只写一次 |
 | `IApiResolver` / `IImageReader` / `ImageScan` | `Target` | 严格字节契约与校验原语 |
+| `GameBuildClassifier` | `Target` | 同名双构建（Steam/EA 1.12）的内存指纹判别，只读 |
 
 ## 不变量（改动时勿破）
 

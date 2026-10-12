@@ -1078,3 +1078,79 @@ Unicorn 6 套件全过（197+semantic+60+218+8+20）。publish-v18（含三个 .
   变换 EA 0x1ED4A0。**待重打包定位**（find_mouse_object.py 已就绪：SetCursorPos 两次+
   堆扫描找跟随光标的 +0x3C/40 对，再反查 .data 全局；需游戏窗口前台，本轮扫描时游戏最小化失败）。
 - 随地建造失效未诊断（需活体：开关开着+放置模式鼠标停在远处空地读 UI 状态差分）。
+
+## v261013 系列（2026-10-13，产品化 + EA 支持大日子，9 个发布）
+
+**版本规则变更：`vYYMMDD-N`（日期+当日序号）取代 v19 起纯数字制。**
+**发布产物变更：单文件正式名 exe `Red Alert 3 Modern Trainer v<版本>.exe`（~58MB x86，图标内嵌，
+无任何附带文件；.enable/dll/pdb 全部退役）。**
+每发一版同步两处版本串：MainVM.AppVersion + UI csproj 的 AssemblyName（PublishSingleFile 条件下覆盖）。
+
+### 内置增援单位表（v34 引入）
+- **增援代码=WB 字符串哈希彻底定案**：B 站教程（opus/383217795565387307）的 Instance ID 就是同一套
+  （JapanEmperorMecha=0xCC023E30 与 FINAL3 文档/我们的哈希表三方一致；AlliedMCV=0x28DA574E 同）。
+- **数据提取全程序化**（tools/analysis/gen_reinforce_table.py → assets/reinforcement_codes.json，
+  125 条=盟军36/苏军40/升阳42/中立箱7）：
+  ① WBStringHashes.big→stringhashes.xml **明文 XML** 58573 条（name→hash）；
+  ② **真实单位清单必须用 Core12.big 的 data\static.12.manifest（RefPack 压缩，507 GameObject）**
+  ——WBData 的 worldbuilder.manifest 只有 19 个阵营物件+环境道具，不是战斗单位表；
+  ③ ChineseT.big→gamestrings.csf（RefPack+CSF：` LBL`/` RTS` ASCII 操作码、值=XOR 0xFF 的
+  UTF-16LE）→ `NAME:<大写名>` 繁中显示名 542 条，**"有中文名"=真实单位过滤条件**（游戏不给
+  弹药/坍塌态这类 helper 对象做本地化）。
+- **格式规范**：BIG4 头=4B magic+LE 文件长+**BE** 条目数+**BE** 索引长，表项=BE offset+BE size+名字；
+  RefPack 解压按 Niotso wiki 公有领域实现（四类命令字）。CSF 头 24B。
+- 接入：ReinforcementCatalog（Core/Model 嵌入资源——**链接资源增量坑同 features.json，改后
+  必须_Core --no-incremental**）；TryResolve 三路=十六进制/内部名/繁中名；UI 卡片 📋
+  （Views/ReinforcePickerWindow 搜索+分组）；`arg.suggest` 元数据驱动（FeatureVM 保持零功能知识）。
+  SelfCheck reinforcetest 8 例。**内部名是语义名**（天啟坦克=SovietAntiVehicleVehicleTech3），
+  英文社区俗名搜不到——已知局限。
+
+### EA 原版 1.12 支持（v261013-2/3/4，用户拍板的特征码哲学落地）
+- **EA 本体=D:\BaiduNetdiskDownload\Red Alert 3（5D 简中盗版）；与重打包同模块名 ra3_1.12.game
+  但布局不同**。版本维度="1.12ea"：features.json 26 钩子加第三列 RVA（displaced 逐字节相同，
+  零 displacedByVersion）；ImageScan.Layout 加 params 多版本重载；五个解析器加 EA 行。
+- **EA 地址总表**（离线定位+契约验证+FINAL3 文档值三方交叉）：
+  钩子 money_h1..h4=0x6CFD0D/DFE/E6C/EB5（链距+F1/+6E/+49 同 repack）、proto_cool_a/b=0x30F38C/42E、
+  aiblock=0x30F530、godmode=0x12EEDF、onekill=0x3651AE、onekill_a/b=0x3FE714/0x2E24E3、
+  build_hp_a/b=0x43EC19/0x43ECA6、zoom=0x128735、sidebar_pts=0x30A5F6、unit_lv=0x3C226C、
+  power_cool=0x1EC7CD、build_power=0x2EBB69、power=0x2F6CFF、weapon_clip=0x390ED1、
+  **ammo 簇=0x438ED0/0x438EF0/0x438F10/0x43BD10/30/50**（六胞胎函数 0x20 间距）。
+  全局：selectionList=0x8DB7A0、playerRoot=0x8E8C9C、鼠标对象=0x8DAEFC（.rdata，13 引用簇）、
+  hash 表宿主=0x8E6C58、owner-kind=0x8D8CE4、生成 manager=0x8E8908。
+  桥：rank=0x35C200（99B 契约原样成立，threshold=0xF7680/award=0x343920/root=0x8D8CDC）、
+  capture=0x38DBB0（helper 0x124C60 同三偏移）、kill=0x365190/0x327890/**0x39EA50**、
+  **spawn wrapper=0x205240：304B canonical 完美吻合**（第三目标集）；support lookup=0x3E4230/
+  hashfind=0x104E10/owner=0x43B300/predicate=0xD5400/transform=0x1ED4A0。
+  随地建造 EA patch 点=0xE7565（FINAL3 文档值，v19 盗版实测 75 0C）。
+- **同名双构建判别**：GameBuildClassifier（Core/Target）——双锚点（money_h1 9B + zoom 5B）
+  全中才判 1.12ea；重打包在 EA 槽位是完全无关字节（实测零巧合）。判错则字节校验大声失败。
+- **v261013-3 防错乱加固**（用户质疑触发）：①ammo 的 AOB 从一开始就锚错六胞胎兄弟
+  （repack 上也错，被"RVA 字节校验通过，特征码仅供参考"掩盖）——重写为"函数体+15CC+下函数前缀"
+  36B 模式，三镜像唯一命中正确地址，特征码回退路径也安全；②回滚路径版本一致；③附加日志全路径。
+- **livetest**（SelfCheck 新模式）：对运行中游戏只读做判别+26 钩子+四桥活体验证（零挂钩零写入）。
+  **双构建活体结果：EA→1.12ea 全过（桥 rank 0x75C200/capture 0x78DBB0/kill 0x765190/spawn 0x605240）；
+  Steam 1.12→1.12 未误判全过（老地址集）——同一份修改器把两个同模块名构建各自路由正确。**
+- 方法论沉淀：①Python 通配符模式解析器把 ?? 字节从数组丢掉=后续字节错位、带通配扫描静默失效
+  （纯字节扫描不受影响）；②六胞胎函数族消解=0x60 窗口差分掩码；③"displaced 全族命中"≠定位成功；
+  ④FINAL3 的 EA 地址按 RVA 理解（鼠标对象 0x8DAEFC 在 .rdata）。
+
+### 单 exe 分发与缓存治理（v261013-5/6/7）
+- 四桥默认开启（.enable 标记退役；env=0 关闭；字节校验仍把守安装）。
+- IncludeNativeLibrariesForSelfExtract + DebugType=none（PublishSingleFile 条件，**Core/UI 两个
+  csproj 都要加**否则 Core.pdb 残留）→ 发布目录只剩一个 exe。
+- **v261013-7 自解缓存清理**：.NET 单文件宿主从不删 %TEMP%\.net\<AssemblyName>\；版本入名→
+  每版泄漏 ~7MB（实测一天 34MB）。App.OnStartup→SingleFileCache.CleanStale() 清家族内非当前
+  版本目录。**★翻车：当前版本目录碰都不能碰**——启动早期 D3DCompiler 等未 LoadLibrary 没锁，
+  被清掉后 WPF 首渲染崩溃（bundle 6 文件只剩锁住的 1 个，活体诊断实锤后改为完全跳过当前目录）。
+- 正式名带空格：tasklist/taskkill IMAGENAME 过滤不可靠，用 PowerShell Get-Process -like。
+
+### 架构两轮（v261013-8 收尾 + v261013-9 抛光）
+- StubGen 拆分（MasterCode 877→279+598 两文件，桩门禁 33/33 零字节）；**M5 定案完成**
+  （"四成未迁"评估过时：16 开关=15 SwitchFeature+build_anywhere 独立功能，全部动作走 catalog）；
+  build_features.py/gen_features.py 删除（会覆盖手工数据），features.json 手工维护写入 ARCHITECTURE.md。
+- 抛光：LegacyFeatureCatalog→FeatureCatalog+FeatureRegistry.cs 归位；ISymbols→Model（消除
+  Engine 实现接口倒挂）；BridgeCoordinator 拆出（TrainerEngine 736→447 行）。
+- 二次评估结论：稳态维护，无结构性欠账；观察项=功能>50 或版本>4 时把版本地址表数据化。
+
+### 其余（v261013-1）
+WhiteSprite 署名入 UI；RA3MT=Red Alert 3 Modern Trainer（用户命名确认）。
