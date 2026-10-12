@@ -10,7 +10,8 @@ public sealed class SpawnGateway(
     Func<IReadOnlyList<uint>> copyHolders,
     Func<(float x, float y, float z)?> mouseGround,
     Func<(float x, float y, float z)?> selectionAnchor,
-    Func<string, List<(uint hash, uint holder, float x, float y, float z)>, (bool ok, string msg)> submit)
+    Func<string, List<(uint hash, uint holder, float x, float y, float z)>, (bool ok, string msg)> submit,
+    Func<string, uint, float, float, float, int, (bool ok, string msg)> reinforcement)
     : ISpawnGateway
 {
     public bool IsAvailable => active;
@@ -23,6 +24,12 @@ public sealed class SpawnGateway(
         List<(uint hash, uint holder, float x, float y, float z)> requests)
     {
         var (ok, msg) = submit(featureName, requests);
+        return ok ? FeatureResult.Succeeded(msg) : FeatureResult.Failure(msg);
+    }
+
+    public FeatureResult SubmitReinforcement(string featureName, uint hash, float x, float y, float z, int count = 8)
+    {
+        var (ok, msg) = reinforcement(featureName, hash, x, y, z, count);
         return ok ? FeatureResult.Succeeded(msg) : FeatureResult.Failure(msg);
     }
 }

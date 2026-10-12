@@ -142,7 +142,8 @@ public sealed class TrainerEngine : IDisposable
             CopyHolders,
             MouseGround,
             SelectionAnchor,
-            SubmitSpawnRequests));
+            SubmitSpawnRequests,
+            SubmitReinforcement));
         return registry;
     }
 
@@ -546,6 +547,74 @@ public sealed class TrainerEngine : IDisposable
                         $"（剩余 {total - 1} 个，再次执行继续）");
         }
         return DrainBridge(featureName, kind, targets, perTargetTimeoutMs: 800, totalBudgetMs: 4000);
+    }
+
+    /// <summary>FINAL3 "We need back": spawn <paramref name="count"/> units of the
+    /// hash around the anchor, then rank every new body up through the rank
+    /// bridge. FINAL3 spawns all eight at the same point; we spread them on a
+    /// small circle because the engine will not separate a pile-up, and each
+    /// reinforcement gets the same level-up FINAL3 applies.</summary>
+    private (bool, string) SubmitReinforcement(string featureName, uint hash, float x, float y, float z, int count)
+    {
+        var spawn = _mc?.SpawnMailbox;
+        if (spawn is null) return (false, $"{featureName}: 生成桥未启用");
+        var bodies = new List<uint>();
+        var rejected = 0;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        for (var i = 0; i < count; i++)
+        {
+            var angle = i * 2f * MathF.PI / count;
+            var px = x + 50f * MathF.Cos(angle);
+            var pz = z + 50f * MathF.Sin(angle);
+            try
+            {
+                spawn.Submit(hash, 0, px, y, pz, 0);
+            }
+            catch (InvalidOperationException ex)
+            {
+                Log?.Invoke($"{featureName}: 第 {i + 1} 个未提交（{ex.Message}）");
+                break;
+            }
+            var deadline = System.Diagnostics.Stopwatch.StartNew();
+            (uint state, uint body, uint resolved) result;
+            while (true)
+            {
+                result = spawn.ReadResult();
+                if (result.state is 3 or 4) break;
+                if (deadline.ElapsedMilliseconds > 1500 || sw.ElapsedMilliseconds > 8000) break;
+                Thread.Sleep(25);
+            }
+            if (result.state == 3) bodies.Add(result.body);
+            else rejected++;
+            if (sw.ElapsedMilliseconds > 8000) break;
+        }
+        if (bodies.Count == 0)
+            return (false, $"{featureName}: 未生成任何单位" + (rejected > 0 ? $"（{rejected} 个被拒绝）" : ""));
+
+        var ranked = 0;
+        if (_mc is not null && _mc.Mailbox(BridgeId.Rank) is not null && _mem is not null)
+        {
+            var requests = new List<BridgeRequest>();
+            foreach (var body in bodies)
+            {
+                var drawable = _mem.ReadU32(body + 0xF4u);
+                var tracker = _mem.ReadU32(body + 0x3CCu);
+                if (drawable < 0x10000 || tracker < 0x10000) continue;
+                requests.Add(BridgeRequest.For(body, drawable, tracker));
+            }
+            if (requests.Count > 0)
+            {
+                var (rok, _) = DrainBridge($"{featureName}·升星", BridgeId.Rank, requests, 800, 8000);
+                if (rok) ranked = requests.Count;
+            }
+        }
+        else
+        {
+            Log?.Invoke($"{featureName}: 晋级桥未启用，已生成但未升星");
+        }
+        var msg = $"已生成 {bodies.Count} 个单位" + (ranked > 0 ? "并升星" : "");
+        Log?.Invoke($"{featureName}: {msg}");
+        return (true, msg);
     }
 
     /// <summary>Spawn bridge entry point: every request carries a template hash or

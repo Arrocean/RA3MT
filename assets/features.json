@@ -714,8 +714,8 @@
       },
       "hooks": [],
       "action": "spawnhash",
-      "desc": "输入 8 位十六进制增援代码（如 6586A5A0）在鼠标位置生成对应单位（热键 Alt+R 用当前输入框内容；需 spawn-bridge.enable）",
-      "src": "orig[22] FINAL3 WeNeedBack（WB 字符串哈希 → 静态模板表 → 生成 wrapper）"
+      "desc": "输入 8 位十六进制增援代码（如 6586A5A0），围绕鼠标位置一次生成 8 个并经晋级桥全部升星（FINAL3 We-need-back 语义；需 spawn-bridge + rank-bridge）",
+      "src": "orig[22] FINAL3 WeNeedBack（批量 8+升星对齐 MustCode2+B00 循环；位置改为圆形分布防叠放）"
     },
     {
       "id": "build_anywhere",

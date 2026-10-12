@@ -46,6 +46,12 @@ public interface ISpawnGateway : IFeatureService
 
     /// <summary>Submit spawn requests (hash 0 = spawn the given holder).</summary>
     FeatureResult Submit(string featureName, List<(uint hash, uint holder, float x, float y, float z)> requests);
+
+    /// <summary>FINAL3-style reinforcement ("We need back"): spawn
+    /// <paramref name="count"/> units of the hash spread around (x, y, z), then
+    /// rank each new unit up through the rank bridge. Rank-up is skipped with a
+    /// log line when the rank bridge is off.</summary>
+    FeatureResult SubmitReinforcement(string featureName, uint hash, float x, float y, float z, int count = 8);
 }
 
 /// <summary>Fully qualified names of the stub flags, so features stop passing
