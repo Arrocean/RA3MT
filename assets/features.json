@@ -54,6 +54,17 @@
       "pattern": "CC CC CC CC 51 56 8B F1 8B 46 04 85 C0 74 0F 8B ?? ?? ?? ?? 00 3B 46 18 75 04 B0 01 EB 02 32 C0 ?? ?? ?? ?? 0F 85 ?? ?? ?? ?? 84 C0 0F 84 B0 00",
       "patternSiteOffset": 64
     },
+    "aiblock": {
+      "rva": {
+        "1.12": "0x34d920",
+        "1.13": "0x3387d0"
+      },
+      "displaced": "0350043BD7",
+      "displacedLen": 5,
+      "asm": "add edx,[eax+4]; cmp edx,edi",
+      "pattern": "03 50 04 3B D7",
+      "patternSiteOffset": 0
+    },
     "build_hp_b": {
       "rva": {
         "1.12": "0x47cc16",
@@ -362,6 +373,21 @@
       "flag": "freezeenemy",
       "desc": "延后非本地阵营的协议/超武冷却（含盟友；不冻结普通生产，待实战验证）",
       "src": "orig[07]"
+    },
+    {
+      "id": "aiblock",
+      "no": "34",
+      "name": "禁止电脑建造",
+      "group": "建造",
+      "kind": "toggle",
+      "hotkey": "F10",
+      "icon": "⛔",
+      "hooks": [
+        "aiblock"
+      ],
+      "flag": "aiblock",
+      "desc": "电脑阵营的生产进度被钉在每拍 1：任何单位/建筑都造不完（FINAL3 F10 同款语义；含盟友，不影响己方）",
+      "src": "FINAL3 F10"
     },
     {
       "id": "zoomlimit",

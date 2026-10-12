@@ -1,5 +1,48 @@
 # 逆向笔记（重打包版 1.12/1.13）
 
+## v27（F10 禁止电脑建造实装，publish-v27，待实测）
+
+### 定位与语义（全部静态+磁盘双版验证）
+
+- **FINAL3 原版（script_00 MustCode+3D0）**：钩子 EA 0x30F530，displaced
+  `add edx,[eax+4]; cmp edx,edi`（5 字节）。script_09（该开关的 ENABLER）设
+  iEnable+15=1 → 生效档=把属主≠本地的生产条目增量 [eax+4] 钉 **1**（每拍只付 1，
+  任何东西都造不完）。它还有个 flag=0 的默认档钉 5000（=瞬间完成，全局分配零初始化
+  的残留，不抄——"禁止建造"的真身就是钉 1 档）。
+- **Steam 双版对称点**：模式 `03 50 04 3B D7` 各 .text **唯一命中**——
+  1.13 RVA 0x3387D0 / 1.12 RVA 0x34D920（老线索"1.13 0x3387D0 已定位未挂钩"落实）。
+  站点环境逐指令同构：`call 0x4652B0(1.13)/0x479EC0(1.12)`（[ebp+0xE4] 生产条目数组
+  第 0 项）→ `mov edx,[eax+0x14]`（已付）→ 站点 → `jb 累加路径 / 落空=完成路径`
+  （完成路径调 0x472910 扣款、`[esi+0x68]+=实际扣除`、ret al=1；未完成路径带疑似
+  "资金不足"提示音）。eax=生产条目，[eax+0xC]=属主，edi=剩余预算。
+- **属主判定**：FINAL3 用 EA 的 ID 链（[x+0x28]+0x20）；MT 用活体验证过的
+  `[[playerRoot]+0x28]` 本地侧（build_power/rank/spawn 同款）。若极性判断错，
+  症状=己方生产被钉慢（可逆：关开关即恢复），实测即知。
+
+### 实装
+
+- StubGen 新增 `aiblock` 桩（55B）：pushfd/pushad → flag 0x0B → root 链取本地侧 →
+  `[entry+0xC]==本地侧` 跳过 → 否则 `[eax+4]=1` → popad/popfd → 重放
+  `add edx,[eax+4]; cmp edx,edi`（cmp 的 CF/ZF 供原代码随后的 jb 消费）→ 跳回。
+- features.json：hook `aiblock`（双版 RVA+5 字节 displaced+pattern）+ 功能条目
+  （no.34，toggle，flag aiblock，热键 **F10**，建造组，34 功能/22 挂钩）。
+  LegacyFeatureCatalog 对 toggle+flag 自动注册 SwitchFeature，零代码。
+- 顺手：UI 启动横幅陈年的 "v2.0" 改为与发布号同步（v27）。
+
+### 验证
+
+SelfCheck 44/44（双版字节+5 字节模式唯一命中交叉验证）+ featuretest 104
+（34 功能/22 挂钩）+ installertest 138 + layouttest 14 + asmtest（桩区 0x530 < 0xFFC）
++ Unicorn：execution 197→**209**（aiblock 12 例：flag×属主×root 缺失 3 态；
+  断言钉值、重放 add 的 edx、重放 cmp 的 CF 必须与真实比较一致——jb 决策不失真）
++ 桥三套 60/25/217 全绿。基线 28→29 桩（纯新增，存量 0 变化）。publish-v27
+（62MB 自包含 x86 + 三 .enable）。
+
+### 待实测
+
+进对局开 F10 → 电脑（含盟友）生产进度条几乎不动、永远造不出新单位；己方生产不受
+影响；关 F10 恢复。注意与 [05] 快速建造互不干扰（己方路径跳过钉值）。
+
 ## v26（增援位置+升星双修：整数像素变换 ABI、去选中门禁，publish-v26，待实测）
 
 ### v25 实测反馈（2026-10-12）

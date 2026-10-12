@@ -30,6 +30,7 @@ public sealed class MasterCode
         ["revealmap"] = 0x08,
         ["xp999"] = 0x09,
         ["ammo"] = 0x0A,
+        ["aiblock"] = 0x0B,
         ["threatmax"] = 0x0D,
         ["threatzero"] = 0x0E,
             };
@@ -288,7 +289,8 @@ public static class StubGen
         "money_h2" or "money_h1" or "money_h3" or "money_h4" or
         "proto_cool_a" or "proto_cool_b" or "power" or
         "build_power" or "build_hp_a" or "build_hp_b" or "sidebar_pts" or
-        "power_cool" or "unit_lv" or "zoom_unit_xp" or "ammo" or "weapon_clip" => true,
+        "power_cool" or "unit_lv" or "zoom_unit_xp" or "ammo" or "weapon_clip" or
+        "aiblock" => true,
         _ => false,
     };
 
@@ -316,6 +318,7 @@ public static class StubGen
         "zoom_unit_xp" => ZoomUnitXp(stubVa, siteEnd, block),
         "ammo" => Ammo(stubVa, siteEnd, block),
         "weapon_clip" => WeaponClip(stubVa, siteEnd, block, rootVa),
+        "aiblock" => AiBlock(stubVa, siteEnd, block, rootVa),
         _ => throw new NotImplementedException(id),
     };
 
@@ -568,12 +571,44 @@ public static class StubGen
     }
 
     // Completion predicate fallback: replay only, never freeze unrelated owners.
-    private static byte[] SidebarPts(nuint stubVa, nuint siteEnd, nuint block)
+    private static byte[] SidebarPts(nuint stubVA, nuint siteEnd, nuint block)
     {
-        var c = new C(stubVa, siteEnd, block);
+        var c = new C(stubVA, siteEnd, block);
         c.A.Db(0x8B, 0x48, 0x50, 0x3B, 0x4E, 0x20);
         return c.Fin();
     }
+
+    // [F10] 禁止电脑建造 — aiblock: add edx,[eax+4]; cmp edx,edi
+    // 生产付款点：eax=生产队列条目（[ebp+0xE4] 数组第 0 项），[eax+4]=每拍进度
+    // 增量、[eax+0x14]=已付、edi=剩余预算；edx≥edi 走完成路径。FINAL3 的启用档
+    // （script_09 → iEnable+15=1）把非本地条目的增量钉 1——每拍只付 1，任何
+    // 单位/建筑都造不完（它默认的 5000 档=瞬间完成，不抄）。
+    // 属主取条目 [eax+0xC]，本地侧照 build_power 惯用例 [[root]+0x28]。
+    private static byte[] AiBlock(nuint stubVA, nuint siteEnd, nuint block, nuint rootVA)
+    {
+        var c = new C(stubVA, siteEnd, block);
+        var a = c.A;
+        a.Pushfd();
+        a.Pushad();                                       // edx/edi hold live progress state
+        c.Flag("aiblock");
+        a.JneShort(1);
+        a.MovRegAbs(R.Ebx, (uint)rootVA);
+        a.TestRegReg(R.Ebx, R.Ebx);
+        a.JeShort(1);                                     // 尚未捕获玩家 → 跳过
+        a.MovRegRegDisp8(R.Ecx, R.Ebx, 0x28);
+        a.TestRegReg(R.Ecx, R.Ecx);
+        a.JeShort(1);                                     // local side unavailable: no mutation
+        a.CmpRegMRegDisp32(R.Ecx, R.Eax, 0xC);            // cmp side,[entry+0xC]
+        a.JeShort(1);                                     // 属主==己方 → 跳过
+        a.MovM32RegDisp8Imm32(R.Eax, 0x04, 1);            // 敌方增量钉 1
+        a.Label(1);
+        a.Popad();
+        a.Popfd();
+        a.Db(0x03, 0x50, 0x04);                           // add edx,[eax+04]
+        a.Db(0x3B, 0xD7);                                 // cmp edx,edi（标志供随后的 jb 消费）
+        return c.Fin();
+    }
+
 
     // [08] Camera zoom limit — power_cool: movss [esi+44],xmm0
     // 特殊：游戏后续指令是 je（消费桩设置的 ZF）——沿用原版 TMK 技巧：

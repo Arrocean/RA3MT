@@ -274,4 +274,36 @@ for missing in ['slot', 'body', 'drawable', 'controller', 'side', 'wrapper', 'te
     preserved(vm, before, [UC_X86_REG_EAX, UC_X86_REG_EFLAGS])
     cases += 1
 
+
+# aiblock [F10] 禁止电脑建造: enemy production increment pinned to 1 per tick.
+# The replayed `cmp edx,edi` must set CF exactly like the original code so the
+# game's following jb branches correctly.
+for enabled in [0, 1]:
+    for local in [False, True]:
+        for context in ['valid', 'null_root', 'null_side']:
+            vm, end = machine('aiblock')
+            entry, controller, side = DATA, DATA + 0x2000, DATA + 0x3000
+            owner = side if local else side + 0x100
+            put(vm, GLOBAL, controller if context != 'null_root' else 0)
+            put(vm, controller + 0x28, side if context != 'null_side' else 0)
+            put(vm, entry + 0xC, owner)
+            put(vm, entry + 0x14, 4321)          # escrow accumulated
+            put(vm, entry + 0x4, 77)             # per-tick increment
+            vm.mem_write(BLOCK + 0xB, bytes([enabled]))
+            vm.reg_write(UC_X86_REG_EAX, entry)
+            vm.reg_write(UC_X86_REG_EDX, 4321)
+            vm.reg_write(UC_X86_REG_EDI, 5000)   # remaining budget
+            before = snapshot(vm)
+            execute(vm, end)
+            pinned = enabled == 1 and context == 'valid' and not local
+            increment = 1 if pinned else 77
+            assert get(vm, entry + 0x4) == increment, (enabled, local, context)
+            new_edx = 4321 + increment
+            assert vm.reg_read(UC_X86_REG_EDX) == new_edx
+            # replayed cmp must restore the branch decision for the game's jb
+            cf = vm.reg_read(UC_X86_REG_EFLAGS) & 1
+            assert cf == (1 if new_edx < 5000 else 0), 'cmp flags not live'
+            preserved(vm, before, [UC_X86_REG_EDX, UC_X86_REG_EFLAGS])
+            cases += 1
+
 print(f'PASS {cases} x86 execution cases including selected local Weapon clip refill, capacity and null guards')
