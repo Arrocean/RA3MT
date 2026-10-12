@@ -63,18 +63,21 @@ public sealed class ReinforcementCatalog
             return false;
         }
         var text = input.Trim();
-        if (_byCode.TryGetValue(text, out var byCode)
-            || _byName.TryGetValue(text, out var byName)
-            || _byZh.TryGetValue(text, out var byZh))
+        ReinforcementEntry? match = null;
+        if (_byCode.TryGetValue(text, out var byCode)) match = byCode;
+        else if (_byName.TryGetValue(text, out var byName)) match = byName;
+        else if (_byZh.TryGetValue(text, out var byZh)) match = byZh;
+        if (match is not null)
         {
-            entry = byCode ?? byName ?? byZh;
-            hash = entry!.Hash;
+            entry = match;
+            hash = match.Hash;
             return true;
         }
         // fall back to a raw hex code the user typed from a community guide
         if (TryParseHex(text, out hash) && hash != 0)
         {
-            entry = Entries.FirstOrDefault(e => e.Hash == hash);
+            var want = hash;
+            entry = Entries.FirstOrDefault(e => e.Hash == want);
             return true;
         }
         return false;

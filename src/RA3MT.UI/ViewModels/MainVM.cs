@@ -47,6 +47,10 @@ public sealed class FeatureVM : ObservableObject
     public bool NeedsCode => Def.Arg?.NeedsText == true;
     public string ArgLabel => Def.Arg?.Label ?? "";
     public string ArgPlaceholder => Def.Arg?.Placeholder ?? "";
+
+    /// <summary>True when the argument has a named suggestion source (the
+    /// picker button shows next to the text box).</summary>
+    public bool HasPicker => NeedsCode && !string.IsNullOrEmpty(Def.Arg?.Suggest);
     private string _codeText = "";
     public string CodeText
     {
@@ -155,7 +159,7 @@ public sealed class MainVM : ObservableObject
         }, _ => Attached);
         LaunchCmd = new RelayCommand(_ => TryLaunchGame(), _ => NotAttached);
 
-        Log($"RA3 Trainer 现代重制版 v33 就绪 — 支持 1.12 / 1.13（{TotalFeatures} 项功能，{Engine.Data.Hooks.Count} 个挂钩点）");
+        Log($"RA3 Trainer 现代重制版 v34 就绪 — 支持 1.12 / 1.13（{TotalFeatures} 项功能，{Engine.Data.Hooks.Count} 个挂钩点）");
         Log("提示：先启动红警3并进入主菜单，再点击「附加进程」。");
     }
 

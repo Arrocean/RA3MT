@@ -43,13 +43,20 @@
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBox Grid.Column="0" Width="112" Margin="0,0,8,0" VerticalContentAlignment="Center"
+          <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,8,0" VerticalAlignment="Center">
+            <TextBox Width="112" VerticalContentAlignment="Center"
                      FontFamily="Cascadia Code,Consolas" FontSize="11.5"
                      Background="#10151f" BorderBrush="#2a3550" BorderThickness="1" Foreground="#dfe6f5"
-                     Padding="6,4" MaxLength="10" VerticalAlignment="Center"
+                     Padding="6,4" MaxLength="32" VerticalAlignment="Center"
                      ToolTip="{Binding ArgPlaceholder}"
                      Text="{Binding CodeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                      Visibility="{Binding NeedsCode, Converter={StaticResource BoolToVisibility}}" />
+            <Button Content="📋" FontSize="12" Width="28" Height="28" Margin="4,0,0,0"
+                    Background="#10151f" BorderBrush="#2a3550" BorderThickness="1"
+                    Foreground="#dfe6f5" Cursor="Hand" Click="OnPickSuggestion"
+                    ToolTip="从内置单位表选择增援代码（也可手动输入十六进制代码）"
+                    Visibility="{Binding HasPicker, Converter={StaticResource BoolToVisibility}}" />
+          </StackPanel>
             <Grid Grid.Column="1">
               <ToggleButton Style="{StaticResource Switch}"
                             IsChecked="{Binding IsOn, Mode=TwoWay}"
@@ -163,7 +170,7 @@
             </Border>
             <StackPanel Margin="11,0,0,0" VerticalAlignment="Center">
               <TextBlock Text="RA3 Trainer" FontSize="15" FontWeight="Bold" />
-              <TextBlock Text="v19 · 现代重制版" FontSize="11" Foreground="{StaticResource Txt2}" Margin="0,2,0,0" />
+              <TextBlock Text="v34 · 现代重制版" FontSize="11" Foreground="{StaticResource Txt2}" Margin="0,2,0,0" />
             </StackPanel>
           </StackPanel>
 

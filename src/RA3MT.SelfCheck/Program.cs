@@ -207,6 +207,12 @@ if (args.Length == 1 && args[0] == "featuretest")
     return 0;
 }
 
+if (args.Length == 1 && args[0] == "reinforcetest")
+{
+    RA3MT.SelfCheck.ReinforcementChecks.Run();
+    return 0;
+}
+
 if (args.Length == 1 && args[0] == "resolvertest")
 {
     var fixture = new FeaturesData();

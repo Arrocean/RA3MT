@@ -76,6 +76,16 @@ public partial class MainWindow : Window
 
     private void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
+    /// <summary>📋 next to a "code" argument: open the suggestion picker for
+    /// that feature and copy the chosen value into the card's text box.</summary>
+    private void OnPickSuggestion(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not FeatureVM vm) return;
+        var picker = new ReinforcePickerWindow { Owner = this };
+        if (picker.ShowDialog() == true && picker.Selected is { } row)
+            vm.CodeText = row.Code;
+    }
+
     private void OnClose(object sender, RoutedEventArgs e)
     {
         _vm.Engine.Detach();
