@@ -81,8 +81,8 @@ Unicorn      stub execution 197+197 / bridge dispatch 60+218+20 / stub
 1. Launch RA3 via Steam (main menu is enough), run the trainer as admin
 2. Attach: every displaced instruction is byte-verified; any mismatch refuses
    the hook (fail-closed). The three game-thread bridges (rank /
-   capture+destroy / spawn) are opt-in via `.enable` marker files next to the
-   exe
+   capture+destroy / spawn) are on by default; set RA3MT_RANK_BRIDGE=0,
+   RA3MT_BRIDGES=0 or RA3MT_SPAWN=0 to disable one for troubleshooting
 3. Toggles = MasterCode flag bytes (stubs run on the game thread) or pure
    byte patches (build anywhere); actions = selection-chain walks or
    game-thread bridges

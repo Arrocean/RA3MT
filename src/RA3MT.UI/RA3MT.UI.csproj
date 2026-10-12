@@ -11,6 +11,16 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>RA3MT.UI</RootNamespace>
     <ApplicationIcon>..\..\assets\app.ico</ApplicationIcon>
+    <!-- WPF native dependencies (wpfgfx, PresentationNative, D3DCompiler,
+         vcruntime...) ride inside the single-file exe and self-extract at
+         startup, so the publish output is one exe and nothing else. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
+  <!-- No .pdb sidecars in single-file publish output (debug symbols are
+       meaningless to players and bloat the folder). -->
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <DebugType>none</DebugType>
   </PropertyGroup>
 
   <ItemGroup>

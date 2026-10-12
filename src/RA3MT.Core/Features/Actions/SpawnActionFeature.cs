@@ -35,7 +35,7 @@ public sealed class SpawnActionFeature(string id, SpawnActionKind kind) : IFeatu
         {
             var gateway = context.Host.Services.Get<ISpawnGateway>();
             if (gateway is null || !gateway.IsActive)
-                return FeatureResult.Failure("需要 spawn-bridge.enable 启用生成桥并通过校验");
+                return FeatureResult.Failure("生成桥未启用（校验未通过，或被环境变量 RA3MT_SPAWN=0 关闭）");
 
             return feature.ActionKind switch
             {

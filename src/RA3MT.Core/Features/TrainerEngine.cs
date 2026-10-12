@@ -21,30 +21,26 @@ public sealed class TrainerEngine : IDisposable
     public bool Attached { get; private set; }
     public bool RecoveryRequired { get; private set; }
 
-    /// <summary>晋级桥显式开关：环境变量 RA3MT_RANK_BRIDGE=1/true，或 exe 旁存在
-    /// rank-bridge.enable 标记文件（对用户可见可切换的持久开关）。
+    /// <summary>晋级桥开关：默认开启（四桥已达 FINAL3 对等并多轮实测）。
+    /// 设置环境变量 RA3MT_RANK_BRIDGE=0/false 可在排障时关闭。
     /// 开启后仍需 RankApiResolver 对晋级函数的严格字节校验通过才会安装消费桩。</summary>
     public bool EnableRankBridge { get; set; } =
-        Environment.GetEnvironmentVariable("RA3MT_RANK_BRIDGE") is "1" or "true"
-        || File.Exists(Path.Combine(AppContext.BaseDirectory, "rank-bridge.enable"));
+        Environment.GetEnvironmentVariable("RA3MT_RANK_BRIDGE") is not ("0" or "false");
 
     public bool RankBridgeActive => Attached && _mc is { RankBridgeEnabled: true, RankMailbox: not null };
 
-    /// <summary>俘虏/摧毁桥显式开关：环境变量 RA3MT_BRIDGES=1/true，或 exe 旁存在
-    /// bridges.enable 标记文件。附加时逐一严格校验，失败者不安装。</summary>
+    /// <summary>俘虏/摧毁桥开关：默认开启；RA3MT_BRIDGES=0/false 可关闭。
+    /// 附加时逐一严格校验，失败者不安装。</summary>
     public bool EnableCaptureKillBridges { get; set; } =
-        Environment.GetEnvironmentVariable("RA3MT_BRIDGES") is "1" or "true"
-        || File.Exists(Path.Combine(AppContext.BaseDirectory, "bridges.enable"));
+        Environment.GetEnvironmentVariable("RA3MT_BRIDGES") is not ("0" or "false");
 
     public bool CaptureBridgeActive => Attached && _mc is { CaptureBridgeEnabled: true, CaptureMailbox: not null };
     public bool KillBridgeActive => Attached && _mc is { KillBridgeEnabled: true, KillMailbox: not null };
 
-    /// <summary>生成桥显式开关：环境变量 RA3MT_SPAWN=1/true，或 exe 旁存在
-    /// spawn-bridge.enable 标记文件。需要生成 wrapper、哈希查找、哈希表全局
-    /// 三项全部严格校验通过才安装消费桩（复制选中/三阵营基地车/战场增援）。</summary>
+    /// <summary>生成桥开关：默认开启；RA3MT_SPAWN=0/false 可关闭（复制选中/三阵营基地车/战场增援）。
+    /// 需要生成 wrapper、哈希查找、哈希表全局三项全部严格校验通过才安装消费桩。</summary>
     public bool EnableSpawnBridge { get; set; } =
-        Environment.GetEnvironmentVariable("RA3MT_SPAWN") is "1" or "true"
-        || File.Exists(Path.Combine(AppContext.BaseDirectory, "spawn-bridge.enable"));
+        Environment.GetEnvironmentVariable("RA3MT_SPAWN") is not ("0" or "false");
 
     public bool SpawnBridgeActive => Attached && _mc is { SpawnBridgeEnabled: true, SpawnMailbox: not null };
 

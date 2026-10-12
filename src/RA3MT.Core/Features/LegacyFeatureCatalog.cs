@@ -58,9 +58,9 @@ public static class LegacyFeatureCatalog
                 {
                     features.Add(new Actions.BridgeActionFeature(def.Id, bridge.Value, def.Action switch
                     {
-                        "lv" => "晋级桥未启用（需要 rank-bridge.enable 并通过校验）",
-                        "capture" => "需要 bridges.enable 启用俘虏桥并通过校验（直接改属主指针不安全，已禁用）",
-                        _ => "需要 bridges.enable 启用摧毁桥并通过校验（直接清血量绕过死亡流程，已禁用）",
+                    "lv" => "晋级桥未启用（晋级函数校验未通过，或被环境变量 RA3MT_RANK_BRIDGE=0 关闭）",
+                    "capture" => "俘虏桥未启用（校验未通过，或被环境变量 RA3MT_BRIDGES=0 关闭）",
+                    _ => "摧毁桥未启用（校验未通过，或被环境变量 RA3MT_BRIDGES=0 关闭）",
                     }));
                     continue;
                 }

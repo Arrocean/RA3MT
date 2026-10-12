@@ -11,4 +11,9 @@
     <EmbeddedResource Include="..\..\assets\reinforcement_codes.json" Link="Data\reinforcement_codes.json" />
   </ItemGroup>
 
+  <!-- keep .pdb files out of single-file publish output -->
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
 </Project>
