@@ -62,9 +62,7 @@ public sealed class SpawnActionFeature(string id, SpawnActionKind kind) : IFeatu
             }
             else
             {
-                var anchor = gateway.SelectionAnchor;
-                if (anchor is null) return FeatureResult.Failure("鼠标位置不可用：请把鼠标移到游戏画面上");
-                var a = anchor.Value;
+                var a = gateway.SelectionAnchor ?? (0f, 0f, 0f);
                 requests.AddRange(holders.Select(holder => (0u, holder, a.x, a.y, a.z)));
             }
 
@@ -86,28 +84,30 @@ public sealed class SpawnActionFeature(string id, SpawnActionKind kind) : IFeatu
                 return FeatureResult.Failure("无效的增援代码（8 位十六进制，或用输入框旁的 📋 从单位表选择；也可直接输入单位名）");
             var label = entry is { } e ? $"增援 {e.Zh}（{e.Name}）0x{hash:X8}" : $"增援代码 0x{hash:X8}";
             var mouse = gateway.MouseGround;
+            var anchor = mouse ?? gateway.SelectionAnchor;
             if (mouse is { } m)
                 context.Host.Log($"{label}：围绕鼠标地面 0x({m.x:F0}, {m.z:F0}) 生成 8 个并升星");
-            else
-                context.Host.Log("增援：鼠标地面坐标不可用（游戏失焦会冻结该值）——请点回游戏画面再按热键；将回退选中单位锚点");
-            var anchor = mouse ?? gateway.SelectionAnchor;
-            if (anchor is null)
-                return FeatureResult.Failure("鼠标位置不可用：请把鼠标移到游戏画面上，或选中一个己方单位作锚点");
-            var (x, y, z) = anchor.Value;
+            else if (anchor is null)
+                context.Host.Log($"{label}：以实时鼠标位置生成（本版本无鼠标地面缓存且未选中单位，无回退锚点）");
+            var (x, y, z) = anchor ?? (0f, 0f, 0f);
             return gateway.SubmitReinforcement(feature.Id, hash, x, y, z);
         }
 
-        /// <summary>Spawn one hash at the mouse ground point, falling back to the
-        /// selected unit's position.</summary>
+        /// <summary>Spawn one hash at the live mouse point. The trainer-side
+        /// anchor (mouse-ground copy, else the selected unit's position) is only
+        /// the fallback for when the game-thread transform fails — versions with
+        /// no mouseGround offset (1.12 / 1.12ea) must not be locked out of the
+        /// feature, so with no anchor at all the request still submits and the
+        /// stub resolves the live mouse itself.</summary>
         private FeatureResult SpawnAtAnchor(ISpawnGateway gateway, uint hash, string describe)
         {
             var mouse = gateway.MouseGround;
+            var anchor = mouse ?? gateway.SelectionAnchor;
             if (mouse is { } m)
                 context.Host.Log($"{describe} 生成位置=鼠标地面 0x({m.x:F0}, {m.z:F0})");
-            var anchor = mouse ?? gateway.SelectionAnchor;
-            if (anchor is null)
-                return FeatureResult.Failure("鼠标位置不可用：请把鼠标移到游戏画面上，或选中一个己方单位作锚点");
-            var (x, y, z) = anchor.Value;
+            else if (anchor is null)
+                context.Host.Log($"{describe}：以实时鼠标位置生成（本版本无鼠标地面缓存且未选中单位，无回退锚点）");
+            var (x, y, z) = anchor ?? (0f, 0f, 0f);
             return gateway.SubmitAtMouse(feature.Id, [(hash, 0u, x, y, z)]);
         }
     }
