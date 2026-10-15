@@ -87,6 +87,37 @@ public static class BridgeMailboxChecks
             cases++;
         }
 
+        // rank mailbox: rejection classification. The dispatcher writes the rank
+        // value before/after the award call; equal non-zero slots = award did not
+        // move it (already at max rank — the benign case), zeroed slots = the
+        // validation path rejected before the award ran (a real error).
+        foreach (var (before, after, benign) in new (uint, uint, bool)[]
+                 {
+                     (0x300u, 0x300u, true),    // unchanged non-zero: already maxed
+                     (0u, 0u, false),           // untouched slots: validation rejection
+                     (0x300u, 0x500u, false),   // value moved but rejected state: real rejection
+                     (0x500u, 0x300u, false),   // value moved backwards: real rejection
+                 })
+        {
+            var memory = new Memory();
+            memory.State(block + RankDispatcher.StateOffset, 4); // Reject
+            memory.State(block + RankDispatcher.RankBeforeOffset, before);
+            memory.State(block + RankDispatcher.RankAfterOffset, after);
+            if (new RankRequestMailbox(memory, block).RejectedBecauseAlreadyRanked() != benign)
+                throw new Exception($"Rank rejection misclassified for {before:X}/{after:X}");
+            cases++;
+        }
+        foreach (var state in new uint[] { 0, 1, 2, 3 })
+        {
+            var memory = new Memory();
+            memory.State(block + RankDispatcher.StateOffset, state);
+            memory.State(block + RankDispatcher.RankBeforeOffset, 0x300);
+            memory.State(block + RankDispatcher.RankAfterOffset, 0x300);
+            if (new RankRequestMailbox(memory, block).RejectedBecauseAlreadyRanked())
+                throw new Exception("Non-reject state reported already-ranked");
+            cases++;
+        }
+
         // spawn mailbox @0x18C0: state transitions and publish-last ordering
         foreach (var state in new uint[] { 0, 1, 2, 3, 4, 55 })
         {

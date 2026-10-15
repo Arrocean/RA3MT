@@ -70,6 +70,7 @@ public sealed class BridgeCoordinator
         var applied = 0;
         var rejected = 0;
         var outstanding = 0;
+        var skipped = 0;
         for (var i = 0; i < requests.Count; i++)
         {
             var request = requests[i];
@@ -102,8 +103,19 @@ public sealed class BridgeCoordinator
                     _log($"{featureName}: {DescribeRequest(consumer, mailbox, request)}");
                     break;
                 case BridgeOutcome.Rejected:
-                    rejected++;
-                    _log($"{featureName}: {DescribeRejection(consumer, request)}");
+                    // Rank only: an award that did not move the rank value is the
+                    // expected "already three-star" outcome — log it as a skip so
+                    // it does not raise the error window.
+                    if (mailbox is RankRequestMailbox rankBox && rankBox.RejectedBecauseAlreadyRanked())
+                    {
+                        skipped++;
+                        _log($"{featureName}: 0x{request.Body:X} 未升星（多为已满星），跳过");
+                    }
+                    else
+                    {
+                        rejected++;
+                        _log($"{featureName}: {DescribeRejection(consumer, request)}");
+                    }
                     break;
                 default:
                     outstanding++;
@@ -117,14 +129,18 @@ public sealed class BridgeCoordinator
             }
         }
 
+        var benignOnly = applied == 0 && skipped > 0 && rejected == 0 && outstanding == 0;
         var msg = applied > 0
             ? $"已作用于 {applied}/{requests.Count} 个目标"
-            : "游戏线程未消费请求（资金未结算？稍后重试）";
+            : benignOnly
+                ? "全部目标已是满星，无需升星"
+                : "游戏线程未消费请求（资金未结算？稍后重试）";
+        if (skipped > 0) msg += $"，{skipped} 个未升星（多为已满星）";
         if (rejected > 0) msg += $"，{rejected} 个被校验拒绝";
         if (outstanding > 0) msg += $"，{outstanding} 个待处理（再次触发继续）";
         _log($"{featureName}: {msg}");
         _stateChanged();
-        return (applied > 0, applied > 0 ? "" : msg);
+        return (applied > 0 || benignOnly, applied > 0 ? "" : msg);
     }
 
     /// <summary>Per-bridge success line. Only the spawn bridge has a resolved

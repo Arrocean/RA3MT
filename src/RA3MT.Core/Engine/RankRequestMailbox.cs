@@ -33,4 +33,17 @@ public sealed class RankRequestMailbox : RequestMailbox
         if (state is not (Success or Reject)) return (state, 0, 0);
         return (state, ReadU32(0x10), ReadU32(0x14));
     }
+
+    /// <summary>Benign rank rejection: the dispatcher measured the rank value
+    /// around the award call and it did not move — almost always "already at
+    /// max rank", which is an expected outcome when the box-selection sweeps
+    /// in promoted units, not an error. The payload publish zeroes both slots
+    /// and the validation path rejects before writing them, so 0/0 means a
+    /// REAL validation rejection. Must only be called on a terminal state.</summary>
+    public bool RejectedBecauseAlreadyRanked()
+    {
+        if (ReadTerminalState() != Reject) return false;
+        var before = ReadU32(0x10);
+        return before != 0 && before == ReadU32(0x14);
+    }
 }
