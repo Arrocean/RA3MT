@@ -18,29 +18,9 @@ architecture. UI curated by WhiteSprite.
 > Single-player only; does not work in online multiplayer. For educational
 > research purposes.
 
-## Current release v261013-9 (2026-10-13)
-
-Version scheme: `vYYMMDD-N` (date + sequence of that day). The distribution
-artifact is a **single-file exe**: `Red Alert 3 Modern Trainer v<version>.exe`
-(~58 MB, x86, embedded icon, **no sidecar files**).
-
-Recent highlights (details in docs/NOTES.md, v261013 section):
-
-- **Built-in reinforcement table**: 125 common units (Allies 36 / Soviets 40 /
-  Empire 42 / neutral fun crates 7) with Traditional-Chinese display names and
-  a searchable picker (📋 on the reinforcement card). Extracted automatically
-  from the game's own archives and cross-checked against live-verified codes;
-  raw hex codes and internal unit names still work
-- **WeMod-style single button**: "Start Game" launches the game and attaches
-  as soon as the process appears; attaches immediately when the game already
-  runs; cancellable while waiting
-- The four game-thread bridges (rank / capture+destroy / spawn) are **on by
-  default**; disable individually for troubleshooting via
-  `RA3MT_RANK_BRIDGE=0`, `RA3MT_BRIDGES=0`, `RA3MT_SPAWN=0`
-- Stale single-file extraction caches in %TEMP% are cleaned at startup, so
-  releases no longer accumulate disk usage
-- 7 user-facing groups, 34 player-oriented descriptions, date versioning,
-  application icon
+Downloads live on **[Releases](https://github.com/Arrocean/RA3MT/releases)**: a
+single-file exe (~58 MB, x86, embedded icon, no sidecar files), versioned
+`vYYMMDD-N` (date + per-day sequence).
 
 ## Build
 
@@ -93,9 +73,9 @@ artifacts/final3/                All 13 FINAL3 CE scripts (.cea) + manifest
 ```
 Hook sites   78/78 (byte-level displaced check, 1.12 + 1.13 + EA 1.12)
 SelfCheck    12 suites green (featuretest 108 / installertest 162 /
-             actiontest 24 / bridgetest / ranktest / spawntest 69 /
-             selectiontest / layouttest / rankmailboxtest / asmtest /
-             resolvertest / reinforcetest)
+             actiontest 24+5 / bridgetest 38 / ranktest / spawntest 69 /
+             selectiontest / layouttest 14 / rankmailboxtest 12 / asmtest /
+             resolvertest 4 / reinforcetest 8)
 livetest     read-only live verification against the running game (build
              classification + all hooks + four bridges, no hooks installed)
 Stub gate    33 stubs byte-identical (py tools/harness/stub_regression.py)
@@ -114,6 +94,10 @@ Unicorn      Python-side stub semantic suites (tools/harness/)
    byte patches (build anywhere); actions = selection-chain walks or
    game-thread bridges
 4. Detach restores every original byte (including the build-anywhere patch)
+
+> The four game-thread bridges (rank / capture+destroy / spawn) are on by
+> default; disable individually for troubleshooting via `RA3MT_RANK_BRIDGE=0`,
+> `RA3MT_BRIDGES=0`, `RA3MT_SPAWN=0`.
 
 ## Technical notes
 

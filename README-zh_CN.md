@@ -16,22 +16,8 @@
 
 > 仅限单机使用，联网对战不可用。仅供学习研究。
 
-## 当前版本 v261013-9（2026-10-13）
-
-版本号规则：`vYYMMDD-N`（日期 + 当日第 N 次发布）。发布产物为**单文件 exe**：
-`Red Alert 3 Modern Trainer v<版本号>.exe`（约 58MB，x86，自带图标，**无需任何附带文件**）。
-
-近期亮点（详见 docs/NOTES.md v261013 节）：
-
-- **内置增援单位表**：125 个常用单位（盟军 36 / 苏军 40 / 升阳 42 / 中立趣味箱 7），
-  带繁体中文名和可搜索选择器（增援卡片上的 📋），数据从游戏自身文件自动提取，
-  并与实测验证过的代码逐个核对；也可手动输入十六进制代码或单位内部名
-- **WeMod 式单键启动**：点「开始游戏」自动拉起游戏并在进程出现后附加；
-  游戏已在运行则直接附加；等待期间可取消
-- 四个游戏线程桥（晋级 / 俘虏+摧毁 / 生成）**默认开启**；排障时可用环境变量
-  `RA3MT_RANK_BRIDGE=0`、`RA3MT_BRIDGES=0`、`RA3MT_SPAWN=0` 单独关闭
-- 首次启动自动清理旧版本运行缓存（%TEMP%），不随版本更替累积占用
-- 7 个用户分组、34 条玩家向功能描述、日期版本号、应用图标
+下载与更新见 **[Releases](https://github.com/Arrocean/RA3MT/releases)**：产物为单文件 exe
+（约 58MB、x86、自带图标、无需任何附带文件），版本号 `vYYMMDD-N`（日期 + 当日第 N 次发布）。
 
 ## 构建
 
@@ -68,9 +54,9 @@ artifacts/final3/                FINAL3 全部 13 个 CE 脚本原文（.cea）+
 
 ```
 挂钩点      78/78（1.12 + 1.13 + EA 1.12 三个镜像，逐字节 displaced 校验）
-SelfCheck   12 套件全过（featuretest 108 / installertest 162 / actiontest 24 /
-            bridgetest / ranktest / spawntest 69 / selectiontest / layouttest /
-            rankmailboxtest / asmtest / resolvertest / reinforcetest）
+SelfCheck   12 套件全过（featuretest 108 / installertest 162 / actiontest 24+5 /
+            bridgetest 38 / ranktest / spawntest 69 / selectiontest / layouttest 14 /
+            rankmailboxtest 12 / asmtest / resolvertest 4 / reinforcetest 8）
 livetest    对运行中游戏的只读全链路验证（构建判别 + 全钩子 + 四桥解析，不挂钩）
 桩门禁      33 桩逐字节零回归（py tools/harness/stub_regression.py）
 Unicorn     Python 侧桩语义执行套件（tools/harness/）
@@ -85,6 +71,9 @@ Unicorn     Python 侧桩语义执行套件（tools/harness/）
 3. 开关型功能 = MasterCode 标志字节（游戏线程执行桩）或纯字节补丁（随地建造）；
    动作型 = 选中链遍历或游戏线程桥
 4. 「脱离进程」恢复全部原始字节（随地建造补丁也会还原）
+
+> 四个游戏线程桥（晋级 / 俘虏+摧毁 / 生成）默认开启；排障时可设环境变量
+> `RA3MT_RANK_BRIDGE=0`、`RA3MT_BRIDGES=0`、`RA3MT_SPAWN=0` 单独关闭。
 
 ## 技术要点
 
