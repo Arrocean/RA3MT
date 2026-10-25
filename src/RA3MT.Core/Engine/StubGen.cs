@@ -15,7 +15,8 @@ public static class StubGen
         "proto_cool_a" or "proto_cool_b" or "power" or
         "build_power" or "build_hp_a" or "build_hp_b" or "sidebar_pts" or
         "power_cool" or "unit_lv" or "zoom_unit_xp" or "ammo" or "weapon_clip" or
-        "aiblock" or "godmode" or "onekill" or "onekill_a" or "onekill_b" => true,
+        "aiblock" or "godmode" or "onekill" or "onekill_a" or "onekill_b" or
+        "challenge_money" or "challenge_time" => true,
         _ => false,
     };
 
@@ -25,29 +26,31 @@ public static class StubGen
     /// <param name="rootVa">VA of the player-context root global</param>
     /// <param name="replay">displaced bytes to replay verbatim (position-independent sites only)</param>
     public static byte[] Emit(string id, nuint stubVa, nuint siteEnd, nuint block, nuint rootVa,
-        byte[]? replay = null) => id switch
+        byte[]? replay = null, GameLayout? layout = null) => id switch
     {
         "money_h2" => MoneyH2(stubVa, siteEnd, block),
-        "money_h1" => MoneyH1(stubVa, siteEnd, block),
-        "money_h3" => MoneyH3(stubVa, siteEnd, block),
+        "money_h1" => MoneyH1(stubVa, siteEnd, block, layout ?? GameLayout.RedAlert3),
+        "money_h3" => MoneyH3(stubVa, siteEnd, block, layout ?? GameLayout.RedAlert3),
         "money_h4" => MoneyH4(stubVa, siteEnd, block),
         "proto_cool_a" => ProtoCoolA(stubVa, siteEnd, block),
         "proto_cool_b" => ProtoCoolB(stubVa, siteEnd, block),
-        "power" => Power(stubVa, siteEnd, block),
-        "build_power" => BuildPower(stubVa, siteEnd, block, rootVa),
+        "power" => Power(stubVa, siteEnd, block, layout ?? GameLayout.RedAlert3),
+        "build_power" => BuildPower(stubVa, siteEnd, block, rootVa, layout ?? GameLayout.RedAlert3),
         "build_hp_a" => BuildHpA(stubVa, siteEnd, block, rootVa),
         "build_hp_b" => BuildHpB(stubVa, siteEnd, block),
         "sidebar_pts" => SidebarPts(stubVa, siteEnd, block),
         "power_cool" => PowerCool(stubVa, siteEnd, block),
-        "unit_lv" => UnitLv(stubVa, siteEnd, block),
+        "unit_lv" => UnitLv(stubVa, siteEnd, block, layout ?? GameLayout.RedAlert3),
         "zoom_unit_xp" => ZoomUnitXp(stubVa, siteEnd, block),
         "ammo" => Ammo(stubVa, siteEnd, block),
-        "weapon_clip" => WeaponClip(stubVa, siteEnd, block, rootVa),
+        "weapon_clip" => WeaponClip(stubVa, siteEnd, block, rootVa, layout ?? GameLayout.RedAlert3),
         "aiblock" => AiBlock(stubVa, siteEnd, block, rootVa),
-        "godmode" => GodMode(stubVa, siteEnd, block, rootVa),
-        "onekill" => OneKill(stubVa, siteEnd, block, rootVa),
-        "onekill_a" => OneKillA(stubVa, siteEnd, block),
-        "onekill_b" => OneKillB(stubVa, siteEnd, block),
+        "godmode" => GodMode(stubVa, siteEnd, block, rootVa, layout ?? GameLayout.RedAlert3),
+        "onekill" => OneKill(stubVa, siteEnd, block, rootVa, layout ?? GameLayout.RedAlert3),
+        "onekill_a" => OneKillA(stubVa, siteEnd, block, layout ?? GameLayout.RedAlert3),
+        "onekill_b" => OneKillB(stubVa, siteEnd, block, layout ?? GameLayout.RedAlert3),
+        "challenge_money" => ChallengeMoney(stubVa, siteEnd, block, replay ?? throw new ArgumentNullException(nameof(replay))),
+        "challenge_time" => ChallengeTime(stubVa, siteEnd, block),
         _ => throw new NotImplementedException(id),
     };
 
@@ -97,8 +100,9 @@ public static class StubGen
     }
 
     // [02] 无限电力 — money_h1: mov eax,[eax+4]; mov ecx,[esi+3B0]
-    private static byte[] MoneyH1(nuint stubVa, nuint siteEnd, nuint block)
+    private static byte[] MoneyH1(nuint stubVa, nuint siteEnd, nuint block, GameLayout layout)
     {
+        if (layout.GuardedResourceHooks) return GuardedPower(stubVa, siteEnd, block);
         var c = new C(stubVa, siteEnd, block);
         var a = c.A;
         a.Pushfd();
@@ -110,13 +114,14 @@ public static class StubGen
         a.Label(1);
         a.Popfd();
         a.Db(0x8B, 0x40, 0x04);                           // mov eax,[eax+04]
-        a.Db(0x8B, 0x8E, 0xB0, 0x03, 0x00, 0x00);         // mov ecx,[esi+3B0]
+        a.MovRegRegDisp32(R.Ecx, R.Esi, layout.PowerUi);         // mov ecx,[esi+3B0]
         return c.Fin();
     }
 
     // [03] 无限协议点数 — money_h3: mov edi,[eax+34]; mov ecx,[esi+3C]
-    private static byte[] MoneyH3(nuint stubVa, nuint siteEnd, nuint block)
+    private static byte[] MoneyH3(nuint stubVa, nuint siteEnd, nuint block, GameLayout layout)
     {
+        if (layout.GuardedResourceHooks) return GuardedPoints(stubVa, siteEnd, block);
         var c = new C(stubVa, siteEnd, block);
         var a = c.A;
         a.Pushfd();
@@ -127,6 +132,41 @@ public static class StubGen
         a.Popfd();
         a.Db(0x8B, 0x78, 0x34);                           // mov edi,[eax+34]
         a.Db(0x8B, 0x4E, 0x3C);                           // mov ecx,[esi+3C]
+        return c.Fin();
+    }
+
+    // Uprising's resource renderers jump directly to the second instruction
+    // of the old multi-instruction sites. Cover the complete preceding fork
+    // instead; relocate its internal branches with labels, never copy rel8.
+    // The shared MOV ECX continuation remains outside the detour for all paths.
+    private static byte[] GuardedPower(nuint stubVa, nuint siteEnd, nuint block)
+    {
+        var c = new C(stubVa, siteEnd, block); var a = c.A;
+        a.Db(0x39, 0x09, 0x5B);                         // cmp [ecx],ecx; pop ebx (original)
+        a.JneShort(1);                                 // unavailable: original XOR EAX path
+        a.Pushfd();
+        a.MovM32AbsReg(R.Esi, (uint)(block + MasterCode.DiagPlayerEsi));
+        c.Flag("power"); a.JneShort(2);
+        a.MovM32RegDisp8Imm32(R.Eax, 4, 100000);
+        a.MovM32RegDisp8Imm32(R.Eax, 8, 0);
+        a.Label(2); a.Popfd();
+        a.Db(0x8B, 0x40, 0x04);
+        a.JmpShort(3);
+        a.Label(1); a.Db(0x33, 0xC0);
+        a.Label(3);
+        return c.Fin();
+    }
+
+    private static byte[] GuardedPoints(nuint stubVa, nuint siteEnd, nuint block)
+    {
+        var c = new C(stubVa, siteEnd, block); var a = c.A;
+        a.TestRegReg(R.Eax, R.Eax); a.JeShort(1);
+        a.Pushfd(); c.Flag("scpoints"); a.JneShort(2);
+        a.MovM32RegDisp8Imm32(R.Eax, 0x34, 15);
+        a.Label(2); a.Popfd();
+        a.Db(0x8B, 0x78, 0x34); a.JmpShort(3);
+        a.Label(1); a.Db(0x33, 0xFF);
+        a.Label(3);
         return c.Fin();
     }
 
@@ -177,7 +217,7 @@ public static class StubGen
     }
 
     // [05] 快速建造（不断电） — power: fld [esi+1BC]
-    private static byte[] Power(nuint stubVa, nuint siteEnd, nuint block)
+    private static byte[] Power(nuint stubVa, nuint siteEnd, nuint block, GameLayout layout)
     {
         var c = new C(stubVa, siteEnd, block);
         var a = c.A;
@@ -187,7 +227,9 @@ public static class StubGen
         a.Db(0x83, 0xFD, 0x01);                           // cmp ebp,1
         a.JeShort(1);
         a.Pushad();
-        a.MovRegRegDisp8(R.Eax, R.Edi, 0x3C);             // eax=[edi+3C]
+        // GenericUnpackUpdate: schedule after the unpack start frame. Uprising
+        // moved that frame to +34; +3C is now an event handle, not a clock.
+        a.MovRegRegDisp8(R.Eax, R.Edi, layout.UnpackStartFrame);
         a.IncReg(R.Eax);
         a.Db(0x89, 0x47, 0x14);                           // mov [edi+14],eax
         a.Popad();
@@ -198,7 +240,7 @@ public static class StubGen
     }
 
     // [06]+[07] — build_power: mov ebx,[eax+418]
-    private static byte[] BuildPower(nuint stubVa, nuint siteEnd, nuint block, nuint rootVa)
+    private static byte[] BuildPower(nuint stubVa, nuint siteEnd, nuint block, nuint rootVa, GameLayout layout)
     {
         var c = new C(stubVa, siteEnd, block);
         var a = c.A;
@@ -207,7 +249,7 @@ public static class StubGen
         // 诊断：捕获 eax(生产对象) / esi / [eax+0x418](属主)
         a.MovM32AbsReg(R.Eax, (uint)(block + MasterCode.DiagProdEax));
         a.MovM32AbsReg(R.Esi, (uint)(block + MasterCode.DiagProdEsi));
-        a.MovRegRegDisp32(R.Edx, R.Eax, 0x418);
+        a.MovRegRegDisp32(R.Edx, R.Eax, layout.Owner);
         a.MovM32AbsReg(R.Edx, (uint)(block + MasterCode.DiagOwner));
         // [06] 协议/超武立即就绪：属主==己方 → [esi+20]=0
         // The global contains the local controller; controller+0x28 is the
@@ -220,7 +262,7 @@ public static class StubGen
         a.MovRegRegDisp8(R.Ecx, R.Ebx, 0x28);
         a.TestRegReg(R.Ecx, R.Ecx);
         a.JeShort(3);                                     // local side unavailable: no mutation
-        a.CmpRegMRegDisp32(R.Ecx, R.Eax, 0x418);          // cmp ecx,[eax+418]
+        a.CmpRegMRegDisp32(R.Ecx, R.Eax, layout.Owner);          // cmp ecx,[eax+418]
         a.JneShort(2);
         a.MovM32RegDisp8Imm32(R.Esi, 0x20, 0);
         // [07] 冻结敌方：属主!=己方 → [esi+20]+=1
@@ -233,14 +275,14 @@ public static class StubGen
         a.MovRegRegDisp8(R.Ecx, R.Ebx, 0x28);
         a.TestRegReg(R.Ecx, R.Ecx);
         a.JeShort(3);                                     // local side unavailable: no mutation
-        a.CmpRegMRegDisp32(R.Ecx, R.Eax, 0x418);
+        a.CmpRegMRegDisp32(R.Ecx, R.Eax, layout.Owner);
         a.JeShort(3);                                     // 属主==己方 → 跳过
         a.AddM32RegDisp8Imm8(R.Esi, 0x20, 1);
         a.Label(3);
         a.Popad();
         a.Popfd();
         a.Db(0x8B, 0x7E, 0x20);                           // reload deadline: game cached EDI before hook
-        a.Db(0x8B, 0x98, 0x18, 0x04, 0x00, 0x00);         // mov ebx,[eax+418]
+        a.MovRegRegDisp32(R.Ebx, R.Eax, layout.Owner);         // mov ebx,[eax+418]
         return c.Fin();
     }
 
@@ -349,7 +391,7 @@ public static class StubGen
     // FINAL3 机制：读取时把健康模块的**真实 HP 字段** +4(当前)/+0xC(上限) 重置
     // 1000000.0——掉血一帧内被刷回满，相当于无敌。属主 [body+0x418] 与
     // [[root]+0x28] 比（阵营指针编码，rank/spawn 桥同款）。
-    private static byte[] GodMode(nuint stubVA, nuint siteEnd, nuint block, nuint rootVA)
+    private static byte[] GodMode(nuint stubVA, nuint siteEnd, nuint block, nuint rootVA, GameLayout layout)
     {
         var c = new C(stubVA, siteEnd, block);
         var a = c.A;
@@ -360,7 +402,7 @@ public static class StubGen
         a.MovRegRegDisp32(R.Ecx, R.Ebx, 0x138);           // ecx = [drawable+0x138] body
         a.TestRegReg(R.Ecx, R.Ecx);
         a.JeShort(1);                                     // 防御：无 body 跳过（FINAL3 不查）
-        a.MovRegRegDisp32(R.Edi, R.Ecx, 0x418);           // edi = 属主
+        a.MovRegRegDisp32(R.Edi, R.Ecx, layout.Owner);           // edi = 属主
         a.TestRegReg(R.Esi, R.Esi);
         a.JeShort(1);                                     // 防御：健康模块空跳过
         a.MovRegAbs(R.Ebx, (uint)rootVA);
@@ -390,7 +432,7 @@ public static class StubGen
     // 门控偏离说明：FINAL3 用 [body+390|394|3A0|3AC] 任一非零做门——实测
     // （v30）敌方主基地等无武装建筑全零被挡，无法一击必杀；换成"本次增量
     // xmm1<0"（真伤害才杀，治疗/修理跳过），语义更准且覆盖建筑。
-    private static byte[] OneKill(nuint stubVA, nuint siteEnd, nuint block, nuint rootVA)
+    private static byte[] OneKill(nuint stubVA, nuint siteEnd, nuint block, nuint rootVA, GameLayout layout)
     {
         var c = new C(stubVA, siteEnd, block);
         var a = c.A;
@@ -408,7 +450,7 @@ public static class StubGen
         a.MovRegAbs(R.Eax, (uint)(block + MasterCode.OneKillBody));
         a.TestRegReg(R.Eax, R.Eax);
         a.JeShort(1);
-        a.MovRegRegDisp32(R.Ecx, R.Eax, 0x418);           // 属主
+        a.MovRegRegDisp32(R.Ecx, R.Eax, layout.Owner);           // 属主
         a.TestRegReg(R.Ecx, R.Ecx);
         a.JeShort(1);
         a.MovRegRegDisp8(R.Eax, R.Ecx, 0x20);             // 属主槽位号
@@ -435,11 +477,11 @@ public static class StubGen
     // [F12] 数据钩 A — onekill_a: mov ecx,[esi+0x33C]
     // EA 0x3FE714 ≡ 1.13 0x427B34 ≡ 1.12 0x43C964（esi=body 的伤害处理路径）。
     // 无 pushfd/pushad：指令本身只写 ecx（重放同款），标志零扰动。
-    private static byte[] OneKillA(nuint stubVA, nuint siteEnd, nuint block)
+    private static byte[] OneKillA(nuint stubVA, nuint siteEnd, nuint block, GameLayout layout)
     {
         var c = new C(stubVA, siteEnd, block);
         var a = c.A;
-        a.Db(0x8B, 0x8E, 0x3C, 0x03, 0x00, 0x00);         // mov ecx,[esi+0x33C]（重放）
+        a.MovRegRegDisp32(R.Ecx, R.Esi, layout.Health);         // mov ecx,[esi+0x33C]（重放）
         a.MovM32AbsReg(R.Esi, (uint)(block + MasterCode.OneKillBody));
         a.MovM32AbsReg(R.Ecx, (uint)(block + MasterCode.OneKillHealth));
         return c.Fin();
@@ -447,12 +489,12 @@ public static class StubGen
 
     // [F12] 数据钩 B — onekill_b: mov ecx,[ecx+0x33C]
     // EA 0x2E24E3 ≡ 1.13 0x30B6C3 ≡ 1.12 0x320963（ecx=body 的另一条路径）。
-    private static byte[] OneKillB(nuint stubVA, nuint siteEnd, nuint block)
+    private static byte[] OneKillB(nuint stubVA, nuint siteEnd, nuint block, GameLayout layout)
     {
         var c = new C(stubVA, siteEnd, block);
         var a = c.A;
         a.MovM32AbsReg(R.Ecx, (uint)(block + MasterCode.OneKillBody)); // 捕获 body（重放前，ecx 尚是 body）
-        a.Db(0x8B, 0x89, 0x3C, 0x03, 0x00, 0x00);         // mov ecx,[ecx+0x33C]（重放）
+        a.MovRegRegDisp32(R.Ecx, R.Ecx, layout.Health);         // mov ecx,[ecx+0x33C]（重放）
         a.MovM32AbsReg(R.Ecx, (uint)(block + MasterCode.OneKillHealth));
         return c.Fin();
     }
@@ -479,19 +521,22 @@ public static class StubGen
     }
 
     // [09] 地图全开 — unit_lv: movss [ebp+260],xmm0
-    private static byte[] UnitLv(nuint stubVa, nuint siteEnd, nuint block)
+    private static byte[] UnitLv(nuint stubVa, nuint siteEnd, nuint block, GameLayout layout)
     {
         var c = new C(stubVa, siteEnd, block);
         var a = c.A;
         a.Pushfd();
         c.Flag("revealmap");
         a.JneShort(1);
-        a.MovM32RegDisp32Imm32(R.Ebp, 0x260, 0x47C35000); // [ebp+260]=100000.0f
+        a.MovM32RegDisp32Imm32(R.Ebp, layout.Vision, 0x47C35000); // [ebp+260]=100000.0f
         a.Popfd();
-        a.JmpTo((uint)siteEnd);                           // 开：跳过原始写入
+        // Uprising's JP +0C / FLD [ebp+25C] / FSTP [ebp+264] immediately
+        // overwrites inherited (-1 template) sight. Skip that audited tail
+        // only while enabled; disabled execution and flags remain untouched.
+        a.JmpTo(checked((uint)siteEnd + layout.VisionOverrideSkip));
         a.Label(1);
         a.Popfd();
-        a.Db(0xF3, 0x0F, 0x11, 0x85, 0x60, 0x02, 0x00, 0x00); // movss [ebp+260],xmm0
+        a.Db(0xF3, 0x0F, 0x11, 0x85); a.Db(BitConverter.GetBytes(layout.Vision)); // movss [ebp+260],xmm0
         return c.Fin();
     }
 
@@ -528,7 +573,7 @@ public static class StubGen
         return c.Fin();
     }
 
-    private static byte[] WeaponClip(nuint stubVa, nuint siteEnd, nuint block, nuint rootVa)
+    private static byte[] WeaponClip(nuint stubVa, nuint siteEnd, nuint block, nuint rootVa, GameLayout layout)
     {
         var c = new C(stubVa, siteEnd, block);
         var a = c.A;
@@ -543,7 +588,7 @@ public static class StubGen
         a.MovRegRegDisp8(R.Ebx, R.Ebx, 0x10);             // Body
         a.TestRegReg(R.Ebx, R.Ebx);
         a.JeShort(1);
-        a.MovRegRegDisp32(R.Edx, R.Ebx, 0xF4);            // Drawable
+        a.MovRegRegDisp32(R.Edx, R.Ebx, layout.BodyDrawable); // Body -> Drawable
         a.TestRegReg(R.Edx, R.Edx);
         a.JeShort(1);
         a.Db(0xF6, 0x82, 0x3D, 0x01, 0x00, 0x00, 0x40); // selected bit
@@ -554,7 +599,7 @@ public static class StubGen
         a.MovRegRegDisp8(R.Ecx, R.Ecx, 0x28);
         a.TestRegReg(R.Ecx, R.Ecx);
         a.JeShort(1);
-        a.CmpRegMRegDisp32(R.Ecx, R.Ebx, 0x418);
+        a.CmpRegMRegDisp32(R.Ecx, R.Ebx, layout.Owner);
         a.JneShort(1);
         a.MovRegRegDisp8(R.Eax, R.Esi, 4);                // weapon template wrapper
         a.TestRegReg(R.Eax, R.Eax);
@@ -562,7 +607,7 @@ public static class StubGen
         a.MovRegRegDisp8(R.Eax, R.Eax, 4);
         a.TestRegReg(R.Eax, R.Eax);
         a.JeShort(1);
-        a.MovRegRegDisp8(R.Eax, R.Eax, 0x70);             // clip capacity
+        a.MovRegRegDisp8(R.Eax, R.Eax, layout.WeaponCapacity);             // clip capacity
         a.Db(0x48);                                      // dec eax: reject zero/negative capacity
         a.CmpR32Imm32(R.Eax, 1000000);
         a.JaeShort(1);
@@ -601,4 +646,30 @@ public static class StubGen
         return c.Fin();
     }
 
+    private static byte[] ChallengeMoney(nuint stubVa, nuint siteEnd, nuint block, byte[] replay)
+    {
+        if (replay.Length != 8 || replay[0] != 0x8B || replay[1] != 0x78 || replay[2] != 8 || replay[3] != 0x68)
+            throw new InvalidOperationException("Invalid challenge money replay contract");
+        var c = new C(stubVa, siteEnd, block);
+        var a = c.A;
+        a.Pushfd();
+        c.Flag("challenge_money"); a.JneShort(1);
+        // Consume once on the game thread, even when this panel refreshes often.
+        a.Db(0xC6, 0x05); a.Db(BitConverter.GetBytes((uint)(block+MasterCode.Flags["challenge_money"]))); a.Db(0);
+        a.CmpM32RegDisp8Imm32(R.Eax, 8, 0x7FFF3CB0); a.JaeShort(1);
+        a.AddM32RegDisp8Imm32(R.Eax, 8, 50000);
+        a.Label(1); a.Popfd(); a.Db(replay);
+        return c.Fin();
+    }
+
+    private static byte[] ChallengeTime(nuint stubVa, nuint siteEnd, nuint block)
+    {
+        var c = new C(stubVa, siteEnd, block);
+        var a = c.A;
+        a.Pushfd(); c.Flag("challenge_time"); a.JneShort(1);
+        a.MovM32RegDisp8Imm32(R.Eax, 0x38, 0x49127BF0); // FINAL: 599999 seconds
+        a.Label(1); a.Popfd();
+        a.Db(0xF3,0x0F,0x2C,0x58,0x38); // cvttss2si ebx,[eax+38]
+        return c.Fin();
+    }
 }

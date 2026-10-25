@@ -23,6 +23,8 @@ public static class SpawnDispatcher
     public const uint ResultBodyOffset = MailboxOffset + 0x1C;   // wrapper return value
     public const uint ResolvedHolderOffset = MailboxOffset + 0x20;
     public const uint MouseModeOffset = MailboxOffset + 0x24;     // !=0: derive pos from the live mouse on the game thread
+    public const uint MouseOffsetX = MailboxOffset + 0x28;
+    public const uint MouseOffsetZ = MailboxOffset + 0x2C;
     public const uint Idle = 0, Pending = 1, Executing = 2, Success = 3, Reject = 4;
 
     public const uint CodeOffset = 0x1580;
@@ -94,7 +96,7 @@ public static class SpawnDispatcher
 
         // ---- wrapper call: cdecl(0, edi, &mailbox.pos, ebp, 0) ----
         a.Db(0x89, 0xE0);                               // old pushad ESP
-        a.Db(0x81, 0xEC, 0x14, 0x02, 0, 0);             // reserve FX area + saved ESP
+        a.Db(0x81, 0xEC, 0x24, 0x02, 0, 0);             // FX + saved ESP + pixels + temporary float3
         a.Db(0x83, 0xE4, 0xF0);                         // stack alignment
         a.Db(0x89, 0x84, 0x24, 0, 0x02, 0, 0);          // [esp+200] = old ESP
         a.Db(0x0F, 0xAE, 0x04, 0x24);                   // fxsave [esp]
@@ -106,7 +108,8 @@ public static class SpawnDispatcher
         // transform takes RAW INT pixels — its own screen-center caller
         // stores shr'd ints with no z at +8/+0xC — unlike EA's float
         // variant that FINAL3 fed (fild + a +0x44 depth). If the transform
-        // fails, fall through: the mailbox still holds the staged fallback.
+        // writes to a temporary float3: a failed/partial conversion must not
+        // corrupt the staged fallback. Only AL is its bool return value.
         a.MovRegAbs(R.Eax, Slot(MouseModeOffset));
         a.TestRegReg(R.Eax, R.Eax);
         Branch(0x84, MouseSkip);                        // not mouse mode: keep mailbox pos
@@ -122,14 +125,23 @@ public static class SpawnDispatcher
         a.Db(0x89, 0x84, 0x24, 0x08, 0x02, 0x00, 0x00); // mov [esp+0x208], eax
         a.Push8(0);
         a.Push8(0);
-        a.Db(0x68); a.Db(BitConverter.GetBytes(Slot(PosXOffset)));  // out = mailbox pos float3
+        a.Db(0x8D, 0x84, 0x24, 0x14, 0x02, 0, 0);      // &temporary float3 (base+20C, 8 bytes pushed)
+        a.Push(R.Eax);
         a.Db(0x8D, 0x84, 0x24, 0x10, 0x02, 0x00, 0x00); // lea eax,[esp+0x210] = &pixels
         a.Db(0x50);                                     // push &pixels
         a.Db(0xE8);                                     // CALL rel32 transform
         int transformDisp = a.Length; a.Db(0, 0, 0, 0);
         a.Db(0x83, 0xC4, 0x10);                         // cdecl: caller cleans 4 args
-        a.TestRegReg(R.Eax, R.Eax);
+        a.Db(0x84, 0xC0);                               // test al,al: upper EAX is unspecified
         Branch(0x84, MouseSkip);                        // transform failed: keep fallback pos
+        a.Db(0xF3, 0x0F, 0x10, 0x84, 0x24, 0x0C, 0x02, 0, 0); // movss xmm0,[esp+20C]
+        a.Db(0xF3, 0x0F, 0x58, 0x05); a.Db(BitConverter.GetBytes(Slot(MouseOffsetX)));
+        a.Db(0xF3, 0x0F, 0x11, 0x05); a.Db(BitConverter.GetBytes(Slot(PosXOffset)));
+        a.MovRegEspDisp32(R.Eax, 0x210);
+        a.MovM32AbsReg(R.Eax, Slot(PosYOffset));
+        a.Db(0xF3, 0x0F, 0x10, 0x84, 0x24, 0x14, 0x02, 0, 0); // movss xmm0,[esp+214]
+        a.Db(0xF3, 0x0F, 0x58, 0x05); a.Db(BitConverter.GetBytes(Slot(MouseOffsetZ)));
+        a.Db(0xF3, 0x0F, 0x11, 0x05); a.Db(BitConverter.GetBytes(Slot(PosZOffset)));
         Mark(MouseSkip);
         a.Db(0x83, 0xEC, 0x08);                         // pad: 5 args + ret = 24 → wrapper entry esp%16 == 0
         a.Push8(0);                                     // arg5: wrapper ignores it (FINAL3 passes [side+0x10])
@@ -180,6 +192,7 @@ public sealed class SpawnRequestMailbox : RequestMailbox
 
     private uint[] _position = [];
     private bool _mouseMode;
+    private float _mouseOffsetX, _mouseOffsetZ;
 
     public SpawnRequestMailbox(IInjectionMemory memory, nuint block) : base(memory, block, Offset) { }
 
@@ -206,6 +219,8 @@ public sealed class SpawnRequestMailbox : RequestMailbox
         WriteU32(0x1C, 0u);
         WriteU32(0x20, 0u);
         WriteU32(0x24, _mouseMode ? 1u : 0u);
+        WriteU32(0x28, BitConverter.SingleToUInt32Bits(_mouseOffsetX));
+        WriteU32(0x2C, BitConverter.SingleToUInt32Bits(_mouseOffsetZ));
     }
 
     /// <summary>Submit a spawn carrying an explicit world position and owner.
@@ -216,6 +231,7 @@ public sealed class SpawnRequestMailbox : RequestMailbox
         if (!float.IsFinite(x) || !float.IsFinite(y) || !float.IsFinite(z))
             throw new ArgumentException("Spawn position must be finite");
         _mouseMode = false;
+        _mouseOffsetX = _mouseOffsetZ = 0;
         _position = [BitConverter.SingleToUInt32Bits(x), BitConverter.SingleToUInt32Bits(y),
                      BitConverter.SingleToUInt32Bits(z)];
         Submit(BridgeRequest.For(owner, 0, hash, holder));
@@ -226,11 +242,15 @@ public sealed class SpawnRequestMailbox : RequestMailbox
     /// screen-to-world transform), so the trainer never samples a possibly
     /// frozen or mis-scaled world-coordinate cache. The fallback position is
     /// only used when the transform itself fails.</summary>
-    public void SubmitAtMouse(uint hash, uint holder, float x, float y, float z, uint owner)
+    public void SubmitAtMouse(uint hash, uint holder, float x, float y, float z, uint owner,
+        float mouseOffsetX = 0, float mouseOffsetZ = 0)
     {
-        if (!float.IsFinite(x) || !float.IsFinite(y) || !float.IsFinite(z))
+        if (!float.IsFinite(x) || !float.IsFinite(y) || !float.IsFinite(z) ||
+            !float.IsFinite(mouseOffsetX) || !float.IsFinite(mouseOffsetZ))
             throw new ArgumentException("Spawn fallback position must be finite");
         _mouseMode = true;
+        _mouseOffsetX = mouseOffsetX;
+        _mouseOffsetZ = mouseOffsetZ;
         _position = [BitConverter.SingleToUInt32Bits(x), BitConverter.SingleToUInt32Bits(y),
                      BitConverter.SingleToUInt32Bits(z)];
         Submit(BridgeRequest.For(owner, 0, hash, holder));

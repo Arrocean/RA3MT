@@ -11,6 +11,7 @@ the transform must receive the RAW INT pixels from the mouse object
 """
 from pathlib import Path
 import argparse
+import math
 import struct
 from unicorn import Uc, UC_ARCH_X86, UC_MODE_32, UC_HOOK_CODE
 from unicorn.x86_const import *
@@ -123,14 +124,14 @@ def fake_transform(vm, calls, out_xyz, result=True):
         pixels = struct.unpack('<II', machine.mem_read(args[0], 8))
         calls.append(('transform', pixels, args[1], args[2], args[3]))
         assert args[2] == 0 and args[3] == 0, 'transform flags must be 0/0'
-        if result:
-            machine.mem_write(args[1], struct.pack('<fff', *out_xyz))
+        # A bool-returning conversion may partially write even on failure.
+        machine.mem_write(args[1], struct.pack('<fff', *(out_xyz if result else (9999.0, -8888.0, 7777.0))))
         for reg in (UC_X86_REG_EAX, UC_X86_REG_ECX, UC_X86_REG_EDX):
             machine.reg_write(reg, 0x66660000)
         for i, reg in enumerate(XMM):
             machine.reg_write(reg, (0x0badf00d0badf00d << 64) | 0xfeedfacefeedface)
         machine.reg_write(UC_X86_REG_EFLAGS, 0x246)
-        machine.reg_write(UC_X86_REG_EAX, 1 if result else 0)
+        machine.reg_write(UC_X86_REG_EAX, 0x66660000 | (1 if result else 0)) # only AL is defined
         machine.reg_write(UC_X86_REG_EIP, get(machine, sp))
         machine.reg_write(UC_X86_REG_ESP, sp + 4)  # cdecl: caller cleans args
     vm.hook_add(UC_HOOK_CODE, hook, begin=TRANSFORM, end=TRANSFORM + 1)
@@ -139,7 +140,7 @@ def fake_transform(vm, calls, out_xyz, result=True):
 def run(blob, align=0, state=1, mutation=None, lookup_result=HOLDER,
         wrapper_result=NEWBODY, owner=0, hash_value=0xAF4C0DA5,
         table_owner=CONTROLLER, expect_wrapper=True, expect_lookup=True,
-        mouse=False, transform_result=True, expect_transform=True):
+        mouse=False, transform_result=True, expect_transform=True, mouse_offset=(0.0,0.0)):
     vm = base_machine(align)
     vm.mem_write(SPAWN, blob)
     shared_entries(vm)
@@ -150,6 +151,7 @@ def run(blob, align=0, state=1, mutation=None, lookup_result=HOLDER,
     put(vm, MAIL + 8, HOLDER if hash_value == 0 else 0)
     put(vm, MAIL + 0x18, owner)
     put(vm, MAIL + 0x24, 1 if mouse else 0)
+    vm.mem_write(MAIL+0x28,struct.pack('<ff',*mouse_offset))
     if mouse:
         put(vm, MOUSE_GLOBAL, MOUSE_OBJ)
         put(vm, MOUSE_OBJ + 0x3C, MOUSE_PX[0])
@@ -171,7 +173,6 @@ def run(blob, align=0, state=1, mutation=None, lookup_result=HOLDER,
         assert len(transforms) == 1, f'transform calls: {len(transforms)}'
         _, pixels, out_ptr, flag3, flag4 = transforms[0]
         assert pixels == MOUSE_PX, f'transform got {pixels}, want raw ints {MOUSE_PX}'
-        assert out_ptr == MAIL + 0xC, f'out 0x{out_ptr:X} is not the mailbox pos'
     else:
         assert not transforms, 'unexpected transform call'
     lookups = [c for c in calls if c[0] == 'lookup']
@@ -186,8 +187,11 @@ def run(blob, align=0, state=1, mutation=None, lookup_result=HOLDER,
         assert len(wrappers) == 1, f'wrapper calls: {len(wrappers)}'
         _, holder_arg, owner_arg, xyz, entry = wrappers[0]
         assert holder_arg == (HOLDER if hash_value == 0 else lookup_result)
-        expected_xyz = TRANSFORMED if (mouse and transform_result) else POS
-        assert xyz == expected_xyz, f'position mismatch: {xyz} != {expected_xyz}'
+        expected_xyz = (TRANSFORMED[0]+mouse_offset[0],TRANSFORMED[1],TRANSFORMED[2]+mouse_offset[1]) if (mouse and transform_result) else POS
+        expected_xyz = struct.unpack('<fff',struct.pack('<fff',*expected_xyz))
+        # Deliberately non-default MXCSR rounds down. Allow one float32 ULP
+        # instead of imposing Python's nearest rounding on the game thread.
+        assert all(math.isclose(a,b,rel_tol=1.2e-7,abs_tol=1e-6) for a,b in zip(xyz,expected_xyz)), f'position mismatch: {xyz} != {expected_xyz}'
         expected_owner = SIDE if owner == 0 else owner
         assert owner_arg == expected_owner, f'owner {owner_arg:X} != {expected_owner:X}'
     else:
@@ -320,7 +324,18 @@ def main():
     assert get(vm, MAIL) == 3, 'fallback after transform failure must still spawn'
     cases += 1
 
-    # 18) mouse object global null → reject after lookup, before transform/wrapper
+    # 18) eight reinforcement positions stay spread after successful live-mouse
+    # conversion. Failure keeps the already-offset staged fallback unchanged.
+    for offset in [(50.0,0.0),(0.0,50.0),(-50.0,0.0),(0.0,-50.0),
+                   (35.35534,35.35534),(-35.35534,35.35534),
+                   (-35.35534,-35.35534),(35.35534,-35.35534)]:
+        offset=struct.unpack('<ff',struct.pack('<ff',*offset))
+        for success in [False,True]:
+            vm,_=run(blob,mouse=True,transform_result=success,mouse_offset=offset)
+            assert get(vm,MAIL)==3
+            cases+=1
+
+    # 19) mouse object global null → reject after lookup, before transform/wrapper
     # (must exit through the FX-restore path: the frame was already reserved)
     def null_mouse(vm_):
         put(vm_, MOUSE_GLOBAL, 0)

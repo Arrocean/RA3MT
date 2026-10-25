@@ -1,3 +1,4 @@
+using RA3MT.Core.Model;
 using System.Buffers.Binary;
 
 namespace RA3MT.Core.Engine;
@@ -29,9 +30,13 @@ public static class RankDispatcher
 
     public static byte[] EmitMoneyBridge(nuint stubVA, nuint siteEnd, nuint blockVA, nuint rootVA,
         string stubId, params uint[] dispatcherOffsets)
+        => EmitMoneyBridge(GameLayout.RedAlert3, stubVA, siteEnd, blockVA, rootVA, stubId, dispatcherOffsets);
+
+    public static byte[] EmitMoneyBridge(GameLayout layout, nuint stubVA, nuint siteEnd, nuint blockVA, nuint rootVA,
+        string stubId, params uint[] dispatcherOffsets)
     {
         var original = StubGen.Emit(stubId, stubVA + (nuint)(5 * dispatcherOffsets.Length),
-            siteEnd, blockVA, rootVA);
+            siteEnd, blockVA, rootVA, layout: layout);
         var bytes = new byte[original.Length + 5 * dispatcherOffsets.Length];
         for (var i = 0; i < dispatcherOffsets.Length; i++)
         {
@@ -43,8 +48,9 @@ public static class RankDispatcher
         return bytes;
     }
 
-    public static byte[] Emit(nuint stubVA, nuint blockVA, nuint rankFunctionVA, nuint rootVA)
+    public static byte[] Emit(nuint stubVA, nuint blockVA, nuint rankFunctionVA, nuint rootVA, GameLayout? layout = null)
     {
+        layout ??= GameLayout.RedAlert3;
         uint start = checked((uint)stubVA), block = checked((uint)blockVA);
         uint api = checked((uint)rankFunctionVA), root = checked((uint)rootVA);
         uint Slot(uint offset) => checked(block + offset);
@@ -72,15 +78,15 @@ public static class RankDispatcher
         a.MovRegAbs(R.Esi, Slot(BodyOffset)); NonNull(R.Esi);
         a.MovRegAbs(R.Edi, Slot(DrawableOffset)); NonNull(R.Edi);
         a.MovRegAbs(R.Ecx, Slot(TrackerOffset)); NonNull(R.Ecx);
-        a.CmpRegMRegDisp32(R.Edi, R.Esi, 0xF4); Branch(0x85, Rejected);
+        a.CmpRegMRegDisp32(R.Edi, R.Esi, layout.BodyDrawable); Branch(0x85, Rejected);
         a.CmpRegMRegDisp32(R.Esi, R.Edi, 0x138); Branch(0x85, Rejected);
-        a.CmpRegMRegDisp32(R.Ecx, R.Esi, 0x3CC); Branch(0x85, Rejected);
+        a.CmpRegMRegDisp32(R.Ecx, R.Esi, layout.Tracker); Branch(0x85, Rejected);
         a.MovRegAbs(R.Eax, root); NonNull(R.Eax);
         a.MovRegRegDisp8(R.Eax, R.Eax, 0x28); NonNull(R.Eax);
-        a.CmpRegMRegDisp32(R.Eax, R.Esi, 0x418); Branch(0x85, Rejected);
+        a.CmpRegMRegDisp32(R.Eax, R.Esi, layout.Owner); Branch(0x85, Rejected);
         a.MovRegRegDisp8(R.Eax, R.Ecx, 4); NonNull(R.Eax);
         a.MovRegRegDisp8(R.Eax, R.Eax, 0x14); NonNull(R.Eax);
-        a.Db(0x80, 0xB8, 0x45, 0x02, 0, 0, 0);          // eligibility != 0
+        a.Db(0x80, 0xB8); a.Db(BitConverter.GetBytes(layout.Eligibility)); a.Db(0);          // eligibility != 0
         Branch(0x84, Rejected);
         a.MovRegRegDisp8(R.Eax, R.Ecx, 0x24);
         a.MovM32AbsReg(R.Eax, Slot(RankBeforeOffset));

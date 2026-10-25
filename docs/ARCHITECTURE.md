@@ -1,79 +1,105 @@
-# 架构
+# 当前架构与维护约定
 
-本文件描述当前分层与扩展方式（M1–M7 解耦 + v261013-8/9 收尾抛光后的稳态）。
-设计目标是**解耦、模块化、功能之间互相影响最小**，
-每步都以"桩字节零回归 + SelfCheck 全模式 + Unicorn 全套件"为闸门。
+本文对应 **v261025-7**。用户操作见 [中文 README](../README-zh_CN.md)，起义时刻地址与证据见 [UPRISING.md](UPRISING.md)，检查命令与保留工具见 [TOOLS.md](TOOLS.md)。[NOTES.md](NOTES.md) 记录历史演进，不作为当前工具清单。
 
-## 分层
+## 项目职责
 
-```
-RA3MT.UI ──► RA3MT.Core ──► RA3MT.SelfCheck（离线验证，引用 Core）
-
-UI 只做渲染：卡片来自 features.json 元数据（icon / arg），不再认识任何 feature id。
-Core 分层（依赖严格向下，无环）：
-  Model          数据形状（FeaturesData / ReinforcementCatalog）+ ISymbols 契约
-  Target         字节契约解析器（三构建布局表 + ImageScan 校验原语 + 构建判别器）
-  Engine         机制层：MasterCode 生命周期、StubGen 桩工厂（分文件）、
-                 块布局、四桥分派器、邮箱
-  Features       FeatureCatalog（唯一注册点）→ 34 个功能实现（Toggles / Selection /
-                 Actions / Patches）；BridgeCoordinator 会话级桥编排（提交/等待/措辞）；
-                 TrainerEngine 编排器（附加/脱离/判别/服务装配，447 行）
-  Host           功能可用的能力（服务按类型查找，不是宽接口）
-  Abstractions   功能契约与上下文（IFeature / IFeatureState / FeatureContext）
+```text
+RA3MT.UI ──────────────► RA3MT.Core
+RA3MT.SelfCheck ───────► RA3MT.Core
+RA3MT.UI.SelfCheck ────► Core + 实际 UI 源码/XAML
 ```
 
-## 扩展一个新功能
+| 模块 | 职责 |
+|---|---|
+| Model | 产品定义、对象布局、功能与增援元数据、符号契约 |
+| Target | 构建指纹、PE 读取、API/全局/结构字节契约与解析 |
+| Engine | 桩生成、块布局、挂钩生命周期、四桥分派器与邮箱 |
+| Features | 功能注册、开关/选中/生成动作、服务装配与会话编排 |
+| UI | 游戏选择、元数据驱动卡片、快捷键、日志与增援选择器 |
+| SelfCheck | 模拟内存检查、失败恢复、磁盘镜像契约和机器码导出 |
+| UI.SelfCheck | 真实 WPF 绑定切换与禁用状态渲染检查 |
 
-只需三步，**不需要改引擎**：
+Core 按职责组织；不要仅凭命名空间推断所有依赖都严格单向。例如 `FeaturesData` 会装配 `UprisingTarget` 的嵌入数据。
 
-1. `assets/features.json` 加一条 `features[]`（含 `icon`，需要参数就加 `arg`；
-   功能私有地址放 `private`）。
-2. `src/RA3MT.Core/Features/<目录>/` 加一个 `IFeature` 实现。
-3. `Features/FeatureCatalog.cs`（唯一注册点）把 id 接到该实现。
+## 产品、构建与对象布局
 
-> **`features.json` 是手工维护的源数据**（34 功能+26 挂钩+三版本地址表）。
-> 旧生成器（build_features.py / gen_features.py）停留在 24 功能时代且会覆盖
-> 现有数据，已于 v261013-8 删除；hookdata.json 是其历史输入，无消费者。
-> 仍由工具生成的数据只有两个：`reinforcement_codes.json`
-> （tools/analysis/gen_reinforce_table.py，从游戏文件提取）和桩字节
-> （SelfCheck stubdump）。
+`GameCatalog` 区分两个产品及其启动入口：原版 Steam appid 17480，起义时刻 24800。原版为 34 项功能/26 个挂钩，起义时刻为 36 项/28 个挂钩。附加或等待启动期间锁定产品选择；脱离后重建功能注册、开关状态和卡片。
 
-`SelfCheck featuretest` 会校验：声明与实现一一对应、id 唯一、kind/flag/action 自洽、
-**每个可运行功能都 `IsMigrated`（不得回落到引擎旧分支）**、卡片有图标、参数声明合法、
-未附加时功能必须 fail-closed。
+支持的构建键：
 
-## 关键抽象
+- 原版：`1.12`、`1.13`、`1.12ea`。
+- 起义时刻：`uprising-1.0ea`、`uprising-1.0`、`uprising-1.01`。
 
-| 抽象 | 位置 | 作用 |
-|---|---|---|
-| `IFeature` / `IFeatureState` | `Features/Abstractions` | 功能契约：Kind、Availability、per-session 状态、`IsMigrated` |
-| `FeatureContext` | 同上 | 会话快照 + `ISymbols` + `FeaturesData` + `FeatureHost` |
-| `ISymbols` | `Model` | 共享全局按 `GameGlobalId` 枚举解析，版本化取址唯一入口（Engine/Features 共同向下依赖） |
-| `FeatureServiceRegistry` | `Features/Host` | 能力按**类型**查找；加能力=加服务类，不撑大所有功能 |
-| `IGameMemory` | 同上 | 受保护的读写（指针 < 0x10000 视为 null） |
-| `ISwitchBank` | 同上 | **开关状态的唯一所有者**，功能只请求翻转 |
-| `IBridgeGateway` / `ISpawnGateway` | 同上 | 游戏线程桥的提交入口，功能看不到邮箱细节 |
-| `BridgeCoordinator` | `Features/` | 会话级桥编排：邮箱提交/等待/重试/日志措辞；附加时创建、脱离时销毁 |
-| `BlockLayout` / `BlockLayoutCatalog` | `Engine` | 块内区域的唯一声明处，`Validate()` 一次证明不重叠 |
-| `IBridgeConsumer` / `RequestMailbox` | `Engine` | 一个桥=一个对象；邮箱状态机只写一次 |
-| `IApiResolver` / `IImageReader` / `ImageScan` | `Target` | 严格字节契约与校验原语 |
-| `GameBuildClassifier` | `Target` | 同名双构建（Steam/EA 1.12）的内存指纹判别，只读 |
+`ra3_1.12.game` 和 `ra3ep1_1.0.game` 都可能对应不同发行布局。通过独立指纹识别实际构建，再解析完整挂钩集合；不能只看文件名或套用统一 RVA 差值。
 
-## 不变量（改动时勿破）
+`GameLayout` 同时服务宿主读取、桩和桥。起义时刻的 Body→Drawable 为 +0xF8，健康组件 +0x34C，属主 +0x428，经验 +0x3DC；苏军展开开始帧为 +0x34。它还记录视野后续指令跳过量和资源完整分支的生成选择。每一项都需要对应对象种类与独立指令证据，不能对所有字段统一加偏移。
 
-1. `TrainerEngine` 里**不得**出现按 feature id 的分支；发现即应做成功能。
-2. 功能之间不直接依赖：只通过 `FeatureContext.Host` 与服务交互。
-3. 块内偏移只在 `BlockLayoutCatalog` 声明；`MasterCode` 不再手写偏移。
-4. 每次改动的验收：`py tools/harness/stub_regression.py`（桩字节逐字节）+ SelfCheck 全模式 + Unicorn 全套件。
+## 数据来源与生成边界
 
-## 验证入口
+| 数据 | 维护方式 |
+|---|---|
+| `assets/features.json` | 手工维护原版功能、挂钩、地址、全局与功能私有偏移 |
+| `assets/uprising.json` 的 `features` | 手工维护两项专属功能、名称、说明、热键 |
+| `assets/uprising.json` 的地址与契约 | `build_uprising_contracts.py` 从三个已确认镜像生成；保留 `features` |
+| 两份增援目录 | `gen_reinforce_table.py` 从对应游戏档案生成，分别 125/137 条 |
+| `artifacts/baseline_stubs/` | 人工审阅有意变化后维护的 34 份原版导出桩基线 |
+| `artifacts/audit/` 等 | 检查时生成的日志、各构建导出及结果，不是配置源 |
+| FINAL3 的 `.cea` 与 manifest | 原件提取的证据；保留原文和来源哈希 |
 
-```
-dotnet build RA3MT.slnx -c Release
-py tools/harness/stub_regression.py                 # 桩字节零回归闸门
-dotnet run --project src/RA3MT.SelfCheck -c Release -- <mode>
-   bridgetest rankmailboxtest ranktest actiontest installertest resolvertest
-   asmtest selectiontest featuretest layouttest spawntest reinforcetest
-   livetest   # 只读活体验证：对运行中的游戏做判别+全钩子/桥解析（不挂钩）
-py tools/harness/test_execution_stubs.py            # 及其余 Unicorn 套件
-```
+生成地址不等于验证地址。`audit_uprising.py` 只读当前预期契约，另外核对指令边界、条件分支距离、调用边、清栈和中间入边；不能通过运行生成器来消除未知的审计失败。
+
+## 会话与执行路径
+
+`TrainerEngine` 负责发现进程、识别构建、核对所有挂钩、解析桥 API、安装 `MasterCode`、装配服务及创建会话状态。挂钩点不完整时拒绝部分附加；某个可选桥解析失败时不安装该桥，并报告对应功能不可用。
+
+`MasterCode` 写入独立代码块，再逐点安装跳转。安装失败尝试恢复；恢复不完整时进入 `RecoveryRequired`。正常脱离恢复挂钩与随地建造分支，游戏退出则清理会话，不再访问已经消失的进程内存。
+
+游戏状态写入与代码恢复是两件事。资金、生命、速度及已写入的挑战时间不会因恢复挂钩自动全部撤销。
+
+### 四个游戏线程桥
+
+晋级、俘虏、摧毁和生成分别拥有分派器及邮箱。资金/电力结算桩调用分派器；请求先写 payload，最后发布 Pending，由游戏线程原子认领，再执行游戏函数。保存/恢复通用寄存器、标志、栈及需要的浮点状态。
+
+调用入口的严格校验不证明所有游戏效果。仍需核对对象类型、参数、返回与清栈，并补充实战记录。
+
+### 开关、选中动作与挑战功能
+
+- 开关通常写入 `MasterCode` 标志；随地建造为经过校验的两字节分支补丁。
+- 速度、生命和矿脉等动作使用实际选中链及对象布局；晋级/俘虏/摧毁通过对应游戏线程桥。
+- 生成从当前产品的增援目录解析哈希。鼠标转换只检查 AL 返回值，使用临时输出保护备用位置；批量增援在转换后再应用分散偏移。
+- 挑战资金由 `FlagActionFeature → IFlagRequests → 标志字节` 提交一次请求，在原生挑战菜单路径增加 50,000 并清除请求位。它不属于四桥邮箱，提交成功不等于画面已刷新。
+- 挑战时间为持续设置的开关。v7 说明为“挑战平均时间设置为 9999：99”；两项都要求战局中执行后按 Esc 进入菜单刷新。底层仍沿用原件时间常量。
+
+## 功能契约与扩展
+
+`FeatureCatalog` 是功能实现的注册入口，`IFeature` 创建会话级 `IFeatureState`。功能通过 `FeatureContext.Host` 获取按类型注册的能力，不直接互相调用。
+
+| 抽象 | 用途 |
+|---|---|
+| `ISymbols` / `SessionSymbols` | 按当前构建解析共享全局 |
+| `FeatureServiceRegistry` | 按类型提供功能能力 |
+| `IGameMemory` | 会话内读写能力 |
+| `ISwitchBank` | 开关状态所有者 |
+| `IBridgeGateway` / `ISpawnGateway` | 桥/生成提交接口 |
+| `IFlagRequests` | 单次标志请求提交 |
+| `BridgeCoordinator` | 桥的目标枚举、提交、等待与反馈 |
+| `BlockLayout` / `BlockLayoutCatalog` | 块区域声明、大小与重叠检查 |
+| `RequestMailbox` / `IBridgeConsumer` | 四桥请求生命周期与消费对象 |
+| `IImageReader` / `ImageScan` | 磁盘或进程镜像的严格读取与校验 |
+
+新增功能时，先在对应产品数据中声明元数据及私有地址，再实现 `IFeature`，最后通过 `FeatureCatalog` 注册；新增能力通过服务扩展。不要重新引入 `TrainerEngine` 的功能分派大表。
+
+接入新构建需要分别证明地址、周围控制流、API 与对象布局。只有结构一致时才复用布局；“解析器加一行”不是跨游戏移植的充分条件。
+
+## 验证约定
+
+检查范围随改动选择，入口统一见 [TOOLS.md](TOOLS.md)：
+
+- 纯说明/UI 改动：构建与对应 WPF 绑定/渲染检查；必要时比较导出桩确保行为未变。
+- 桩/布局/挂钩改动：运行三构建审计、相关执行用例、块布局与原版基线比较。
+- 生命周期/桥改动：补充失败恢复、邮箱与 ABI/寄存器/栈/FX 检查。
+- 基线有意变化时，说明原因和新旧字节/哈希；未解释的变化应阻止验收。
+- 静态和模拟通过后，记录真实进程验证的具体构建、场景与效果，不能宣称其余构建已全部实测。
+
+v6 修复了资源分支中间入边、视野继承覆盖及生成位置问题；原版历史 33 份桩中仅生成桩有意改变，并新增一份电力桥导出，当前基线为 34 份。v7 只更新挑战操作说明，三个起义构建各 36 份导出桩与 v6 相同。

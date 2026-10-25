@@ -102,13 +102,31 @@ public sealed class FeaturesData
     [JsonPropertyName("globals")] public Globals Globals { get; set; } = new();
     [JsonPropertyName("features")] public List<FeatureDef> Features { get; set; } = new();
 
-    public static FeaturesData LoadEmbedded()
+    public static FeaturesData LoadEmbedded(GameId game = GameId.RedAlert3)
     {
         var asm = typeof(FeaturesData).Assembly;
         using var s = asm.GetManifestResourceStream("RA3MT.Core.Data.features.json")
                       ?? throw new InvalidOperationException("embedded features.json not found");
-        return System.Text.Json.JsonSerializer.Deserialize<FeaturesData>(s)
+        var data = System.Text.Json.JsonSerializer.Deserialize<FeaturesData>(s)
                ?? throw new InvalidOperationException("features.json failed to deserialize");
+        if (game == GameId.Uprising)
+        {
+            var target = Target.UprisingTarget.Default;
+            // Fresh definitions prevent session/UI state from leaking between games.
+            data.Hooks = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string,HookDef>>(
+                System.Text.Json.JsonSerializer.Serialize(target.Hooks))!;
+            data.Globals = new Globals
+            {
+                PlayerRoot = target.Globals["playerRoot"], SelectionList = target.Globals["selectionList"],
+            };
+            data.Game.ModuleNames = GameCatalog.Uprising.ModuleNames.ToList();
+            data.Features.Single(f => f.Id == "build_anywhere").Private["site"] =
+                string.Join(';', target.BuildAnywhere.Select(kv => $"{kv.Key}={kv.Value}"));
+            data.Features.AddRange(System.Text.Json.JsonSerializer.Deserialize<List<FeatureDef>>(
+                System.Text.Json.JsonSerializer.Serialize(target.Features))!);
+        }
+        else if (game != GameId.RedAlert3) throw new ArgumentOutOfRangeException(nameof(game));
+        return data;
     }
 
     /// <summary>Typed lookup: shared game globals only. Missing entries are null

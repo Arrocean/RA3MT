@@ -10,7 +10,11 @@ internal static partial class NativeMethods
     public const uint PROCESS_QUERY_INFORMATION = 0x0400;
     public const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
     public const uint PROCESS_ALL_ACCESS =
-        PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION | PROCESS_QUERY_INFORMATION | 0x000F0000;
+        PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION | PROCESS_QUERY_INFORMATION |
+        0x000F0000 |
+        SYNCHRONIZE;   // WaitForSingleObject (liveness) requires it; part of the real ALL_ACCESS
+
+    public const uint SYNCHRONIZE = 0x00100000;
 
     public const uint MEM_COMMIT = 0x1000;
     public const uint MEM_RESERVE = 0x2000;
@@ -52,5 +56,12 @@ internal static partial class NativeMethods
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    internal static partial bool FlushInstructionCache(IntPtr h, nuint addr, nuint size);
+    internal static partial bool FlushInstructionCache(IntPtr h, nuint baseAddr, nuint size);
+
+    /// <summary>WAIT_TIMEOUT: the wait timed out, i.e. the object is still
+    /// unsignalled — for a process handle this means the process still runs.</summary>
+    public const uint WAIT_TIMEOUT = 0x102;
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    internal static partial uint WaitForSingleObject(IntPtr h, uint milliseconds);
 }

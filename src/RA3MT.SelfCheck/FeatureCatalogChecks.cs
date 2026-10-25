@@ -10,9 +10,9 @@ namespace RA3MT.SelfCheck;
 /// Run: SelfCheck featuretest</summary>
 public static class FeatureCatalogChecks
 {
-    public static void Run()
+    public static void Run(GameId game = GameId.RedAlert3)
     {
-        var data = FeaturesData.LoadEmbedded();
+        var data = FeaturesData.LoadEmbedded(game);
         var cases = 0;
 
         // 1) one registry entry per declaration, no strays

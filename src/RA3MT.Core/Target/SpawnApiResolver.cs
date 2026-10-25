@@ -54,6 +54,8 @@ public static class SpawnApiResolver
 
     public static nuint Resolve(string version, nuint imageBase, IImageReader image)
     {
+        if (Model.GameLayout.IsUprising(version))
+            return UprisingTarget.Build(version).Verify("spawn", imageBase, image);
         ArgumentNullException.ThrowIfNull(image);
         var layout = Layouts.FirstOrDefault(item => item.Version == version);
         if (layout.Version is null)

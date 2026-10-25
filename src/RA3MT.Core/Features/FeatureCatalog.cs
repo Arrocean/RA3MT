@@ -42,6 +42,12 @@ public static class FeatureCatalog
                 continue;
             }
 
+            if (kind == FeatureKind.Action && def.Action == "pulse" && def.Flag is not null)
+            {
+                features.Add(new Actions.FlagActionFeature(def.Id,def.Flag));
+                continue;
+            }
+
             // Selection actions and threat-normal are migrated too: they only need
             // the memory accessor, the model and the validated selection helper.
             if (kind == FeatureKind.Action)

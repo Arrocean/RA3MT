@@ -35,6 +35,8 @@ public sealed class MasterCode
         ["threatzero"] = 0x0E,
         ["godmode"] = 0x0F,
         ["onekill"] = 0x38,   // 0x00-0x0F 已占满；0x38 在数据区末尾（<0x40）
+        ["challenge_money"] = 0x39,
+        ["challenge_time"] = 0x3A,
             };
 
     public const uint BlockSize = BlockLayoutCatalog.BlockSize;
@@ -108,14 +110,16 @@ public sealed class MasterCode
     private readonly List<(string hookId, byte[] original, nuint va)> _patched = new();
     private readonly Action<string>? _log;
     private BlockLayout? _layout;
+    private readonly GameLayout _gameLayout;
 
     public MasterCode(IInjectionMemory mem, nuint imageBase, nuint playerRootVa,
         Dictionary<string, HookResolution> sites, IReadOnlyDictionary<string, HookDef> defs, Action<string>? log,
         nuint rankApi = 0, nuint captureApi = 0, nuint killApi = 0,
         nuint killDeathMarkerApi = 0,
         nuint spawnWrapperApi = 0, nuint hashLookupApi = 0, nuint hashTableGlobalVa = 0,
-        nuint mouseObjGlobalVa = 0, nuint mouseTransformApi = 0)
+        nuint mouseObjGlobalVa = 0, nuint mouseTransformApi = 0, GameLayout? gameLayout = null)
     {
+        _gameLayout = gameLayout ?? GameLayout.RedAlert3;
         _mem = mem;
         _rankApi = rankApi;
         _captureApi = captureApi;
@@ -138,9 +142,9 @@ public sealed class MasterCode
     private BridgeConsumerSet BuildBridgeConsumers()
     {
         var consumers = new List<IBridgeConsumer>();
-        if (RankBridgeEnabled) consumers.Add(new RankBridgeConsumer(_rankApi, _rootVa));
-        if (CaptureBridgeEnabled) consumers.Add(new CaptureBridgeConsumer(_captureApi, _rootVa));
-        if (KillBridgeEnabled) consumers.Add(new KillBridgeConsumer(_killApi, _rootVa));
+        if (RankBridgeEnabled) consumers.Add(new RankBridgeConsumer(_rankApi, _rootVa, _gameLayout));
+        if (CaptureBridgeEnabled) consumers.Add(new CaptureBridgeConsumer(_captureApi, _rootVa, _gameLayout));
+        if (KillBridgeEnabled) consumers.Add(new KillBridgeConsumer(_killApi, _rootVa, _gameLayout));
         if (SpawnBridgeEnabled)
             consumers.Add(new SpawnBridgeConsumer(_spawnWrapperApi, _hashLookupApi, _hashTableGlobalVa, _rootVa,
             _mouseObjGlobalVa, _mouseTransformApi));
@@ -171,8 +175,8 @@ public sealed class MasterCode
             // settlement can go quiet for long stretches, but the power settle
             // keeps ticking, so mailbox requests get consumed either way.
             var code = bridgeOffsets.Length != 0 && (stubId == "money_h2" || stubId == "money_h1")
-                ? RankDispatcher.EmitMoneyBridge(Block + off, siteEnd, Block, _rootVa, stubId, bridgeOffsets)
-                : StubGen.Emit(stubId, Block + off, siteEnd, Block, _rootVa, site.Displaced);
+                ? RankDispatcher.EmitMoneyBridge(_gameLayout, Block + off, siteEnd, Block, _rootVa, stubId, bridgeOffsets)
+                : StubGen.Emit(stubId, Block + off, siteEnd, Block, _rootVa, site.Displaced, _gameLayout);
             var next = checked(off + (uint)((code.Length + 15) & ~15));
             if (next > CaptureCount)
                 throw new InvalidOperationException($"Stub area overlaps capture data at hook '{id}'");

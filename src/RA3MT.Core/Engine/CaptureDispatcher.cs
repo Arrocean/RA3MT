@@ -1,3 +1,4 @@
+using RA3MT.Core.Model;
 using System.Buffers.Binary;
 using RA3MT.Core.Memory;
 
@@ -17,8 +18,9 @@ public static class CaptureDispatcher
 
     public const uint CodeOffset = 0x1280;
 
-    public static byte[] Emit(nuint stubVA, nuint blockVA, nuint transitionVA, nuint rootVA)
+    public static byte[] Emit(nuint stubVA, nuint blockVA, nuint transitionVA, nuint rootVA, GameLayout? layout = null)
     {
+        layout ??= GameLayout.RedAlert3;
         uint start = checked((uint)stubVA), block = checked((uint)blockVA);
         uint api = checked((uint)transitionVA), root = checked((uint)rootVA);
         uint Slot(uint offset) => checked(block + offset);
@@ -45,13 +47,13 @@ public static class CaptureDispatcher
 
         a.MovRegAbs(R.Esi, Slot(BodyOffset)); NonNull(R.Esi);
         a.MovRegAbs(R.Edi, Slot(DrawableOffset)); NonNull(R.Edi);
-        a.CmpRegMRegDisp32(R.Edi, R.Esi, 0xF4); Branch(0x85, Rejected);
+        a.CmpRegMRegDisp32(R.Edi, R.Esi, layout.BodyDrawable); Branch(0x85, Rejected);
         a.CmpRegMRegDisp32(R.Esi, R.Edi, 0x138); Branch(0x85, Rejected);
         a.Db(0xF6, 0x87, 0x3D, 0x01, 0, 0, 0x40);       // selected bit 13D40
         Branch(0x84, Rejected);
         a.MovRegAbs(R.Eax, root); NonNull(R.Eax);
         a.MovRegRegDisp8(R.Ebp, R.Eax, 0x28); NonNull(R.Ebp);   // EBP = local side
-        a.CmpRegMRegDisp32(R.Ebp, R.Esi, 0x418);
+        a.CmpRegMRegDisp32(R.Ebp, R.Esi, layout.Owner);
         Branch(0x84, Rejected);                         // already ours → no-op
         a.MovRegRegDisp32(R.Ebx, R.Ebp, 0xAC); NonNull(R.Ebx);   // EBX = local default context (0xAC > disp8)
         a.MovRegRegDisp8(R.Ecx, R.Ebx, 4); NonNull(R.Ecx);
@@ -74,7 +76,7 @@ public static class CaptureDispatcher
         a.MovRegAbs(R.Esi, Slot(BodyOffset));            // reload after callee clobber
         a.MovRegAbs(R.Eax, root);
         a.MovRegRegDisp8(R.Ebp, R.Eax, 0x28);
-        a.CmpRegMRegDisp32(R.Ebp, R.Esi, 0x418);          // owner now local?
+        a.CmpRegMRegDisp32(R.Ebp, R.Esi, layout.Owner);          // owner now local?
         Branch(0x85, Restore);
         a.MovM32Abs(Slot(StateOffset), Success);
         Jump(Terminal);

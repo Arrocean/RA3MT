@@ -1,0 +1,6 @@
+[ENABLE]
+[MustCode+1201]:
+db eb 0c
+[disable]
+[MustCode+1201]:
+db 75 0c

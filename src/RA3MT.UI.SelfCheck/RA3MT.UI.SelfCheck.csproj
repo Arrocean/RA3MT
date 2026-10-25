@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <StartupObject>RA3MT.UI.SelfCheck.Program</StartupObject>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\RA3MT.Core\RA3MT.Core.csproj" />
+    <Compile Include="..\RA3MT.UI\**\*.cs" Exclude="..\RA3MT.UI\obj\**;..\RA3MT.UI\bin\**;..\RA3MT.UI\AssemblyInfo.cs" />
+    <ApplicationDefinition Include="..\RA3MT.UI\App.xaml" Link="App.xaml" />
+    <Page Include="..\RA3MT.UI\MainWindow.xaml" Link="MainWindow.xaml" />
+    <Page Include="..\RA3MT.UI\LogWindow.xaml" Link="LogWindow.xaml" />
+    <Page Include="..\RA3MT.UI\Views\ReinforcePickerWindow.xaml" Link="Views\ReinforcePickerWindow.xaml" />
+    <Resource Include="..\..\assets\app.ico" Link="app.ico" />
+  </ItemGroup>
+</Project>

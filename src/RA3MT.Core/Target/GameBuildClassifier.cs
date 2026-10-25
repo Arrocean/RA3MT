@@ -15,6 +15,24 @@ public static class GameBuildClassifier
 
     private static readonly string[] ProbeIds = ["money_h1", "zoom_unit_xp"];
 
+    public static string ClassifyUprising(IImageReader image, string moduleVersion, FeaturesData data)
+    {
+        string[] candidates = moduleVersion switch
+        {
+            "1.0" => ["uprising-1.0ea", "uprising-1.0"],
+            "1.1" => ["uprising-1.01"],
+            _ => throw new InvalidOperationException($"不支持的起义时刻模块版本：{moduleVersion}"),
+        };
+        var matches = candidates.Where(version => ProbeIds.All(id =>
+        {
+            var def = data.Hooks[id];
+            var want = def.DisplacedBytes(version);
+            try { return image.Read(def.RvaFor(version),want.Length).AsSpan().SequenceEqual(want); }
+            catch { return false; }
+        })).ToArray();
+        return matches.Length == 1 ? matches[0] : throw new InvalidOperationException("无法唯一识别起义时刻构建，拒绝附加");
+    }
+
     public static string Classify(ProcessMemory mem, nuint baseAddr, FeaturesData data)
     {
         foreach (var id in ProbeIds)

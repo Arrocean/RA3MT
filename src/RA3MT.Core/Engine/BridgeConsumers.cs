@@ -1,10 +1,11 @@
 using RA3MT.Core.Memory;
+using RA3MT.Core.Model;
 
 namespace RA3MT.Core.Engine;
 
 /// <summary>Rank bridge: promotes the selected units through the game's own rank
 /// function, called on the game thread from the money settlement stub.</summary>
-public sealed class RankBridgeConsumer(nuint rankFunctionVa, nuint rootVa) : IBridgeConsumer
+public sealed class RankBridgeConsumer(nuint rankFunctionVa, nuint rootVa, GameLayout? gameLayout = null) : IBridgeConsumer
 {
     public BridgeId Id => BridgeId.Rank;
     public string DisplayName => "晋级桥";
@@ -14,7 +15,7 @@ public sealed class RankBridgeConsumer(nuint rankFunctionVa, nuint rootVa) : IBr
     public void Declare(BlockLayout layout) => BlockLayoutCatalog.DeclareBridge(layout, "Rank");
 
     public byte[] EmitDispatcher(nuint dispatcherVa, nuint blockVa) =>
-        RankDispatcher.Emit(dispatcherVa, blockVa, rankFunctionVa, rootVa);
+        RankDispatcher.Emit(dispatcherVa, blockVa, rankFunctionVa, rootVa, gameLayout);
 
     public IBridgeMailbox CreateMailbox(IInjectionMemory memory, nuint blockVa) =>
         new RankRequestMailbox(memory, blockVa);
@@ -22,7 +23,7 @@ public sealed class RankBridgeConsumer(nuint rankFunctionVa, nuint rootVa) : IBr
 
 /// <summary>Capture bridge: runs the complete ownership transition on the game
 /// thread (never a raw owner-pointer write).</summary>
-public sealed class CaptureBridgeConsumer(nuint captureFunctionVa, nuint rootVa) : IBridgeConsumer
+public sealed class CaptureBridgeConsumer(nuint captureFunctionVa, nuint rootVa, GameLayout? gameLayout = null) : IBridgeConsumer
 {
     public BridgeId Id => BridgeId.Capture;
     public string DisplayName => "俘虏桥";
@@ -32,7 +33,7 @@ public sealed class CaptureBridgeConsumer(nuint captureFunctionVa, nuint rootVa)
     public void Declare(BlockLayout layout) => BlockLayoutCatalog.DeclareBridge(layout, "Capture");
 
     public byte[] EmitDispatcher(nuint dispatcherVa, nuint blockVa) =>
-        CaptureDispatcher.Emit(dispatcherVa, blockVa, captureFunctionVa, rootVa);
+        CaptureDispatcher.Emit(dispatcherVa, blockVa, captureFunctionVa, rootVa, gameLayout);
 
     public IBridgeMailbox CreateMailbox(IInjectionMemory memory, nuint blockVa) =>
         new CaptureRequestMailbox(memory, blockVa);
@@ -41,7 +42,7 @@ public sealed class CaptureBridgeConsumer(nuint captureFunctionVa, nuint rootVa)
 /// <summary>Kill bridge: routes destruction through the game's FULL damage entry
 /// so the death decision, animation dispatch and model recycling all run inside
 /// the game's own path (FINAL3-identical call).</summary>
-public sealed class KillBridgeConsumer(nuint damageEntryVa, nuint rootVa) : IBridgeConsumer
+public sealed class KillBridgeConsumer(nuint damageEntryVa, nuint rootVa, GameLayout? gameLayout = null) : IBridgeConsumer
 {
     public BridgeId Id => BridgeId.Kill;
     public string DisplayName => "摧毁桥";
@@ -51,7 +52,7 @@ public sealed class KillBridgeConsumer(nuint damageEntryVa, nuint rootVa) : IBri
     public void Declare(BlockLayout layout) => BlockLayoutCatalog.DeclareBridge(layout, "Kill");
 
     public byte[] EmitDispatcher(nuint dispatcherVa, nuint blockVa) =>
-        KillDispatcher.Emit(dispatcherVa, blockVa, damageEntryVa, rootVa);
+        KillDispatcher.Emit(dispatcherVa, blockVa, damageEntryVa, rootVa, gameLayout);
 
     public IBridgeMailbox CreateMailbox(IInjectionMemory memory, nuint blockVa) =>
         new KillRequestMailbox(memory, blockVa);

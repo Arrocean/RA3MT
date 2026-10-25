@@ -22,7 +22,7 @@
        MainVM.AppVersion (both bump every release). -->
   <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
     <DebugType>none</DebugType>
-    <AssemblyName>Red Alert 3 Modern Trainer v261015-2</AssemblyName>
+    <AssemblyName>Red Alert 3 Modern Trainer v261025-7</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>

@@ -4,12 +4,13 @@ Run SelfCheck stubdump artifacts/stubs_semantic first, then this script.
 Requires unicorn. No process access or game writes.
 """
 from pathlib import Path
+from game_fixture import STUBS, OWNER, HEALTH, TRACKER as TRACKER_FIELD, ELIGIBILITY, CAPACITY, BODY_DRAWABLE
 import struct
 from unicorn import Uc, UC_ARCH_X86, UC_MODE_32, UC_HOOK_CODE
 from unicorn.x86_const import *
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT = ROOT / 'artifacts/stubs_semantic/money_h2_rank.bin'
+DEFAULT = STUBS / 'money_h2_rank.bin'
 BLOCK, START, END = 0x40000000, 0x40000040, 0x452105
 RANK, API, GLOBAL = 0x40001100, 0x785600, 0x400000
 STACK, DATA = 0x200000, 0x300000
@@ -46,7 +47,7 @@ def machine(blob, state, money_enabled, rejected=False):
                        (STACK, 0x10000), (API & ~0xfff, 0x1000), (END & ~0xfff, 0x1000)]:
         vm.mem_map(addr, size)
     vm.mem_write(START, blob)
-    vm.mem_write(RANK, (ROOT / 'artifacts/stubs_semantic/rank_dispatcher.bin').read_bytes())
+    vm.mem_write(RANK, (STUBS / 'rank_dispatcher.bin').read_bytes())
     vm.mem_write(API, bytes.fromhex('db e3 d9 e8 0f 57 c0 0f 57 ff c2 0c 00'))
     vm.mem_write(GLOBAL + 0xa00, bytes.fromhex('db e3 d9 e8 d9 eb'))
     vm.emu_start(GLOBAL + 0xa00, GLOBAL + 0xa06)
@@ -59,17 +60,17 @@ def machine(blob, state, money_enabled, rejected=False):
         vm.reg_write(reg, (0xfedcba9876543210 << 64) | (0x123456789abcdef0 + i))
     entries = [(MAIL, state), (MAIL+4, BODY), (MAIL+8, DRAWABLE),
                (MAIL+12, TRACKER), (MAIL+16, 0xabcdef), (MAIL+20, 0xabcdef),
-               (BODY+0xf4, DRAWABLE), (DRAWABLE+0x138, BODY),
-               (BODY+0x3cc, TRACKER), (BODY+0x418, SIDE), (GLOBAL, CONTROLLER),
+               (BODY+BODY_DRAWABLE, DRAWABLE), (DRAWABLE+0x138, BODY),
+               (BODY+TRACKER_FIELD, TRACKER), (BODY+OWNER, SIDE), (GLOBAL, CONTROLLER),
                (CONTROLLER+0x28, SIDE), (TRACKER+4, WRAPPER), (WRAPPER+0x14, TEMPLATE),
                (TRACKER+0x24, 7), (EXTRA+4, 900), (EXTRA+8, 50), (VTABLE, 0x12345678)]
     for addr, value in entries:
         put(vm, addr, value)
     vm.mem_write(DRAWABLE+0x13d, b'\x40')
-    vm.mem_write(TEMPLATE+0x245, b'\x01')
+    vm.mem_write(TEMPLATE+ELIGIBILITY, b'\x01')
     vm.mem_write(BLOCK, bytes([money_enabled]))
     if rejected:
-        put(vm, BODY+0x418, SIDE + 0x100)
+        put(vm, BODY+OWNER, SIDE + 0x100)
     vm.reg_write(UC_X86_REG_EAX, EXTRA)
     vm.reg_write(UC_X86_REG_ECX, VTABLE)
     vm.reg_write(UC_X86_REG_EDI, 10)
@@ -97,7 +98,7 @@ def run(blob, state, money_enabled, rejected=False):
             claims.append(get(vm, MAIL))
 
     vm.hook_add(UC_HOOK_CODE, hook)
-    baseline = machine((ROOT / 'artifacts/stubs_semantic/money_h2.bin').read_bytes(), state, money_enabled, rejected)
+    baseline = machine((STUBS / 'money_h2.bin').read_bytes(), state, money_enabled, rejected)
     baseline.emu_start(START, END, count=20000)
     vm.emu_start(START, END, count=20000)
     assert vm.reg_read(UC_X86_REG_EIP) == END

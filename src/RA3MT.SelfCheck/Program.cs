@@ -5,60 +5,91 @@ using RA3MT.Core.Target;
 
 // stub-dump mode: emit every MasterCode stub to a folder (for offline
 // disassembly verification)
-if (args.Length == 2 && args[0] == "stubdump")
+if (args.Length == 1 && args[0] == "uprisingtest")
 {
+    RA3MT.SelfCheck.UprisingChecks.Run();
+    return 0;
+}
+
+if (args.Length is 1 or 2 && args[0] == "uprisingattachtest")
+{
+    RA3MT.SelfCheck.UprisingChecks.LiveAttach(args.Length==2 ? int.Parse(args[1]) : null);
+    return 0;
+}
+
+if (args.Length is 1 or 2 && args[0] == "uprising-selectiontest")
+{
+    RA3MT.SelfCheck.UprisingChecks.LiveSelection(args.Length == 2 ? int.Parse(args[1]) : null);
+    return 0;
+}
+
+if (args.Length is 2 or 3 && args[0] is "stubdump" or "uprising-stubdump")
+{
+    var uprisingDump = args[0] == "uprising-stubdump";
+    var dumpData = FeaturesData.LoadEmbedded(uprisingDump ? GameId.Uprising : GameId.RedAlert3);
+    var dumpVersion = args.Length == 3 ? args[2] : uprisingDump ? "uprising-1.01" : "1.13";
+    if (uprisingDump != GameLayout.IsUprising(dumpVersion))
+        throw new ArgumentException("Dump version does not belong to the selected game");
+    if (dumpData.Hooks.Values.Any(h => !h.Rva.ContainsKey(dumpVersion)))
+        throw new ArgumentException("Unknown dump build");
+    var dumpLayout = GameLayout.For(dumpVersion);
     Directory.CreateDirectory(args[1]);
     var fakeBase = 0x40000000u;   // synthetic MasterCode block VA
     var fakeRoot = 0x400000u;     // synthetic player-root VA
     var fakeSite = 0x452100u;     // synthetic site VA; siteEnd = site+displacedLen
-    foreach (var (id, def) in FeaturesData.LoadEmbedded().Hooks)
+    foreach (var (id, def) in dumpData.Hooks)
     {
         var stubId = def.Stub ?? id;
         if (!StubGen.Handles(stubId)) continue;
-        var displaced = def.DisplacedByVersion != null && def.DisplacedByVersion.Count != 0
-            ? def.DisplacedBytes("1.13")
-            : def.DisplacedBytes();
+        var displaced = def.DisplacedBytes(dumpVersion);
         var siteEnd = fakeSite + (uint)displaced.Length;
-        var code = StubGen.Emit(stubId, fakeBase + MasterCode.StubArea, siteEnd, fakeBase, fakeRoot, displaced);
+        var code = StubGen.Emit(stubId, fakeBase + MasterCode.StubArea, siteEnd, fakeBase, fakeRoot, displaced, dumpLayout);
         File.WriteAllBytes(Path.Combine(args[1], $"{id}.bin"), code);
         File.WriteAllText(Path.Combine(args[1], $"{id}.meta"),
             $"stubVa=0x{fakeBase + MasterCode.StubArea:X}\nsiteEnd=0x{siteEnd:X}\nlen={code.Length}\n");
         Console.WriteLine($"{id,-14} {code.Length} bytes -> {id}.bin");
     }
     File.WriteAllBytes(Path.Combine(args[1], "money_h2_rank.bin"),
-        RankDispatcher.EmitMoneyBridge(0x40000040, 0x452105, 0x40000000, 0x400000, "money_h2", RankDispatcher.CodeOffset));
+        RankDispatcher.EmitMoneyBridge(dumpLayout, 0x40000040, 0x452105, 0x40000000, 0x400000, "money_h2", RankDispatcher.CodeOffset));
     File.WriteAllBytes(Path.Combine(args[1], "money_h2_full_bridge.bin"),
-        RankDispatcher.EmitMoneyBridge(0x40000040, 0x452105, 0x40000000, 0x400000, "money_h2",
+        RankDispatcher.EmitMoneyBridge(dumpLayout, 0x40000040, 0x452105, 0x40000000, 0x400000, "money_h2",
             RankDispatcher.CodeOffset, CaptureDispatcher.CodeOffset, KillDispatcher.CodeOffset));
+    File.WriteAllBytes(Path.Combine(args[1], "money_h1_full_bridge.bin"),
+        RankDispatcher.EmitMoneyBridge(dumpLayout, fakeBase+MasterCode.StubArea,
+            fakeSite+(uint)dumpData.Hooks["money_h1"].DisplacedBytes(dumpVersion).Length, fakeBase, fakeRoot, "money_h1",
+            RankDispatcher.CodeOffset,CaptureDispatcher.CodeOffset,KillDispatcher.CodeOffset,SpawnDispatcher.CodeOffset));
     File.WriteAllBytes(Path.Combine(args[1], "rank_dispatcher.bin"),
-        RankDispatcher.Emit(0x40001100, 0x40000000, 0x785600, 0x400000));
+        RankDispatcher.Emit(0x40001100, 0x40000000, 0x785600, 0x400000, dumpLayout));
     File.WriteAllBytes(Path.Combine(args[1], "capture_dispatcher.bin"),
-        CaptureDispatcher.Emit(0x40001280, 0x40000000, 0x7B5DF0, 0x400000));
+        CaptureDispatcher.Emit(0x40001280, 0x40000000, 0x7B5DF0, 0x400000, dumpLayout));
     File.WriteAllBytes(Path.Combine(args[1], "kill_dispatcher.bin"),
-        KillDispatcher.Emit(0x40001400, 0x40000000, 0x7C7190, 0x400000));
+        KillDispatcher.Emit(0x40001400, 0x40000000, 0x7C7190, 0x400000, dumpLayout));
     File.WriteAllBytes(Path.Combine(args[1], "spawn_dispatcher.bin"),
         SpawnDispatcher.Emit(0x40001580, 0x40000000, 0x62E3E0, 0x80D5B0, 0xCF0108, 0x400000,
             0xCE43BC, 0x60ECF0));
     File.WriteAllBytes(Path.Combine(args[1], "money_h2_spawn_bridge.bin"),
-        RankDispatcher.EmitMoneyBridge(0x40000040, 0x452105, 0x40000000, 0x400000, "money_h2",
+        RankDispatcher.EmitMoneyBridge(dumpLayout, 0x40000040, 0x452105, 0x40000000, 0x400000, "money_h2",
             RankDispatcher.CodeOffset, CaptureDispatcher.CodeOffset, KillDispatcher.CodeOffset,
             SpawnDispatcher.CodeOffset));
     return 0;
 }
 
-if (args.Length == 1 && args[0] == "livetest")
+if (args.Length is >=1 and <=3 && args[0] == "livetest")
 {
     // Read-only live verification: find the running game, classify the build,
     // resolve every hook site and bridge API against live memory. Nothing is
     // written and no hooks are installed — safe to run against any build.
-    var liveData = FeaturesData.LoadEmbedded();
-    var liveFound = RA3MT.Core.Memory.ProcessMemory.FindGame(liveData.Game.ModuleNames)
+    var liveGame = args.Length>=2 && args[1]=="uprising" ? GameId.Uprising : GameId.RedAlert3;
+    var liveData = FeaturesData.LoadEmbedded(liveGame);
+    var liveFound = RA3MT.Core.Memory.ProcessMemory.FindGame(liveData.Game.ModuleNames,args.Length==3?int.Parse(args[2]):null)
                     ?? throw new InvalidOperationException("未找到运行中的红警3进程（请先启动游戏）");
     var liveMem = new RA3MT.Core.Memory.ProcessMemory(liveFound.pid);
     var liveMain = System.Diagnostics.Process.GetProcessById(liveFound.pid).MainModule
                    ?? throw new InvalidOperationException("无法读取主模块");
     var liveBase = (nuint)liveMain.BaseAddress;
-    var liveVersion = liveFound.version == "1.12"
+    var liveVersion = liveGame == GameId.Uprising
+        ? GameBuildClassifier.ClassifyUprising(new DelegateImageReader((r,l) => liveMem.Read(liveBase+r,l)),liveFound.version,liveData)
+        : liveFound.version == "1.12"
         ? RA3MT.Core.Target.GameBuildClassifier.Classify(liveMem, liveBase, liveData)
         : liveFound.version;
 
@@ -67,7 +98,7 @@ if (args.Length == 1 && args[0] == "livetest")
     Console.WriteLine($"live module-version={liveFound.version} -> classified={liveVersion}");
 
     var liveImage = new RA3MT.Core.Target.DelegateImageReader((rva, len) => liveMem.Read(liveBase + rva, len));
-    var liveText = liveMem.Read(liveBase + 0x1000, 0x7D0000);
+    var liveText = PeTextSection.Read(liveImage);
     var liveSites = HookResolver.ResolveAll(liveData, liveVersion, liveImage.Read, liveText, liveBase);
     Console.WriteLine($"live hook sites: {liveSites.Count}/{liveData.Hooks.Count} 字节校验通过");
     var liveMethods = liveSites.Values.GroupBy(s => s.Method)
@@ -79,7 +110,7 @@ if (args.Length == 1 && args[0] == "livetest")
     var (killAdj, killMark, killDmg) = RA3MT.Core.Target.KillApiResolver.Resolve(liveVersion, liveBase, liveImage);
     var spawn = SpawnApiResolver.Resolve(liveVersion, liveBase, liveImage.Read);
     var support = SpawnSupportApiResolver.Resolve(liveVersion, liveBase, liveImage.Read);
-    Console.WriteLine($"live bridges: rank=0x{rank:X} capture=0x{capture:X} kill=0x{killAdj:X}/0x{killMark:X}/0x{killDmg:X}");
+    Console.WriteLine($"live bridges: rank=0x{rank.Value:X} capture=0x{capture.Value:X} kill=0x{killAdj:X}/0x{killMark:X}/0x{killDmg:X}");
     Console.WriteLine($"live spawn: wrapper=0x{spawn:X} lookup=0x{support.TemplateHashLookup:X} " +
                       $"owner=0x{support.OwnerResolver:X} transform=0x{support.MouseScreenToWorld:X}");
 
@@ -248,6 +279,25 @@ if (args.Length == 1 && args[0] == "layouttest")
 if (args.Length == 1 && args[0] == "featuretest")
 {
     RA3MT.SelfCheck.FeatureCatalogChecks.Run();
+    return 0;
+}
+
+if (args.Length == 1 && args[0] == "processtest")
+{
+    // IsProcessAlive drives the dead-process fast path in Detach: handle-based
+    // wait, immune to PID reuse. Three cases: own process (alive), a disposed
+    // accessor (closed handle), and a process we watched exit (signalled
+    // handle — the exact state after the game quits under the trainer).
+    var self = new RA3MT.Core.Memory.ProcessMemory(Environment.ProcessId);
+    if (!self.IsProcessAlive) throw new Exception("Own process reported dead");
+    self.Dispose();
+    if (self.IsProcessAlive) throw new Exception("Disposed accessor reported alive");
+    using var victim = System.Diagnostics.Process.Start(
+        new System.Diagnostics.ProcessStartInfo("cmd.exe", "/c exit") { UseShellExecute = false })!;
+    victim.WaitForExit();
+    using var dead = new RA3MT.Core.Memory.ProcessMemory(victim.Id);
+    if (dead.IsProcessAlive) throw new Exception("Exited process reported alive");
+    Console.WriteLine("PASS 3 process-liveness cases (own alive / handle closed / exited signalled)");
     return 0;
 }
 

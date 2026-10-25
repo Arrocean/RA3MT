@@ -80,7 +80,7 @@ public sealed class SpawnActionFeature(string id, SpawnActionKind kind) : IFeatu
         {
             // The embedded table resolves unit names (and localized names);
             // raw community-guide codes still go through the hash parser.
-            if (!ReinforcementCatalog.Default.TryResolve(arg, out var hash, out var entry) || hash == 0)
+            if (!ReinforcementCatalog.ForVersion(context.Session.Version).TryResolve(arg, out var hash, out var entry) || hash == 0)
                 return FeatureResult.Failure("无效的增援代码（8 位十六进制，或用输入框旁的 📋 从单位表选择；也可直接输入单位名）");
             var label = entry is { } e ? $"增援 {e.Zh}（{e.Name}）0x{hash:X8}" : $"增援代码 0x{hash:X8}";
             var mouse = gateway.MouseGround;

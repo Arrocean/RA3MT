@@ -22,6 +22,13 @@ public sealed class ProcessMemory : IDisposable, IInjectionMemory
     public int Pid { get; }
     public bool IsClosed => _h == IntPtr.Zero;
 
+    /// <summary>True while the target process still runs. The handle stays valid
+    /// after exit and Windows signals it, so this is immune to PID reuse —
+    /// unlike asking the process table again.</summary>
+    public bool IsProcessAlive =>
+        _h != IntPtr.Zero &&
+        NativeMethods.WaitForSingleObject(_h, 0) == NativeMethods.WAIT_TIMEOUT;
+
     public byte[] Read(nuint addr, int size)
     {
         var buf = new byte[size];
@@ -70,13 +77,15 @@ public sealed class ProcessMemory : IDisposable, IInjectionMemory
     }
 
     /// <summary>Find the RA3 game process. Returns (pid, version, modulePath) or null.</summary>
-    public static (int pid, string version, string modulePath)? FindGame(IEnumerable<string> moduleNames)
+    public static (int pid, string version, string modulePath)? FindGame(IEnumerable<string> moduleNames, int? preferredPid = null)
     {
         foreach (var p in Process.GetProcesses())
         {
             try
             {
-                if (!p.ProcessName.StartsWith("ra3_1.", StringComparison.OrdinalIgnoreCase))
+                if (preferredPid is { } wanted && p.Id != wanted) continue;
+                if (!moduleNames.Any(m => m.Equals(p.ProcessName,StringComparison.OrdinalIgnoreCase) ||
+                        Path.GetFileNameWithoutExtension(m).Equals(p.ProcessName, StringComparison.OrdinalIgnoreCase)))
                     continue;
                 string path;
                 try { path = p.MainModule?.FileName ?? ""; } catch { continue; }

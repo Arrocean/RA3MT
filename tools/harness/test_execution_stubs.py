@@ -3,11 +3,12 @@ Run stubdump artifacts/stubs_semantic first, then py tools/harness/test_executio
 Requires unicorn. These tests validate synthetic contracts, not gameplay effects.
 """
 from pathlib import Path
+from game_fixture import STUBS, OWNER, HEALTH, TRACKER as TRACKER_FIELD, ELIGIBILITY, CAPACITY, BODY_DRAWABLE, UPRISING
 import struct
 from unicorn import Uc, UC_ARCH_X86, UC_MODE_32
 from unicorn.x86_const import *
 
-OUT = Path(__file__).resolve().parents[2] / 'artifacts/stubs_semantic'
+OUT = STUBS
 BLOCK, START, END = 0x40000000, 0x40000040, 0x452100
 GLOBAL, STACK, DATA = 0x400000, 0x200000, 0x300000
 REGS = [UC_X86_REG_EAX, UC_X86_REG_EBX, UC_X86_REG_ECX, UC_X86_REG_EDX,
@@ -63,12 +64,17 @@ for enabled in [0, 1]:
         put(vm, DATA + 0x103c, 0x123456)
         vm.mem_write(BLOCK + 2, bytes([enabled]))
         before = snapshot(vm)
-        execute(vm, end)
+        if UPRISING:
+            # The shared renderer continuation is deliberately outside the
+            # relocated resource fork, so null paths can reach it unchanged.
+            vm.mem_write(end,bytes.fromhex('8b4e3c'))
+        execute(vm, end+3 if UPRISING else end)
         expected = 15 if enabled else original
         assert get(vm, DATA + 0x34) == expected
         assert vm.reg_read(UC_X86_REG_EDI) == expected
         assert vm.reg_read(UC_X86_REG_ECX) == 0x123456
-        preserved(vm, before, [UC_X86_REG_EDI, UC_X86_REG_ECX])
+        preserved(vm, before, [UC_X86_REG_EDI, UC_X86_REG_ECX]+([UC_X86_REG_EFLAGS] if UPRISING else []))
+        if UPRISING: assert vm.reg_read(UC_X86_REG_EFLAGS)==6 # actual TEST EAX,EAX with DATA
         cases += 1
 
 for ready in [0, 1]:
@@ -81,7 +87,7 @@ for ready in [0, 1]:
                 owner = side if local else side + 0x100
                 put(vm, GLOBAL, controller if context != 'null_root' else 0)
                 put(vm, controller + 0x28, side if context != 'null_side' else 0)
-                put(vm, body + 0x418, owner)
+                put(vm, body + OWNER, owner)
                 put(vm, cooldown + 0x20, 800)
                 vm.mem_write(BLOCK + 5, bytes([ready, freeze]))
                 vm.reg_write(UC_X86_REG_EAX, body)
@@ -226,14 +232,14 @@ for enabled in [0, 1]:
                 wrapper, template, side = DATA + 0x5000, DATA + 0x6000, DATA + 0x7000
                 put(vm, weapon + 8, slot)
                 put(vm, slot + 0x10, body)
-                put(vm, body + 0xf4, drawable)
+                put(vm, body + BODY_DRAWABLE, drawable)
                 vm.mem_write(drawable + 0x13d, bytes([0x40 if selected else 0]))
                 put(vm, GLOBAL, controller)
                 put(vm, controller + 0x28, side)
-                put(vm, body + 0x418, side if local else side + 0x100)
+                put(vm, body + OWNER, side if local else side + 0x100)
                 put(vm, weapon + 4, wrapper)
                 put(vm, wrapper + 4, template)
-                put(vm, template + 0x70, capacity)
+                put(vm, template + CAPACITY, capacity)
                 put(vm, weapon + 0x1c, 3)
                 put(vm, weapon + 0x24, 7)
                 put(vm, weapon + 0x2c, 9)
@@ -256,14 +262,14 @@ for missing in ['slot', 'body', 'drawable', 'controller', 'side', 'wrapper', 'te
     wrapper, template, side = DATA + 0x5000, DATA + 0x6000, DATA + 0x7000
     put(vm, weapon + 8, slot if missing != 'slot' else 0)
     put(vm, slot + 0x10, body if missing != 'body' else 0)
-    put(vm, body + 0xf4, drawable if missing != 'drawable' else 0)
+    put(vm, body + BODY_DRAWABLE, drawable if missing != 'drawable' else 0)
     vm.mem_write(drawable + 0x13d, b'\x40')
     put(vm, GLOBAL, controller if missing != 'controller' else 0)
     put(vm, controller + 0x28, side if missing != 'side' else 0)
-    put(vm, body + 0x418, side)
+    put(vm, body + OWNER, side)
     put(vm, weapon + 4, wrapper if missing != 'wrapper' else 0)
     put(vm, wrapper + 4, template if missing != 'template' else 0)
-    put(vm, template + 0x70, 8)
+    put(vm, template + CAPACITY, 8)
     put(vm, weapon + 0x1c, 3)
     vm.mem_write(BLOCK + 0xa, b'\x01')
     vm.reg_write(UC_X86_REG_ESI, weapon)
@@ -312,7 +318,7 @@ for enabled in [0, 1]:
 
 
 # godmode [F11] 玩家无敌: health fields re-pinned at the health-bar reader.
-# ebx=drawable ([ebx+0x138]=body, body+0x418=owner), esi=health module
+# ebx=drawable ([ebx+0x138]=body, body+OWNER=owner), esi=health module
 # ([esi]=vtable, +4 current, +0xC max), eax=[esi] at the site.
 import struct as _s
 CUR, MAXHP = _s.unpack('<I', _s.pack('<f', 137.0))[0], _s.unpack('<I', _s.pack('<f', 300.0))[0]
@@ -325,7 +331,7 @@ for enabled in [0, 1]:
             controller, side = DATA + 0x3000, DATA + 0x5000
             owner = side if local else side + 0x100
             put(vm, drawable + 0x138, body if context != 'null_body' else 0)
-            put(vm, body + 0x418, owner)
+            put(vm, body + OWNER, owner)
             put(vm, controller + 0x28, side if context != 'null_side' else 0)
             put(vm, GLOBAL, controller if context != 'null_root' else 0)
             put(vm, health, vtable)
@@ -353,7 +359,7 @@ for enabled in [0, 1]:
 # a non-local victim that passes the combat gate.
 vm, end = machine('onekill_a')
 body, health = DATA, DATA + 0x4000
-put(vm, body + 0x33C, health)
+put(vm, body + HEALTH, health)
 vm.reg_write(UC_X86_REG_ESI, body)
 before = snapshot(vm)
 execute(vm, end)
@@ -363,7 +369,7 @@ preserved(vm, before, [UC_X86_REG_ECX])
 cases += 1
 
 vm, end = machine('onekill_b')
-put(vm, body + 0x33C, health)
+put(vm, body + HEALTH, health)
 vm.reg_write(UC_X86_REG_ECX, body)
 before = snapshot(vm)
 execute(vm, end)
@@ -387,7 +393,7 @@ for enabled in [0, 1]:
             put(vm, side + 0x20, 2)                       # local slot
             local_owner = victim == 'match_local'
             put(vm, owner_obj + 0x20, 2 if local_owner else 3)
-            put(vm, body + 0x418, owner_obj if context != 'null_owner' else 0)
+            put(vm, body + OWNER, owner_obj if context != 'null_owner' else 0)
             health_now = health if victim.startswith('match') else health + 0x10
             put(vm, BLOCK + 0x30, body)
             put(vm, BLOCK + 0x34, health)

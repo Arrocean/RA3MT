@@ -9,6 +9,7 @@ asserts that convention.
 bottom-level HP-adjust one.
 """
 from pathlib import Path
+from game_fixture import STUBS, OWNER, HEALTH, TRACKER as TRACKER_FIELD, ELIGIBILITY, CAPACITY, BODY_DRAWABLE
 import argparse
 import struct
 from unicorn import Uc, UC_ARCH_X86, UC_MODE_32, UC_HOOK_CODE
@@ -69,13 +70,13 @@ def shared_entries(vm, own=False):
     put(vm, MAILK + 4, BODY)
     put(vm, MAILK + 8, DRAWABLE)
     put(vm, MAILK + 12, HP)
-    put(vm, BODY + 0xF4, DRAWABLE)
+    put(vm, BODY + BODY_DRAWABLE, DRAWABLE)
     put(vm, DRAWABLE + 0x138, BODY)
-    put(vm, BODY + 0x33C, HP)
+    put(vm, BODY + HEALTH, HP)
     vm.mem_write(DRAWABLE + 0x13D, b'\x40')
     put(vm, GLOBAL, CONTROLLER)
     put(vm, CONTROLLER + 0x28, SIDE)
-    put(vm, BODY + 0x418, SIDE if own else SIDE + 0x100)
+    put(vm, BODY + OWNER, SIDE if own else SIDE + 0x100)
     put(vm, SIDE + 0xAC, CTX)
     put(vm, CTX + 4, DATA + 0x6000)
     put(vm, DATA + 0x6008, SIDE)
@@ -100,7 +101,7 @@ def run_capture(blob, align=0, state=1, mutation=None, api_side_effect=True):
         assert (sp + 16) % 16 == 0
         calls.append(address)
         if api_side_effect:
-            put(machine, BODY + 0x418, SIDE)
+            put(machine, BODY + OWNER, SIDE)
         for i, reg in enumerate(REGS[:-2]):
             machine.reg_write(reg, 0x55550000 + i)
     vm.hook_add(UC_HOOK_CODE, fake_api, begin=CAPTURE_API, end=CAPTURE_API + 1)
@@ -160,8 +161,8 @@ def run_kill(blob, align=0, state=1, mutation=None, api_zeroes=True):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('--capture-bin', type=Path, default=ROOT / 'artifacts/stubs_semantic/capture_dispatcher.bin')
-    ap.add_argument('--kill-bin', type=Path, default=ROOT / 'artifacts/stubs_semantic/kill_dispatcher.bin')
+    ap.add_argument('--capture-bin', type=Path, default=STUBS / 'capture_dispatcher.bin')
+    ap.add_argument('--kill-bin', type=Path, default=STUBS / 'kill_dispatcher.bin')
     cblob, kblob = ap.parse_args().capture_bin.read_bytes(), ap.parse_args().kill_bin.read_bytes()
     assert cblob[:2] == b'\x9C\x60' and cblob[-3:] == b'\x61\x9D\xC3'
     assert kblob[:2] == b'\x9C\x60' and kblob[-3:] == b'\x61\x9D\xC3'
@@ -171,7 +172,7 @@ def main():
     for state in (0, 2, 3, 4, 0xffffffff):
         run_capture(cblob, state=state); run_kill(kblob, state=state); cases += 2
     for mut in [lambda vm: put(vm, MAILC + 4, 0), lambda vm: put(vm, MAILC + 8, 0xffff),
-                lambda vm: put(vm, BODY + 0xF4, DATA + 0x9000),
+                lambda vm: put(vm, BODY + BODY_DRAWABLE, DATA + 0x9000),
                 lambda vm: put(vm, DRAWABLE + 0x138, DATA + 0x9000),
                 lambda vm: vm.mem_write(DRAWABLE + 0x13D, b'\x00'),
                 lambda vm: put(vm, GLOBAL, 0),
@@ -181,10 +182,10 @@ def main():
                 lambda vm: put(vm, DATA + 0x6008, SIDE + 8)]:
         run_capture(cblob, mutation=mut); cases += 1
     run_capture(cblob, mutation=None, api_side_effect=False); cases += 1  # transition no-op → Reject
-    run_capture(cblob, mutation=lambda vm: put(vm, BODY + 0x418, SIDE)); cases += 1  # already ours → Reject
+    run_capture(cblob, mutation=lambda vm: put(vm, BODY + OWNER, SIDE)); cases += 1  # already ours → Reject
     for mut in [lambda vm: put(vm, MAILK + 12, DATA + 0x7000),
-                lambda vm: put(vm, BODY + 0x33C, DATA + 0x7000),
-                lambda vm: put(vm, BODY + 0xF4, DATA + 0x9000),
+                lambda vm: put(vm, BODY + HEALTH, DATA + 0x7000),
+                lambda vm: put(vm, BODY + BODY_DRAWABLE, DATA + 0x9000),
                 lambda vm: vm.mem_write(DRAWABLE + 0x13D, b'\x10'),
                 lambda vm: put(vm, MAILK + 4, 0)]:
         run_kill(kblob, mutation=mut); cases += 1

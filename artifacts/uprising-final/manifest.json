@@ -1,0 +1,82 @@
+{
+  "source": "C:\\Users\\14560\\Downloads\\\u3010\u7ea2\u8272\u8b66\u62123\u8d77\u4e49\u65f6\u523b\u3011\u4fee\u6539\u5668\\RedAlert3_Uprising_Trainer_FINAL.exe",
+  "sha256": "00203e87eb11f3f2a72b88dfff381cf2a11bc02a303d298a3aa574a8e04943b4",
+  "size": 1423199,
+  "scripts": [
+    {
+      "offset": "0x8d05b",
+      "encodedLength": 20498,
+      "file": "script_00_0008D05B.cea"
+    },
+    {
+      "offset": "0x92102",
+      "encodedLength": 57,
+      "file": "script_01_00092102.cea"
+    },
+    {
+      "offset": "0x92182",
+      "encodedLength": 57,
+      "file": "script_02_00092182.cea"
+    },
+    {
+      "offset": "0x92205",
+      "encodedLength": 57,
+      "file": "script_03_00092205.cea"
+    },
+    {
+      "offset": "0x92287",
+      "encodedLength": 57,
+      "file": "script_04_00092287.cea"
+    },
+    {
+      "offset": "0x9230a",
+      "encodedLength": 57,
+      "file": "script_05_0009230A.cea"
+    },
+    {
+      "offset": "0x92390",
+      "encodedLength": 57,
+      "file": "script_06_00092390.cea"
+    },
+    {
+      "offset": "0x9240c",
+      "encodedLength": 97,
+      "file": "script_07_0009240C.cea"
+    },
+    {
+      "offset": "0x924af",
+      "encodedLength": 59,
+      "file": "script_08_000924AF.cea"
+    },
+    {
+      "offset": "0x9253b",
+      "encodedLength": 59,
+      "file": "script_09_0009253B.cea"
+    },
+    {
+      "offset": "0x925c5",
+      "encodedLength": 59,
+      "file": "script_10_000925C5.cea"
+    },
+    {
+      "offset": "0x92654",
+      "encodedLength": 59,
+      "file": "script_11_00092654.cea"
+    },
+    {
+      "offset": "0x926dc",
+      "encodedLength": 59,
+      "file": "script_12_000926DC.cea"
+    },
+    {
+      "offset": "0x92761",
+      "encodedLength": 59,
+      "file": "script_13_00092761.cea"
+    },
+    {
+      "offset": "0x92dd5",
+      "encodedLength": 75,
+      "file": "script_14_00092DD5.cea"
+    }
+  ]
+}

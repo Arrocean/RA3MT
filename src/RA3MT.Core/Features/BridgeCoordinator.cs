@@ -210,7 +210,8 @@ public sealed class BridgeCoordinator
             var pz = z + 50f * MathF.Sin(angle);
             try
             {
-                spawn.SubmitAtMouse(hash, 0, px, y, pz, 0);
+                spawn.SubmitAtMouse(hash, 0, px, y, pz, 0,
+                    50f * MathF.Cos(angle), 50f * MathF.Sin(angle));
             }
             catch (InvalidOperationException ex)
             {
@@ -239,8 +240,8 @@ public sealed class BridgeCoordinator
             var requests = new List<BridgeRequest>();
             foreach (var body in bodies)
             {
-                var drawable = _mem.ReadU32(body + 0xF4u);
-                var tracker = _mem.ReadU32(body + 0x3CCu);
+                var drawable = _mem.ReadU32(body + GameLayout.For(_version).BodyDrawable);
+                var tracker = _mem.ReadU32(body + GameLayout.For(_version).Tracker);
                 if (drawable < 0x10000 || tracker < 0x10000) continue;
                 requests.Add(BridgeRequest.For(body, drawable, tracker));
             }

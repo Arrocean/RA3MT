@@ -1,149 +1,100 @@
 # RA3MT — Red Alert 3 Modern Trainer
 
-[English](README.md) | [简体中文](README-zh_CN.md)
+English | [简体中文](README-zh_CN.md)
 
-A modern rebuild of Ken22265's FINAL3 trainer (2009, EA retail 1.12, 31 features):
-**C# / .NET 10 + WPF**. All 31 FINAL3 features are ported at parity and
-live-tested; the trainer ships **34 features** on the four game-thread bridge
-architecture. UI curated by WhiteSprite.
+A modern rebuild and extension of Ken22265's FINAL3 trainer, using **C# / .NET 10 + WPF**, with UI by WhiteSprite. These documents describe **v261025-7**. Versions use `vYYMMDD-N`: date and release sequence for that day.
 
-**One trainer, three game builds (auto-detected at attach):**
+Select the game in the sidebar. **Red Alert 3 has 34 features and 26 hooks; Uprising has 36 features and 28 hooks.** Each game has its own reinforcement catalog: 125 RA3 entries and 137 Uprising entries.
 
-| Build | Notes |
-|---|---|
-| Steam Ultimate Collection **1.13** | primary live-test platform |
-| Steam Ultimate Collection **1.12** | same byte-level verification |
-| **EA retail 1.12** | classic retail layout (FINAL3's native target), since v261013-2 |
+Single-player research use only; online multiplayer is unsupported. Distributions are listed on [GitHub Releases](https://github.com/Arrocean/RA3MT/releases). A local build does not imply that it has been uploaded there.
 
-> Single-player only; does not work in online multiplayer. For educational
-> research purposes.
+## Supported builds and validation
 
-Downloads live on **[Releases](https://github.com/Arrocean/RA3MT/releases)**: a
-single-file exe (~58 MB, x86, embedded icon, no sidecar files), versioned
-`vYYMMDD-N` (date + per-day sequence).
+| Game        | Build          | Evidence                                                            |
+|-------------|----------------|---------------------------------------------------------------------|
+| Red Alert 3 | Steam 1.13     | Primary gameplay validation platform for the original feature set   |
+| Red Alert 3 | Steam 1.12     | Independent addresses, byte contracts and offline checks            |
+| Red Alert 3 | EA retail 1.12 | Separate retail layout; historical live-resolution checks           |
+| Uprising    | EA retail 1.0  | Independent layout/contracts; historical live attach/restore checks |
+| Uprising    | Steam 1.0      | Independent fingerprint, static audit and emulated execution        |
+| Uprising    | Steam 1.01     | Module `ra3ep1_1.1.game`; historical live attach/restore checks     |
 
-## Build
-
-- Requires .NET 10 SDK + Windows Desktop runtime
-- `dotnet build RA3MT.slnx -c Release`
-- Publish: `dotnet publish src/RA3MT.UI -c Release -r win-x86 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish-v<version>`
-  (in Git Bash use `-p:` not `/p:`; bump the version string in TWO places each
-  release: `MainVM.AppVersion` and the UI csproj `AssemblyName`)
-- Output is a single **x86** exe and requires admin (manifest) — mandatory
-  for writing a 32-bit game process
-
-## Project layout
-
-```
-assets/features.json             Hand-maintained source data: 34 features +
-                                 26 hook sites (per-build RVA, displaced bytes,
-                                 AOB patterns) + globals / feature-private
-                                 offsets (embedded resource)
-assets/reinforcement_codes.json  Built-in unit code table (generated from the
-                                 game files by gen_reinforce_table.py)
-src/RA3MT.Core                   Layered engine (see docs/ARCHITECTURE.md):
-                                 Model (data shapes + ISymbols) / Target (byte-
-                                 contract resolvers) / Engine (MasterCode
-                                 lifecycle, StubGen stub factory, four bridge
-                                 dispatchers) / Features (FeatureCatalog
-                                 registration, 34 feature implementations,
-                                 BridgeCoordinator, TrainerEngine orchestrator)
-src/RA3MT.SelfCheck              12 offline suites + stubdump + livetest
-                                 (read-only live verification)
-src/RA3MT.UI                     WPF app (metadata-driven cards, one-button
-                                 start+attach, reinforcement picker)
-tools/harness/                   Unicorn stub-execution suites + stub baseline
-                                 regression (baseline in artifacts/baseline_stubs)
-tools/analysis/                  Resident reverse-engineering tools (trampoline
-                                 tracer, .text diff, FINAL3 extractor,
-                                 reinforcement-table generator — 7 items);
-                                 exploration scripts are deleted once their
-                                 conclusions land in NOTES
-docs/NOTES.md                    Reverse-engineering notes — the primary
-                                 knowledge base
-docs/ARCHITECTURE.md             Layering and extension guide (including which
-                                 data is hand-maintained vs generated)
-docs/FINAL3_*.md                 FINAL3 teardown and cross-reference audit
-                                 (historical deliverables; NOTES supersedes)
-artifacts/final3/                All 13 FINAL3 CE scripts (.cea) + manifest
-```
-
-## Verification (run all on every change)
-
-```
-Hook sites   78/78 (byte-level displaced check, 1.12 + 1.13 + EA 1.12)
-SelfCheck    12 suites green (featuretest 108 / installertest 162 /
-             actiontest 24+5 / bridgetest 38 / ranktest / spawntest 69 /
-             selectiontest / layouttest 14 / rankmailboxtest 12 / asmtest /
-             resolvertest 4 / reinforcetest 8)
-livetest     read-only live verification against the running game (build
-             classification + all hooks + four bridges, no hooks installed)
-Stub gate    33 stubs byte-identical (py tools/harness/stub_regression.py)
-Unicorn      Python-side stub semantic suites (tools/harness/)
-```
+Each Uprising build passes 903 offline execution cases, 2,709 total. The audit also covers 84 hook sites, 63 function/global/layout contracts and 10,302 byte-tamper refusal cases. The user has confirmed that challenge funds work with the refresh procedure below. **Complete gameplay acceptance of all 36 features on all three builds remains pending.** Historical attachment or static validation does not establish every gameplay effect. See [UPRISING.md](docs/UPRISING.md) for evidence and fixes.
 
 ## Usage
 
-1. Run the single-file exe as admin; click "Start Game" — the Steam build is
-   launched via Steam and attached automatically; for the EA retail build,
-   start the game yourself and click (it attaches the same way)
-2. Attach auto-detects the build (Steam and EA 1.12 share the module name;
-   a 14-byte in-memory fingerprint discriminates them) and byte-verifies
-   every displaced instruction — any mismatch refuses the hook (fail-closed)
-3. Toggles = MasterCode flag bytes (stubs run on the game thread) or pure
-   byte patches (build anywhere); actions = selection-chain walks or
-   game-thread bridges
-4. Detach restores every original byte (including the build-anywhere patch)
+1. Start the trainer and select Red Alert 3 or Uprising.
+2. For Steam, use Start Game to launch and wait for automatic attachment. For EA retail, launch the game yourself, then attach. An already running game can be attached directly.
+3. Attachment fingerprints the actual build and checks original instructions. Unknown, ambiguous or modified sites are refused.
+4. Game selection is locked while attached or waiting for launch. Detach or cancel waiting before switching.
+5. Game exit triggers automatic detachment. Manual detach restores hooks and the build-anywhere patch. Changes already made to game state, such as funds or health, are not all undone by restoring code.
 
-> The four game-thread bridges (rank / capture+destroy / spawn) are on by
-> default; disable individually for troubleshooting via `RA3MT_RANK_BRIDGE=0`,
-> `RA3MT_BRIDGES=0`, `RA3MT_SPAWN=0`.
+### Uprising challenge features
 
-## Technical notes
+| Feature                 | Operation                                                                                                                                  |
+|-------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
+| Challenge funds +50,000 | Submit once **during the battle, then press Esc to enter the menu and refresh once for it to take effect**. Hotkey: `Ctrl+Shift+F11`       |
+| Extended challenge time | Set the challenge average time to **9999:99**; **press Esc to enter the menu and refresh for it to take effect**. Hotkey: `Ctrl+Shift+F12` |
 
-- Game is 32-bit, ImageBase 0x400000, no ASLR; the three builds are
-  region-shifted against each other, so every RVA is re-located by byte
-  contracts on its own image with tamper-refusing verification —
-  **onboarding a new build = one resolver row + one features.json key,
-  zero code forks** (EA 1.12 was added exactly this way)
-- Same-name dual builds: `ra3_1.12.game` is the module of both the Steam
-  repack and EA retail; a dual-anchor memory fingerprint classifies them,
-  and a misclassification still fails loudly in the byte verifier
-- **Four-bridge architecture**: the money/power settlement sites are the
-  game-thread entry; each bridge has its own mailbox (payload published
-  first, state last — atomic claim), so cross-thread calls into game
-  functions always execute on the game thread
-- **Build-anywhere patch**: the placement gate's "out of range → failure
-  code" branch, `75 0C → EB 0C` (EA 0x4E7565 ↔ 1.13 0x511955 ↔ 1.12
-  0x528DF5, identical bytes in all three; the gate is shared by player
-  placement and AI site-picking)
-- **Reinforcement code = WB string hash**: the game's own archives
-  (WBStringHashes.big / Core*.big / language packs) yield the complete
-  unit→code table programmatically — no manual unpacking
-- Site-location ironclad rule: a static address must be confirmed live via
-  a trampoline before patching; VA/RVA differ by 0x400000 — check the
-  convention before reusing any address from the notes (three historical
-  misdiagnoses trace back to this, see NOTES v18o)
-- Semantic counterparts of legacy EA addresses are located by **instruction
-  signatures + structural isomorphism** — a runnable reference beats
-  reasoning (FINAL3 on a pirated 1.12 is the ground truth)
+Funds are a one-shot request consumed by the challenge menu path. A submitted request does not mean the display has already refreshed. Disabling the time feature stops further writes; the current mission's written value remains.
 
-## Feature status at a glance (34 / 7 groups)
+### Feature groups
 
-| Group | Features | Status |
-|---|---|---|
-| Resources (4) | money / power / protocol points / unlock protocols | ✅ verified |
-| Build & production (3) | fast build / build anywhere / forbid AI building | ✅ verified |
-| Combat (4) | god mode / one-hit kills / freeze enemy skills / instant ready | ✅ verified |
-| Vision & camera (2) | reveal map / unlimited zoom | ✅ verified |
-| Selection (13) | 3-star / ammo / speed ×2 / freeze / HP ×3 / heal / capture / destroy / copy … | ✅ verified |
-| Reinforcements (4) | three MCVs / reinforcement code (📋 built-in table) | ✅ verified |
-| Misc (4) | threat ×3 / ore restore | ✅ verified |
+| Group                         | Count | Features                                                                                    |
+|-------------------------------|------:|---------------------------------------------------------------------------------------------|
+| Resources                     |     4 | Money, power, protocol points, unlock protocols                                             |
+| Build and production          |     3 | Fast build, build anywhere, block AI production                                             |
+| Combat                        |     4 | God mode, one-hit kills, freeze enemy skills, instant readiness                             |
+| Vision and camera             |     2 | Reveal map, unlimited zoom                                                                  |
+| Selection                     |    13 | Rank, ammo, speed/restore, freeze, health, heal, capture, destroy, copy and related actions |
+| Reinforcements                |     4 | Three faction MCVs and reinforcement code/picker                                            |
+| Miscellaneous                 |     4 | Threat levels and ore restoration                                                           |
+| Challenge mode, Uprising only |     2 | Challenge funds and average time                                                            |
 
-All of the above closed out on Steam 1.13 (FINAL3 31/31 parity + 3
-extensions). **EA retail 1.12** landed in v261013-2 with triple-verified
-addresses (offline contracts + 78/78 static + livetest); in-game feature
-testing is in progress.
+The four game-thread bridges—rank, capture, destroy and spawn—are enabled by default. Troubleshooting switches are `RA3MT_RANK_BRIDGE=0`, `RA3MT_BRIDGES=0` and `RA3MT_SPAWN=0`. Actions report unavailable when their required bridge fails validation.
 
-Original author: Ken22265 (FINAL3, 2009). This project is a modern rebuild
-and extension of its features, by WhiteSprite.
+## Build and publish
+
+Requires Windows, the .NET 10 SDK and Windows Desktop build support. Publishing produces an approximately 58 MiB, x86, self-contained executable. It requests administrator access through its manifest and does not require a separately installed .NET runtime.
+
+From the repository root:
+
+```powershell
+dotnet build RA3MT.slnx -c Release
+dotnet publish src/RA3MT.UI -c Release -r win-x86 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish-v261025-7
+```
+
+Output: `Red Alert 3 Modern Trainer v261025-7.exe`. Update both `MainVM.AppVersion` and the UI project's `AssemblyName` for a release. Use `-p:` in Git Bash as well.
+
+## Repository and documentation
+
+| Location                                         | Purpose                                                                                                      |
+|--------------------------------------------------|--------------------------------------------------------------------------------------------------------------|
+| `assets/features.json`                           | RA3 features, 26 hooks, three-build addresses and private offsets                                            |
+| `assets/uprising.json`                           | Three Uprising profiles, exact contracts and two exclusive features; regeneration preserves feature metadata |
+| `assets/*reinforcement_codes.json`               | Separate 125-entry RA3 and 137-entry Uprising catalogs                                                       |
+| `src/RA3MT.Core`                                 | Products/layouts, resolvers, injection mechanisms, features and session orchestration                        |
+| `src/RA3MT.UI`                                   | WPF UI, game selection, hotkeys and reinforcement picker                                                     |
+| `src/RA3MT.SelfCheck`                            | Offline C# checks, machine-code exports and explicit live diagnostics                                        |
+| `src/RA3MT.UI.SelfCheck`                         | WPF binding/rendering checks without a game                                                                  |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md)          | Current architecture, data ownership and extension rules                                                     |
+| [TOOLS.md](docs/TOOLS.md)                        | Retained tools, dependencies, commands and cleanup inventory                                                 |
+| [UPRISING.md](docs/UPRISING.md)                  | Uprising addresses, layout differences, fixes and validation limits                                          |
+| [NOTES.md](docs/NOTES.md)                        | Version history, reverse-engineering evidence and corrections                                                |
+| `docs/FINAL3_*.md`                               | Historical FINAL3 analysis, retaining its original conclusions                                               |
+| `artifacts/final3/`, `artifacts/uprising-final/` | Extracted CE scripts and source manifests                                                                    |
+| `artifacts/baseline_stubs/`                      | Current 34-file RA3 machine-code baseline                                                                    |
+
+## Offline checks
+
+```powershell
+py -m pip install -r tools/requirements.txt
+py tools/harness/run_uprising_audit.py
+py tools/harness/stub_regression.py
+```
+
+The audit builds the projects, exports each Uprising profile, runs ten suites per profile and checks WPF bindings. It does not open a game process. The baseline gate compares 34 RA3 exports. Choose other checks according to the change; see [TOOLS.md](docs/TOOLS.md) for commands and the boundaries of live diagnostics.
+
+Never regenerate expected bytes or freeze a baseline merely to hide unexplained differences. Establish the instruction, field and control-flow change first.
+
+Original author: Ken22265 (FINAL3, 2009). Modern rebuild and extensions by WhiteSprite.

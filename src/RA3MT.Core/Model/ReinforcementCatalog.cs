@@ -41,11 +41,14 @@ public sealed class ReinforcementCatalog
     }
 
     public static ReinforcementCatalog Default { get; } = LoadEmbedded();
+    public static ReinforcementCatalog Uprising { get; } = LoadEmbedded("uprising_reinforcement_codes.json");
+    public static ReinforcementCatalog For(GameId game) => game == GameId.Uprising ? Uprising : Default;
+    public static ReinforcementCatalog ForVersion(string version) => GameLayout.IsUprising(version) ? Uprising : Default;
 
-    private static ReinforcementCatalog LoadEmbedded()
+    private static ReinforcementCatalog LoadEmbedded(string file = "reinforcement_codes.json")
     {
         var asm = typeof(ReinforcementCatalog).Assembly;
-        using var s = asm.GetManifestResourceStream("RA3MT.Core.Data.reinforcement_codes.json")
+        using var s = asm.GetManifestResourceStream("RA3MT.Core.Data."+file)
                       ?? throw new InvalidOperationException("embedded reinforcement_codes.json not found");
         var data = System.Text.Json.JsonSerializer.Deserialize<ReinforcementData>(s)
                    ?? throw new InvalidOperationException("reinforcement_codes.json failed to deserialize");

@@ -1,112 +1,102 @@
-# RA3MT — Red Alert 3 Modern Trainer（红色警戒 3 现代修改器）
+# RA3MT — 红色警戒 3 现代修改器
 
 [English](README.md) | 简体中文
 
-以 Ken22265 的 FINAL3 修改器（2009，EA 原版 1.12，31 项功能）为蓝本的现代重制版：
-**C# / .NET 10 + WPF**。FINAL3 31 项功能已全部对等移植并多轮实测，本修改器共 **34 项功能**、
-四大游戏线程桥架构，UI 由 WhiteSprite 主理。
+基于 Ken22265 的 FINAL3 修改器进行现代重制与扩展，使用 **C# / .NET 10 + WPF**，UI by WhiteSprite。当前文档对应 **v261025-7**，版本格式为 `vYYMMDD-N`（日期 + 当日第 N 次发布）。
 
-**一份修改器支持三个游戏构建（附加时自动识别）：**
+左侧选择游戏，附加时自动识别构建：**红色警戒 3 原版 34 项功能、26 个挂钩；起义时刻 36 项功能、28 个挂钩**。原版内置 125 条增援单位记录，起义时刻使用独立的 137 条记录。
 
-| 构建 | 说明 |
-|---|---|
-| Steam 终极合集 **1.13** | 主力实测平台 |
-| Steam 终极合集 **1.12** | 同样字节级校验支持 |
-| **EA 原版 1.12** | 经典零售布局（FINAL3 的原生目标），v261013-2 起 |
+仅限单机学习研究，联网对战不可用。分发页面见 [GitHub Releases](https://github.com/Arrocean/RA3MT/releases)；本地构建不代表已上传到发布页。
 
-> 仅限单机使用，联网对战不可用。仅供学习研究。
+## 支持的构建与验证范围
 
-下载与更新见 **[Releases](https://github.com/Arrocean/RA3MT/releases)**：产物为单文件 exe
-（约 58MB、x86、自带图标、无需任何附带文件），版本号 `vYYMMDD-N`（日期 + 当日第 N 次发布）。
+| 游戏       | 构建         | 验证记录                                        |
+|------------|--------------|-------------------------------------------------|
+| 红色警戒 3 | Steam 1.13   | 原版功能集的主要实战验证平台                    |
+| 红色警戒 3 | Steam 1.12   | 独立地址、字节契约与离线检查                    |
+| 红色警戒 3 | EA 原版 1.12 | 独立零售布局；已有历史真实进程解析记录          |
+| 起义时刻   | EA 原版 1.0  | 独立地址与结构契约；已有历史附加/恢复记录       |
+| 起义时刻   | Steam 1.0    | 独立指纹、静态审计与模拟执行                    |
+| 起义时刻   | Steam 1.01   | 模块名 `ra3ep1_1.1.game`；已有历史附加/恢复记录 |
 
-## 构建
+起义时刻三个构建各通过 903 项离线执行检查，共 2,709 项；另有 84 处挂钩、63 段函数/全局/结构契约和 10,302 项字节篡改拒绝检查。用户已确认挑战资金修改生效，**尚未完成三个构建全部 36 项功能的逐项实战验收**。历史附加成功和静态通过不能代替完整游戏效果验证。具体修正及证据见 [UPRISING.md](docs/UPRISING.md)。
 
-- 需要 .NET 10 SDK + Windows Desktop 运行时
-- `dotnet build RA3MT.slnx -c Release`
-- 发布：`dotnet publish src/RA3MT.UI -c Release -r win-x86 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish-v<版本>`
-  （Git Bash 下必须用 `-p:` 而不是 `/p:`；每发一版同步改两处版本串：
-  `MainVM.AppVersion` 与 UI csproj 的 `AssemblyName`）
-- 产物为 **x86** 单文件 exe，要求管理员运行（manifest）——写 32 位游戏进程内存所必需
+## 使用
 
-## 项目结构
+1. 启动修改器，选择“红色警戒 3”或“红色警戒 3：起义时刻”。
+2. Steam 版可点“开始游戏”启动并等待自动附加；EA 版先自行启动游戏，再点击附加。已经运行的游戏可直接附加。
+3. 附加会判别实际构建并逐点校验指令；未知、歧义或被其他修改器改写的站点会被拒绝。
+4. 附加或等待启动期间锁定游戏选择；脱离或取消等待后可切换。
+5. 退出游戏会自动脱离；手动“脱离进程”恢复挂钩与随地建造补丁。已写入的资金、生命、速度等游戏状态不等于代码补丁，不会因脱离而全部撤销。
 
+### 挑战模式的两项功能
+
+仅起义时刻显示这两项：
+
+| 功能             | 操作与生效流程                                                                                       |
+|------------------|------------------------------------------------------------------------------------------------------|
+| 挑战资金 +50,000 | 一次增加 50,000 挑战资金；**在战局中执行后，按 Esc 进入菜单页刷新一次生效**。快捷键 `Ctrl+Shift+F11` |
+| 延长挑战时限     | 将挑战平均时间设置为 **9999：99**；**同样需要按 Esc 进入菜单页刷新生效**。快捷键 `Ctrl+Shift+F12`    |
+
+挑战资金按钮提交一次请求，菜单刷新时消费；不要把“已提交”理解为画面已刷新。时间功能关闭后停止继续设置，当前关卡已设置的值保留。
+
+### 功能分组
+
+| 分组                     | 项数 | 内容                                                         |
+|--------------------------|-----:|--------------------------------------------------------------|
+| 资源                     |    4 | 资金、电力、协议点数、解锁协议                               |
+| 建造与生产               |    3 | 快速建造、随地建造、禁止电脑建造                             |
+| 战斗                     |    4 | 玩家无敌、一击必杀、冻结敌方技能、协议立即就绪               |
+| 视野与镜头               |    2 | 地图全开、无限缩放                                           |
+| 选中单位                 |   13 | 三星、弹药、速度与恢复、冻结、生命、治疗、俘虏、摧毁、复制等 |
+| 战场增援                 |    4 | 三阵营基地车、增援代码与单位选择器                           |
+| 其他                     |    4 | 威胁等级、矿脉恢复                                           |
+| 挑战模式（起义时刻专属） |    2 | 挑战资金、挑战平均时间                                       |
+
+四个游戏线程桥（晋级、俘虏、摧毁、生成）默认开启。排障时可分别设置 `RA3MT_RANK_BRIDGE=0`、`RA3MT_BRIDGES=0`、`RA3MT_SPAWN=0`；动作依赖的桥未通过校验时会报告不可用。
+
+## 构建与发布
+
+需要 Windows、.NET 10 SDK 及其 Windows Desktop 构建支持。发布产物为约 58 MiB 的 x86 自包含单文件 exe，运行时按 manifest 请求管理员权限，无需额外安装 .NET 运行时。
+
+在仓库根目录执行：
+
+```powershell
+dotnet build RA3MT.slnx -c Release
+dotnet publish src/RA3MT.UI -c Release -r win-x86 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish-v261025-7
 ```
-assets/features.json             手工维护的源数据：34 功能 + 26 挂钩（三版本 RVA、被替换
-                                 字节、AOB 特征码）+ 全局/功能私有偏移（嵌入资源）
-assets/reinforcement_codes.json  内置增援单位表（gen_reinforce_table.py 从游戏文件生成）
-src/RA3MT.Core                   分层引擎（见 docs/ARCHITECTURE.md）：
-                                 Model（数据形状+ISymbols）/ Target（字节契约解析器）/
-                                 Engine（MasterCode 生命周期、StubGen 桩工厂、四桥分派器）/
-                                 Features（FeatureCatalog 注册、34 个功能实现、
-                                 BridgeCoordinator 桥编排、TrainerEngine 编排器）
-src/RA3MT.SelfCheck              离线自检 12 套件 + stubdump + livetest（活体只读验证）
-src/RA3MT.UI                     WPF 主程序（元数据驱动卡片、单键启动、增援选择器）
-tools/harness/                   Unicorn 桩执行套件 + 桩基线回归（artifacts/baseline_stubs）
-tools/analysis/                  常驻逆向工具（跳板 tracer、.text diff、FINAL3 提取器、
-                                 增援表生成器等 7 项）；探索脚本用完即删，结论在 NOTES
-docs/NOTES.md                    逆向笔记——所有功能的定位过程、契约、教训（知识主载体）
-docs/ARCHITECTURE.md             分层与扩展指南（含"哪些数据手工维护/哪些生成"清单）
-docs/FINAL3_*.md                 FINAL3 解构与对照审计（历史交付物，结论以 NOTES 为准）
-artifacts/final3/                FINAL3 全部 13 个 CE 脚本原文（.cea）+ manifest
+
+文件名为 `Red Alert 3 Modern Trainer v261025-7.exe`。发布前同步修改 `MainVM.AppVersion` 与 UI 项目的 `AssemblyName`；Git Bash 中也使用 `-p:` 参数。
+
+## 文档与项目结构
+
+| 位置                                             | 内容                                                            |
+|--------------------------------------------------|-----------------------------------------------------------------|
+| `assets/features.json`                           | 原版功能、26 个挂钩、三构建地址与私有偏移                       |
+| `assets/uprising.json`                           | 三个起义构建的地址/契约、两项专属功能；生成器保留手工功能元数据 |
+| `assets/*reinforcement_codes.json`               | 原版 125 条 / 起义时刻 137 条增援目录                           |
+| `src/RA3MT.Core`                                 | 产品/布局、解析器、注入机制、功能注册与会话编排                 |
+| `src/RA3MT.UI`                                   | WPF 界面、游戏选择、热键、增援选择器                            |
+| `src/RA3MT.SelfCheck`                            | C# 离线检查、机器码导出、显式实机诊断                           |
+| `src/RA3MT.UI.SelfCheck`                         | 不启动游戏的 WPF 绑定与渲染检查                                 |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md)          | 当前架构、数据维护与扩展规则                                    |
+| [TOOLS.md](docs/TOOLS.md)                        | 保留工具、依赖、运行命令、脚本清理清单                          |
+| [UPRISING.md](docs/UPRISING.md)                  | 起义时刻的独立字段、地址、已知修正和验证边界                    |
+| [NOTES.md](docs/NOTES.md)                        | 版本演进、逆向证据与历史勘误                                    |
+| `docs/FINAL3_*.md`                               | 原版 FINAL3 的历史解构与对照，保留当时结论                      |
+| `artifacts/final3/`、`artifacts/uprising-final/` | 原件提取的 CE 脚本与 manifest                                   |
+| `artifacts/baseline_stubs/`                      | 当前 34 份原版导出桩基线                                        |
+
+## 离线检查
+
+```powershell
+py -m pip install -r tools/requirements.txt
+py tools/harness/run_uprising_audit.py
+py tools/harness/stub_regression.py
 ```
 
-## 验证（每次改动全跑）
+第一条审计入口会构建项目、分别导出三个起义构建的机器码、运行各自的十套检查及 WPF 检查；不打开游戏进程。第二条比较原版 34 份桩基线。按改动范围选择其他检查，完整入口与实机诊断边界见 [TOOLS.md](docs/TOOLS.md)。
 
-```
-挂钩点      78/78（1.12 + 1.13 + EA 1.12 三个镜像，逐字节 displaced 校验）
-SelfCheck   12 套件全过（featuretest 108 / installertest 162 / actiontest 24+5 /
-            bridgetest 38 / ranktest / spawntest 69 / selectiontest / layouttest 14 /
-            rankmailboxtest 12 / asmtest / resolvertest 4 / reinforcetest 8）
-livetest    对运行中游戏的只读全链路验证（构建判别 + 全钩子 + 四桥解析，不挂钩）
-桩门禁      33 桩逐字节零回归（py tools/harness/stub_regression.py）
-Unicorn     Python 侧桩语义执行套件（tools/harness/）
-```
+不要用更新预期字节或重建基线来消除未知差异；先解释指令、数据字段与控制流变化。
 
-## 运行
-
-1. 双击单文件 exe（管理员）；点「开始游戏」——Steam 版经 Steam 拉起后自动附加，
-   EA 原版权请自行启动游戏后点击（一样自动附加）
-2. 附加时自动识别游戏构建（Steam 与 EA 的 1.12 模块同名，靠内存指纹判别），
-   逐点校验原始指令字节，不匹配即拒绝挂钩（防呆）
-3. 开关型功能 = MasterCode 标志字节（游戏线程执行桩）或纯字节补丁（随地建造）；
-   动作型 = 选中链遍历或游戏线程桥
-4. 「脱离进程」恢复全部原始字节（随地建造补丁也会还原）
-
-> 四个游戏线程桥（晋级 / 俘虏+摧毁 / 生成）默认开启；排障时可设环境变量
-> `RA3MT_RANK_BRIDGE=0`、`RA3MT_BRIDGES=0`、`RA3MT_SPAWN=0` 单独关闭。
-
-## 技术要点
-
-- 游戏 32 位、ImageBase 0x400000、无 ASLR；三个构建两两之间存在区域偏移，
-  所有 RVA 按字节契约在各自镜像重新定位并防篡改校验——**接入新游戏构建 =
-  解析器加一行 + features.json 加一列键，零代码分叉**（EA 1.12 即此方式接入）
-- 同名双构建判别：`ra3_1.12.game` 既是 Steam 重打包也是 EA 原版的模块名，
-  附加时读两个独立锚点共 14 字节内存指纹判定；判错即字节校验大声失败
-- **四桥架构**：资金/电力结算点为游戏线程入口，按序 CALL 各桥分派器；每个桥独立邮箱
-  （payload 先写、state 最后发布的原子认领），跨线程调用游戏函数全程在游戏线程执行
-- **随地建造补丁**：放置 gate 的"范围外→失败码"分支 `75 0C→EB 0C`
-  （EA 0x4E7565 ↔ 1.13 0x511955 ↔ 1.12 0x528DF5，三版同字节，玩家与 AI 选址共用层）
-- **增援代码 = WB 字符串哈希**：游戏自带档案（WBStringHashes.big/Core*.big/语言包）
-  可程序化提取完整"单位→代码"对照，无需手工解包
-- 站点定位铁律：静态地址必须先经活体证实才可 patch；VA/RVA 差 0x400000，
-  引用笔记地址前先确认口径（历史三次误诊皆源于此，见 NOTES v18o）
-- 旧 EA 地址的语义对应用**指令特征 + 结构同构**定位（可运行的参照实现优先于推理——
-  盗版 1.12 上的 FINAL3 是 ground truth）
-
-## 功能一览（34 项 / 7 组）
-
-| 分组 | 功能 | 状态 |
-|---|---|---|
-| 资源（4） | 资金 / 电力 / 协议点数 / 解锁协议 | ✅ 实测通过 |
-| 建造与生产（3） | 快速建造 / 随地建造 / 禁止电脑建造 | ✅ 实测通过 |
-| 战斗（4） | 玩家无敌 / 一击必杀 / 冻结敌方技能 / 协议立即就绪 | ✅ 实测通过 |
-| 视野与镜头（2） | 地图全开 / 无限缩放 | ✅ 实测通过 |
-| 选中单位（13） | 三星 / 弹药 / 速度×2 / 冻结 / 血量×3 / 治疗 / 俘虏 / 摧毁 / 复制 等 | ✅ 实测通过 |
-| 战场增援（4） | 三阵营基地车 / 增援代码（📋 内置单位表） | ✅ 实测通过 |
-| 其他（4） | 威胁×3 / 矿脉恢复 | ✅ 实测通过 |
-
-以上均在 Steam 1.13 实测收官（FINAL3 31/31 对等 + 3 项扩展）；
-**EA 原版 1.12** 于 v261013-2 接入，地址层已三重验证（离线契约 + 78/78 静态 + livetest 活体），
-功能实机测试进行中。
-
-原版作者：Ken22265（FINAL3，2009）。本项目是其功能的现代重制与扩展，by WhiteSprite。
+原版作者：Ken22265（FINAL3，2009）。本项目为其功能的现代重制与扩展，by WhiteSprite。

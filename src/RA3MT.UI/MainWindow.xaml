@@ -36,7 +36,7 @@
               </Border>
             </StackPanel>
             <TextBlock Text="{Binding Desc}" FontSize="11" Foreground="{StaticResource Txt2}"
-                       Margin="0,3,0,0" TextWrapping="Wrap" MaxHeight="30" />
+                       Margin="0,3,0,0" TextWrapping="Wrap" MaxHeight="30" ToolTip="{Binding Desc}" />
           </StackPanel>
           <Grid Grid.Column="2" VerticalAlignment="Center">
             <Grid.ColumnDefinitions>
@@ -152,11 +152,11 @@
                            HorizontalAlignment="Center" VerticalAlignment="Center" />
               </Border>
               <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
-                <TextBlock Text="红色警戒 3" FontSize="12.5" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding GameName}" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap" MaxWidth="145" />
                 <TextBlock Text="命令与征服" FontSize="12.5" FontWeight="SemiBold" Opacity="0.9" />
                 <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                   <Ellipse Width="6" Height="6" Fill="{StaticResource Ok}" VerticalAlignment="Center" />
-                  <TextBlock Text="支持 1.12 / 1.13 / EA原版" FontSize="10.5" Foreground="{StaticResource Ok}" Margin="5,0,0,0" />
+                  <TextBlock Text="{Binding SupportedVersions}" TextWrapping="Wrap" MaxWidth="140" FontSize="10.5" Foreground="{StaticResource Ok}" Margin="5,0,0,0" />
                 </StackPanel>
               </StackPanel>
             </StackPanel>
@@ -177,6 +177,54 @@
 
           <!-- nav -->
           <StackPanel DockPanel.Dock="Top">
+            <TextBlock Text="选择游戏" FontSize="10.5" Foreground="{StaticResource Txt3}" Margin="8,0,0,8" />
+            <ListBox ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
+                     IsEnabled="{Binding CanSelectGame}" Background="Transparent" BorderThickness="0" Padding="0"
+                     FocusVisualStyle="{x:Null}" ToolTipService.ShowOnDisabled="True"
+                     Margin="0,0,0,18" ToolTip="脱离当前游戏后可切换；等待启动时请先取消等待。">
+              <!-- The stock disabled ListBox template uses a light system brush.
+                   Own the background so locking product selection keeps this theme. -->
+              <ListBox.Template>
+                <ControlTemplate TargetType="ListBox">
+                  <Border Background="{TemplateBinding Background}" BorderThickness="0">
+                    <ScrollViewer Background="Transparent" Focusable="False" CanContentScroll="True"
+                                  HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled">
+                      <ItemsPresenter />
+                    </ScrollViewer>
+                  </Border>
+                </ControlTemplate>
+              </ListBox.Template>
+              <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                  <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                  <Setter Property="Foreground" Value="#aeb9d0" />
+                  <Setter Property="Cursor" Value="Hand" />
+                  <Setter Property="Template">
+                    <Setter.Value>
+                      <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="gameOption" Background="#10151f" BorderBrush="#283249"
+                                BorderThickness="1" CornerRadius="9" Padding="12,11" Margin="0,0,0,7">
+                          <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                          <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="gameOption" Property="Background" Value="#191f30" />
+                            <Setter TargetName="gameOption" Property="BorderBrush" Value="#6d7cff" />
+                            <Setter Property="Foreground" Value="#dfe4ff" />
+                          </Trigger>
+                          <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="gameOption" Property="Opacity" Value="0.6" />
+                          </Trigger>
+                        </ControlTemplate.Triggers>
+                      </ControlTemplate>
+                    </Setter.Value>
+                  </Setter>
+                </Style>
+              </ListBox.ItemContainerStyle>
+              <ListBox.ItemTemplate>
+                <DataTemplate><TextBlock Text="{Binding Name}" FontSize="12" TextWrapping="Wrap" /></DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
             <TextBlock Text="菜单" FontSize="10.5" Foreground="{StaticResource Txt3}" Margin="8,0,0,8" />
             <Border Background="#191f30" BorderBrush="#6d7cff" BorderThickness="1" CornerRadius="9" Padding="10,9" Margin="0,0,0,3">
               <StackPanel Orientation="Horizontal">
@@ -224,8 +272,8 @@
                              HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="1" Margin="18,0,0,0" VerticalAlignment="Center">
-                  <TextBlock Text="命令与征服：红色警戒 3" FontSize="19" FontWeight="Bold" />
-                  <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                  <TextBlock Text="{Binding GameTitle}" FontSize="19" FontWeight="Bold" TextWrapping="Wrap" />
+                  <WrapPanel Margin="0,7,0,0">
                     <Border Margin="0,0,8,0" CornerRadius="10" Padding="9,3" Background="#123329"
                             BorderBrush="#1d5c48" BorderThickness="1">
                       <TextBlock FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Ok}"
@@ -236,9 +284,9 @@
                                  Text="{Binding SiteCheckText}" />
                     </Border>
                     <Border Style="{StaticResource Chip}">
-                      <TextBlock FontSize="10.5" Foreground="{StaticResource Txt2}" Text="兼容 1.12 / EA原版 · 终极合集" />
+                      <TextBlock FontSize="10.5" Foreground="{StaticResource Txt2}" Text="{Binding SupportedVersions}" />
                     </Border>
-                  </StackPanel>
+                  </WrapPanel>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                   <Button Style="{StaticResource BtnPrimary}" MinWidth="104" Command="{Binding StartCmd}">
@@ -306,11 +354,9 @@
                   </Style>
                 </Ellipse.Style>
               </Ellipse>
-              <TextBlock FontSize="11" Foreground="{StaticResource Txt2}" Margin="8,0,0,0">
-                <Run Text="ra3_" /><Run Text="{Binding VersionText, Mode=OneWay}" /><Run Text=".game" />
-              </TextBlock>
+              <TextBlock Text="{Binding BuildStatusText}" FontSize="11" Foreground="{StaticResource Txt2}" Margin="8,0,0,0" />
               <Border Width="1" Height="14" Background="{StaticResource Line}" Margin="14,0" />
-              <TextBlock Text="自动适配 1.12 / 1.13 游戏版本" FontSize="11" Foreground="{StaticResource Txt2}"
+              <TextBlock Text="{Binding GameName}" FontSize="11" Foreground="{StaticResource Txt2}"
                          VerticalAlignment="Center" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">

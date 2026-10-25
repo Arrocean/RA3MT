@@ -24,6 +24,12 @@ public static class CaptureApiResolver
 
     public static ApiAddress Resolve(string version, nuint imageBase, IImageReader image)
     {
+        if (Model.GameLayout.IsUprising(version))
+        {
+            var address = UprisingTarget.Build(version).Verify("capture", imageBase, image);
+            return new ApiAddress(address, ImageScan.Resolved("Capture API", version, imageBase,
+                checked((uint)(address-imageBase)), 0x288));
+        }
         var layout = For(version);
         var code = ImageScan.ReadExact(image, layout.Entry, 0x50, "Capture transition");
         ImageScan.RequirePattern(code, Prologue, "Capture transition");
@@ -82,6 +88,12 @@ public static class KillApiResolver
     public static (nuint adjust, nuint deathMarker, nuint damageEntry) Resolve(
         string version, nuint imageBase, IImageReader image)
     {
+        if (Model.GameLayout.IsUprising(version))
+        {
+            var build = UprisingTarget.Build(version);
+            return (build.Verify("adjust", imageBase, image), build.Verify("marker", imageBase, image),
+                build.Verify("damage", imageBase, image));
+        }
         var layout = For(version);
         var code = ImageScan.ReadExact(image, layout.Entry, 0x28, "HP adjust");
         ImageScan.RequirePattern(code, Entry, "HP adjust");

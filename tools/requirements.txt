@@ -1,0 +1,4 @@
+# Versions used for the 2026-10-25 offline audits.
+pefile==2024.8.26
+capstone==5.0.9
+unicorn==2.1.4

@@ -28,10 +28,10 @@ public partial class ReinforcePickerWindow : Window
 
     public ReinforceRow? Selected => List.SelectedItem as ReinforceRow;
 
-    public ReinforcePickerWindow()
+    public ReinforcePickerWindow(GameId game = GameId.RedAlert3)
     {
         InitializeComponent();
-        foreach (var cat in ReinforcementCatalog.Default.Categories)
+        foreach (var cat in ReinforcementCatalog.For(game).Categories)
             foreach (var row in cat.Items)
                 _rows.Add(new ReinforceRow
                 {

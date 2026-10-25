@@ -16,6 +16,11 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = _vm;
+        _vm.GameChanged += () =>
+        {
+            _hotkeys.Dispose();
+            if (PresentationSource.FromVisual(this) is not null) RegisterHotkeys();
+        };
         _vm.ErrorLogged += OnErrorLogged;   // 静默日志：仅在错误行出现时弹完整日志窗口
         // hotkey registration is deferred to OnSourceInitialized: RegisterHotKey
         // needs the real window handle — registering against IntPtr.Zero binds
@@ -81,7 +86,7 @@ public partial class MainWindow : Window
     private void OnPickSuggestion(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not FeatureVM vm) return;
-        var picker = new ReinforcePickerWindow { Owner = this };
+        var picker = new ReinforcePickerWindow(_vm.SelectedGame.Id) { Owner = this };
         if (picker.ShowDialog() == true && picker.Selected is { } row)
             vm.CodeText = row.Code;
     }

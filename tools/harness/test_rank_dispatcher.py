@@ -3,12 +3,13 @@ Run SelfCheck stubdump artifacts/stubs_semantic first, then this script.
 Requires unicorn; no process handles, remote calls, game writes or native threads.
 """
 from pathlib import Path
+from game_fixture import STUBS, OWNER, HEALTH, TRACKER as TRACKER_FIELD, ELIGIBILITY, CAPACITY, BODY_DRAWABLE
 import argparse
 import struct
 from unicorn import Uc, UC_ARCH_X86, UC_MODE_32, UC_HOOK_CODE
 from unicorn.x86_const import *
 
-DEFAULT = Path(__file__).resolve().parents[2] / 'artifacts/stubs_semantic/rank_dispatcher.bin'
+DEFAULT = STUBS / 'rank_dispatcher.bin'
 BLOCK, STUB, API, GLOBAL = 0x40000000, 0x40001100, 0x785600, 0x400000
 STACK, DATA, MAIL, CALLER = 0x200000, 0x300000, BLOCK + 0x1800, GLOBAL + 0x800
 BODY, DRAWABLE, TRACKER = DATA, DATA + 0x1000, DATA + 0x2000
@@ -59,12 +60,12 @@ def machine(blob, align, flags):
     for i, reg in enumerate(XMM):
         vm.reg_write(reg, (0xfedcba9876543210 << 64) | (0x123456789abcdef0 + i))
     for addr, value in [(MAIL, 1), (MAIL+4, BODY), (MAIL+8, DRAWABLE), (MAIL+12, TRACKER),
-                        (MAIL+16, 0xabcdef), (MAIL+20, 0xabcdef), (BODY+0xf4, DRAWABLE),
-                        (DRAWABLE+0x138, BODY), (BODY+0x3cc, TRACKER), (BODY+0x418, SIDE),
+                        (MAIL+16, 0xabcdef), (MAIL+20, 0xabcdef), (BODY+BODY_DRAWABLE, DRAWABLE),
+                        (DRAWABLE+0x138, BODY), (BODY+TRACKER_FIELD, TRACKER), (BODY+OWNER, SIDE),
                         (GLOBAL, CONTROLLER), (CONTROLLER+0x28, SIDE), (TRACKER+4, WRAPPER),
                         (WRAPPER+0x14, TEMPLATE), (TRACKER+0x24, 7)]:
         put(vm, addr, value)
-    vm.mem_write(TEMPLATE+0x245, b'\x01')
+    vm.mem_write(TEMPLATE+ELIGIBILITY, b'\x01')
     return vm
 
 
@@ -132,8 +133,8 @@ def main():
     invalid += [lambda vm, addr=addr: put(vm, addr, 0xffff) for addr in
                 (MAIL+4, MAIL+8, MAIL+12, GLOBAL, CONTROLLER+0x28, TRACKER+4, WRAPPER+0x14)]
     invalid += [lambda vm, addr=addr: put(vm, addr, DATA+0x7000) for addr in
-                (BODY+0xf4, DRAWABLE+0x138, BODY+0x3cc, BODY+0x418)]
-    invalid += [lambda vm: vm.mem_write(TEMPLATE+0x245, b'\x00')]
+                (BODY+BODY_DRAWABLE, DRAWABLE+0x138, BODY+TRACKER_FIELD, BODY+OWNER)]
+    invalid += [lambda vm: vm.mem_write(TEMPLATE+ELIGIBILITY, b'\x00')]
     # NOTE: no "selected" gate exists — FINAL3 ranks freshly spawned
     # (unselected) reinforcement units, so 0x13D.6 must NOT be validated.
     for mutation in invalid:

@@ -4,8 +4,8 @@
 [Oo]ut/
 artifacts/*
 !artifacts/baseline_stubs/
-!artifacts/stubs_semantic/
 !artifacts/final3/
+!artifacts/uprising-final/
 publish/
 publish**
 

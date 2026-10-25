@@ -20,6 +20,12 @@ public static class RankApiResolver
 
     public static ApiAddress Resolve(string version, nuint imageBase, IImageReader image)
     {
+        if (Model.GameLayout.IsUprising(version))
+        {
+            var address = UprisingTarget.Build(version).Verify("rank", imageBase, image);
+            return new ApiAddress(address, ImageScan.Resolved("Rank API", version, imageBase,
+                checked((uint)(address-imageBase)), 99));
+        }
         var layout = For(version);
         var length = Pattern.Parse(Signature).Length;
         var code = ImageScan.ReadExact(image, layout.Entry, length, "Rank API");

@@ -132,7 +132,7 @@ public static class BridgeMailboxChecks
             if (allowed)
             {
                 var expectedOrder = new List<nuint>();
-                for (var slot = 4; slot <= 0x24; slot += 4)
+                for (var slot = 4; slot <= 0x2C; slot += 4)
                     expectedOrder.Add(block + SpawnDispatcher.MailboxOffset + (nuint)slot);
                 expectedOrder.Add(block + SpawnDispatcher.StateOffset);
                 if (!memory.Writes.SequenceEqual(expectedOrder))
@@ -140,6 +140,28 @@ public static class BridgeMailboxChecks
                 if (new SpawnRequestMailbox(memory, block).State != 1) throw new Exception("Bad spawn publish");
             }
             else if (memory.Writes.Count != 0) throw new Exception("Outstanding spawn request overwritten");
+            cases++;
+        }
+        // Mouse offsets belong to one request, including publish-last and reuse.
+        {
+            var memory = new Memory();
+            var mailbox = new SpawnRequestMailbox(memory, block);
+            mailbox.SubmitAtMouse(0xAF4C0DA5, 0, 100, 0, 200, 0, 50, -50);
+            if (BitConverter.ToSingle(memory.Read(block + SpawnDispatcher.MouseOffsetX, 4)) != 50 ||
+                BitConverter.ToSingle(memory.Read(block + SpawnDispatcher.MouseOffsetZ, 4)) != -50 ||
+                memory.Writes.Last() != block + SpawnDispatcher.StateOffset)
+                throw new Exception("Reinforcement offsets missing or not published before state");
+            memory.State(block + SpawnDispatcher.StateOffset, 3);
+            mailbox.Submit(0xAF4C0DA5, 0, 100, 0, 200, 0);
+            if (BitConverter.ToUInt32(memory.Read(block + SpawnDispatcher.MouseOffsetX, 4)) != 0 ||
+                BitConverter.ToUInt32(memory.Read(block + SpawnDispatcher.MouseOffsetZ, 4)) != 0)
+                throw new Exception("Previous mouse offsets leaked into a new request");
+            cases++;
+            memory.Writes.Clear();
+            var refused = false;
+            try { mailbox.SubmitAtMouse(0xAF4C0DA5, 0, 100, 0, 200, 0, float.NaN, 0); }
+            catch (ArgumentException) { refused = true; }
+            if (!refused || memory.Writes.Count != 0) throw new Exception("Non-finite mouse offset published");
             cases++;
         }
         // spawn validation: no template at all, low owner, non-finite position

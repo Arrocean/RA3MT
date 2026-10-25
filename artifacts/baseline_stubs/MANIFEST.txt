@@ -12,6 +12,7 @@ capture_dispatcher.bin d98c43c77b82a4fe 304
 godmode.bin 08002e12eed9827c 78
 kill_dispatcher.bin f9d544fa70c1dfe8 236
 money_h1.bin 139a36d62e77b4b1 45
+money_h1_full_bridge.bin 1d18a816f10777d8 65
 money_h2.bin 58c71bfaeb53a5ff 44
 money_h2_full_bridge.bin ad8c250c6ba4f772 59
 money_h2_rank.bin ff3447e825146305 49
@@ -27,7 +28,7 @@ proto_cool_a.bin aceeb5bd66c86cb6 29
 proto_cool_b.bin 8946f0bfa5c9beb1 28
 rank_dispatcher.bin ae23f96f202c1d3f 327
 sidebar_pts.bin 93ec51a0e4d9a94c 11
-spawn_dispatcher.bin 36fd6db39d97ed1b 370
+spawn_dispatcher.bin 00f8e8df518d1eac 436
 unit_lv.bin 81ef9ccd8cb26be3 40
 weapon_clip.bin 34915dc72993b9ef 113
 zoom_unit_xp.bin dc93fbd582837fee 68

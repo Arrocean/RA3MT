@@ -15,23 +15,24 @@ public static class SelectionActions
             throw new NotSupportedException("俘虏需要游戏归属切换流程，不能直接覆盖属主指针");
 
         var bodies = ReadSelection(address => mem.ReadU32(address), address => mem.Read(address, 1)[0],
-            imageBase + data.Globals.SelectionList.RvaFor(version));
+            imageBase + data.Globals.SelectionList.RvaFor(version), GameLayout.For(version));
         var applied = 0;
         foreach (var body in bodies)
         {
-            if (!IsSelectedBody(address => mem.ReadU32(address), address => mem.Read(address, 1)[0], body)) continue;
-            if (ApplyOne(mem, action, body, state)) applied++;
+            if (!IsSelectedBody(address => mem.ReadU32(address), address => mem.Read(address, 1)[0], body, GameLayout.For(version))) continue;
+            if (ApplyOne(mem, action, body, state, GameLayout.For(version))) applied++;
         }
         return applied;
     }
 
     public static uint[] ReadSelection(Func<nuint, uint> readU32, Func<nuint, byte> readByte,
-        nuint global)
+        nuint global, GameLayout? layout = null)
     {
+        layout ??= GameLayout.RedAlert3;
         var root = readU32(global);
         if (root < 0x10000) return [];
-        var sentinel = (nuint)root + 0x50;
-        var count = readU32(root + 0x5Cu);
+        var sentinel = (nuint)root + layout.SelectionHead;
+        var count = readU32(root + layout.SelectionCount);
         if (count == 0) return [];
         if (count > 4096) throw new InvalidOperationException("选中列表计数异常");
         var node = (nuint)readU32(sentinel);
@@ -45,35 +46,37 @@ public static class SelectionActions
             if (drawable >= 0x10000 && (readByte(drawable + 0x13Du) & 0x40) != 0)
             {
                 var body = readU32(drawable + 0x138u);
-                if (body >= 0x10000 && readU32(body + 0xF4u) == drawable)
+                if (body >= 0x10000 && readU32(body + layout.BodyDrawable) == drawable)
                     bodies.Add(body);
             }
             node = readU32(node);
         }
-        if (node != sentinel || readU32(root + 0x5Cu) != count || readU32(global) != root)
+        if (node != sentinel || readU32(root + layout.SelectionCount) != count || readU32(global) != root)
             throw new InvalidOperationException("选中列表已变化，请重新执行");
         return bodies.ToArray();
     }
 
     public static bool IsSelectedBody(Func<nuint, uint> readU32,
-        Func<nuint, byte> readByte, uint body)
+        Func<nuint, byte> readByte, uint body, GameLayout? layout = null)
     {
+        layout ??= GameLayout.RedAlert3;
         if (body < 0x10000) return false;
-        var drawable = readU32(body + 0xF4u);
+        var drawable = readU32(body + layout.BodyDrawable);
         return drawable >= 0x10000 && readU32(drawable + 0x138u) == body &&
             (readByte(drawable + 0x13Du) & 0x40) != 0;
     }
 
-    public static uint[] ReadLocomotors(Func<nuint, uint> readU32, uint body, bool allModes)
+    public static uint[] ReadLocomotors(Func<nuint, uint> readU32, uint body, bool allModes, GameLayout? layout = null)
     {
-        var ai = readU32(body + 0x374u);
+        layout ??= GameLayout.RedAlert3;
+        var ai = readU32(body + layout.Ai);
         if (ai < 0x10000) return [];
         var result = new HashSet<uint>();
-        var active = readU32(ai + 0x21Cu);
+        var active = readU32(ai + layout.LocomotorActive);
         if (active >= 0x10000) result.Add(active);
         if (allModes)
         {
-            foreach (var setOffset in new uint[] { 0x1FC })
+            foreach (var setOffset in new uint[] { layout.LocomotorSet })
             {
                 var begin = readU32(ai + setOffset + 4);
                 var end = readU32(ai + setOffset + 8);
@@ -91,13 +94,14 @@ public static class SelectionActions
     }
 
     public static bool CanGainExperience(Func<nuint, uint> readU32,
-        Func<nuint, byte> readByte, uint tracker)
+        Func<nuint, byte> readByte, uint tracker, GameLayout? layout = null)
     {
+        layout ??= GameLayout.RedAlert3;
         if (tracker < 0x10000) return false;
         var wrapper = readU32(tracker + 4u);
         if (wrapper < 0x10000) return false;
         var template = readU32(wrapper + 0x14u);
-        return template >= 0x10000 && readByte(template + 0x245u) != 0;
+        return template >= 0x10000 && readByte(template + layout.Eligibility) != 0;
     }
 
     /// <summary>Eligible (body, drawable, tracker) triples for the game-thread rank bridge.
@@ -106,15 +110,15 @@ public static class SelectionActions
         IInjectionMemory mem, FeaturesData data, string version, nuint imageBase)
     {
         var bodies = ReadSelection(address => mem.ReadU32(address), address => mem.Read(address, 1)[0],
-            imageBase + data.Globals.SelectionList.RvaFor(version));
+            imageBase + data.Globals.SelectionList.RvaFor(version), GameLayout.For(version));
         var targets = new List<(uint, uint, uint)>();
         foreach (var body in bodies)
         {
-            if (!IsSelectedBody(address => mem.ReadU32(address), address => mem.Read(address, 1)[0], body)) continue;
-            var drawable = mem.ReadU32(body + 0xF4u);
-            var tracker = mem.ReadU32(body + 0x3CCu);
+            if (!IsSelectedBody(address => mem.ReadU32(address), address => mem.Read(address, 1)[0], body, GameLayout.For(version))) continue;
+            var drawable = mem.ReadU32(body + GameLayout.For(version).BodyDrawable);
+            var tracker = mem.ReadU32(body + GameLayout.For(version).Tracker);
             if (drawable < 0x10000 || tracker < 0x10000) continue;
-            if (!CanGainExperience(address => mem.ReadU32(address), address => mem.Read(address, 1)[0], tracker)) continue;
+            if (!CanGainExperience(address => mem.ReadU32(address), address => mem.Read(address, 1)[0], tracker, GameLayout.For(version))) continue;
             targets.Add((body, drawable, tracker));
         }
         return targets;
@@ -133,14 +137,14 @@ public static class SelectionActions
     {
         var side = LocalSide(mem, data, version, imageBase);
         var bodies = ReadSelection(address => mem.ReadU32(address), address => mem.Read(address, 1)[0],
-            imageBase + data.Globals.SelectionList.RvaFor(version));
+            imageBase + data.Globals.SelectionList.RvaFor(version), GameLayout.For(version));
         var targets = new List<(uint, uint)>();
         if (side == 0) return targets;
         foreach (var body in bodies)
         {
-            if (!IsSelectedBody(address => mem.ReadU32(address), address => mem.Read(address, 1)[0], body)) continue;
-            if (mem.ReadU32(body + 0x418u) == side) continue;
-            var drawable = mem.ReadU32(body + 0xF4u);
+            if (!IsSelectedBody(address => mem.ReadU32(address), address => mem.Read(address, 1)[0], body, GameLayout.For(version))) continue;
+            if (mem.ReadU32(body + GameLayout.For(version).Owner) == side) continue;
+            var drawable = mem.ReadU32(body + GameLayout.For(version).BodyDrawable);
             if (drawable < 0x10000) continue;
             targets.Add((body, drawable));
         }
@@ -153,13 +157,13 @@ public static class SelectionActions
         IInjectionMemory mem, FeaturesData data, string version, nuint imageBase)
     {
         var bodies = ReadSelection(address => mem.ReadU32(address), address => mem.Read(address, 1)[0],
-            imageBase + data.Globals.SelectionList.RvaFor(version));
+            imageBase + data.Globals.SelectionList.RvaFor(version), GameLayout.For(version));
         var targets = new List<(uint, uint, uint)>();
         foreach (var body in bodies)
         {
-            if (!IsSelectedBody(address => mem.ReadU32(address), address => mem.Read(address, 1)[0], body)) continue;
-            var drawable = mem.ReadU32(body + 0xF4u);
-            var hp = mem.ReadU32(body + 0x33Cu);
+            if (!IsSelectedBody(address => mem.ReadU32(address), address => mem.Read(address, 1)[0], body, GameLayout.For(version))) continue;
+            var drawable = mem.ReadU32(body + GameLayout.For(version).BodyDrawable);
+            var hp = mem.ReadU32(body + GameLayout.For(version).Health);
             if (drawable < 0x10000 || hp < 0x10000) continue;
             targets.Add((body, drawable, hp));
         }
@@ -169,19 +173,30 @@ public static class SelectionActions
     // Ore node layout verified live (2026-10-11): body+0x398 → state C;
     // [C+4] → container O; [O+8] = amount, [C+0x14] = extracted;
     // remaining = [O+8] - [C+0x14] (matches the FINAL3 ore accessor site).
-    private const uint OreStateOff = 0x398;
 
     /// <summary>Restore every selected ore node to 100000 and reset the extracted
     /// counters of all states pointing at the same container.</summary>
     public static int RestoreOreMines(IInjectionMemory mem, FeaturesData data, string version, nuint imageBase)
     {
+        var oreStateOff = GameLayout.For(version).Ore;
         var bodies = ReadSelection(address => mem.ReadU32(address), address => mem.Read(address, 1)[0],
-            imageBase + data.Globals.SelectionList.RvaFor(version));
+            imageBase + data.Globals.SelectionList.RvaFor(version), GameLayout.For(version));
         var restored = 0;
         foreach (var body in bodies)
         {
-            var state = mem.ReadU32(body + OreStateOff);
+            var state = mem.ReadU32(body + oreStateOff);
             if (state < 0x10000) continue;
+            if (GameLayout.For(version).InlineOreAmount)
+            {
+                // Uprising FINAL +2E3D70: remaining = state+28 - state+14.
+                // Unlike RA3 this count is instance-owned, not container+8.
+                var total = mem.ReadU32(state+0x28u);
+                if (total > 5_000_000 || mem.ReadU32(state+0x14u)>total) continue;
+                mem.Write(state+0x28u,BitConverter.GetBytes(100000u));
+                mem.Write(state+0x14u,BitConverter.GetBytes(0u));
+                restored++;
+                continue;
+            }
             var container = mem.ReadU32(state + 4u);
             if (container < 0x10000) continue;
             var amount = mem.ReadU32(container + 8u);
@@ -199,7 +214,7 @@ public static class SelectionActions
                 try { block = mem.Read(node, 0x800); }
                 catch { continue; }
                 if (block.Length < 0x800) continue;
-                var cand = BitConverter.ToUInt32(block, (int)OreStateOff);
+                var cand = BitConverter.ToUInt32(block, (int)oreStateOff);
                 if (cand >= 0x10000 && mem.ReadU32(cand + 4u) == container)
                 {
                     mem.Write(cand + 0x14u, BitConverter.GetBytes(0u));
@@ -219,14 +234,14 @@ public static class SelectionActions
         return restored;
     }
 
-    private static bool ApplyOne(IInjectionMemory mem, string action, uint body, SelectionActionState? state)
+    private static bool ApplyOne(IInjectionMemory mem, string action, uint body, SelectionActionState? state, GameLayout layout)
     {
         switch (action)
         {
             case "lv":
             {
-                var lv = mem.ReadU32(body + 0x3CC);
-                if (!CanGainExperience(address => mem.ReadU32(address), address => mem.Read(address, 1)[0], lv)) return false;
+                var lv = mem.ReadU32(body + layout.Tracker);
+                if (!CanGainExperience(address => mem.ReadU32(address), address => mem.Read(address, 1)[0], lv, layout)) return false;
                 mem.WriteF32(lv + 0xC, 999999f);
                 return true;
             }
@@ -236,7 +251,7 @@ public static class SelectionActions
             case "freeze2":
             case "speedrestore":
             {
-                var locomotors = ReadLocomotors(address => mem.ReadU32(address), body, action == "speedrestore");
+                var locomotors = ReadLocomotors(address => mem.ReadU32(address), body, action == "speedrestore", layout);
                 var speed = action switch
                 {
                     "speed2" => 10f,
@@ -262,7 +277,7 @@ public static class SelectionActions
             }
             case "hpmax":
             {
-                var hp = mem.ReadU32(body + 0x33C);
+                var hp = mem.ReadU32(body + layout.Health);
                 if (hp == 0) return false;
                 mem.WriteF32(hp + 4, 999999f);
                 mem.WriteF32(hp + 0xC, 999999f);
@@ -270,7 +285,7 @@ public static class SelectionActions
             }
             case "hpmin":
             {
-                var hp = mem.ReadU32(body + 0x33C);
+                var hp = mem.ReadU32(body + layout.Health);
                 if (hp == 0) return false;
                 mem.WriteF32(hp + 4, 1f);
                 return true;
@@ -278,7 +293,7 @@ public static class SelectionActions
             case "hpnormal":
             case "heal":
             {
-                var hp = mem.ReadU32(body + 0x33C);
+                var hp = mem.ReadU32(body + layout.Health);
                 if (hp < 0x10000) return false;
                 var restoreMaximum = action == "hpnormal";
                 var maxv = mem.ReadF32(hp + (restoreMaximum ? 0x10u : 0xCu));

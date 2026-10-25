@@ -98,12 +98,50 @@ public sealed class MainVM : ObservableObject
     /// <summary>Single source of truth for the displayed version. Scheme
     /// (from v261013): date + per-day sequence — vYYMMDD-N, N counts the
     /// releases of that calendar day.</summary>
-    public const string AppVersion = "v261015-2";
+    public const string AppVersion = "v261025-7";
     public string BannerText => $"{AppVersion} · 现代重制版";
 
     public TrainerEngine Engine { get; } = new();
     public ObservableCollection<FeatureGroupVM> Groups { get; } = new();
     public ObservableCollection<string> LogLines { get; } = new();
+    public IReadOnlyList<GameDefinition> Games => GameCatalog.All;
+    public event Action? GameChanged;
+    private GameDefinition _selectedGame = GameCatalog.RedAlert3;
+    public GameDefinition SelectedGame
+    {
+        get => _selectedGame;
+        set
+        {
+            if (value is null || value.Id == _selectedGame.Id || !CanSelectGame) return;
+            Engine.SelectGame(value.Id);
+            Set(ref _selectedGame,value);
+            RebuildCards();
+            Raise(nameof(GameTitle)); Raise(nameof(GameName)); Raise(nameof(SupportedVersions));
+            Raise(nameof(SiteCheckText));
+            GameChanged?.Invoke();
+            Log($"已选择{value.Name} · {value.SupportedVersions}");
+        }
+    }
+    public bool CanSelectGame => !Attached && !WaitingForGame;
+    public string GameTitle => "命令与征服："+SelectedGame.Name;
+    public string GameName => SelectedGame.Name;
+    public string SupportedVersions => SelectedGame.SupportedVersions;
+    public string BuildStatusText => Attached ? VersionText : "自动识别游戏构建";
+
+    private void RebuildCards()
+    {
+        Groups.Clear();
+        foreach (var g in Engine.Data.Features.GroupBy(f => f.Group))
+        {
+            var gv = new FeatureGroupVM { Name = g.Key };
+            foreach (var f in g) gv.Items.Add(new FeatureVM(f, this));
+            Groups.Add(gv);
+        }
+        TotalFeatures = Engine.Data.Features.Count;
+        TotalSites = Engine.Data.Hooks.Count;
+        HotkeyCount = Engine.Data.Features.Count(f => !string.IsNullOrEmpty(f.Hotkey) && f.Kind != "pending");
+        Raise(nameof(TotalFeatures)); Raise(nameof(TotalSites)); Raise(nameof(HotkeyCount)); RaiseEnabled();
+    }
 
     private bool _attached;
     private string _version = "—";
@@ -129,6 +167,7 @@ public sealed class MainVM : ObservableObject
             {
                 Raise(nameof(AttachChipText));
                 Raise(nameof(StartButtonText));
+                Raise(nameof(CanSelectGame));
             }
         }
     }
@@ -136,7 +175,11 @@ public sealed class MainVM : ObservableObject
     private CancellationTokenSource? _waitCts;
 
     public string Version { get => _version; private set => Set(ref _version, value); }
-    public string VersionText => Version == "1.12ea" ? "1.12 EA原版" : Version;
+    public string VersionText => Version switch
+    {
+        "1.12ea" => "1.12 EA原版", "uprising-1.0ea" => "1.0 EA原版",
+        "uprising-1.0" => "1.0 Steam", "uprising-1.01" => "1.01 Steam", _ => Version,
+    };
     public int Pid { get => _pid; private set => Set(ref _pid, value); }
     public int Resolved { get => _resolved; private set => Set(ref _resolved, value); }
     public int TotalFeatures { get; private set; }
@@ -157,7 +200,7 @@ public sealed class MainVM : ObservableObject
         : WaitingForGame ? "等待中" : "未附加";
     public string SiteCheckText => Engine.RecoveryRequired ? "功能已禁用，请重试脱离" : Attached
         ? $"挂钩点 {Resolved}/{TotalSites} 校验通过"
-        : $"支持 1.12 / 1.13 · {TotalSites} 个挂钩点";
+        : $"{TotalSites} 个挂钩点 · 逐项校验";
 
     /// <summary>WeMod 式单键：游戏在跑就直接附加；没在跑就请求 Steam 启动并
     /// 后台轮询进程，出现后自动附加；已附加时点击则脱离。</summary>
@@ -169,17 +212,9 @@ public sealed class MainVM : ObservableObject
     {
         Engine.Log += Log;
         Engine.StateChanged += OnStateChanged;
+        Engine.GameExited += OnGameExited;
 
-        foreach (var g in Engine.Data.Features.GroupBy(f => f.Group))
-        {
-            var gv = new FeatureGroupVM { Name = g.Key };
-            foreach (var f in g) gv.Items.Add(new FeatureVM(f, this));
-            Groups.Add(gv);
-        }
-        TotalFeatures = Engine.Data.Features.Count;
-        TotalSites = Engine.Data.Hooks.Count;
-        HotkeyCount = Engine.Data.Features.Count(f =>
-            !string.IsNullOrEmpty(f.Hotkey) && f.Kind != "pending");
+        RebuildCards();
 
         StartCmd = new RelayCommand(_ =>
         {
@@ -202,7 +237,7 @@ public sealed class MainVM : ObservableObject
             Log("已脱离。");
         }, _ => Attached);
 
-        Log($"RA3 Trainer 现代重制版 {AppVersion} 就绪 — 支持 1.12 / 1.13（{TotalFeatures} 项功能，{Engine.Data.Hooks.Count} 个挂钩点）");
+        Log($"RA3 Trainer 现代重制版 {AppVersion} 就绪 — {SupportedVersions}（{TotalFeatures} 项功能，{Engine.Data.Hooks.Count} 个挂钩点）");
         if (SingleFileCache.FreedBytes > 0)
             Log($"已清理旧版本运行缓存 {SingleFileCache.FreedBytes / 1048576.0:F1} MB（%TEMP%\\.net，避免版本更替累积占用）");
         Log("提示：点击「开始游戏」会自动启动游戏并附加；游戏已在运行时点击则直接附加。");
@@ -231,12 +266,12 @@ public sealed class MainVM : ObservableObject
         }
         try
         {
-            Process.Start(new ProcessStartInfo("steam://rungameid/17480") { UseShellExecute = true });
-            Log("已请求 Steam 启动红警3（appid 17480）— 检测到游戏后将自动附加…");
+            Process.Start(new ProcessStartInfo($"steam://rungameid/{SelectedGame.SteamAppId}") { UseShellExecute = true });
+            Log($"已请求 Steam 启动{SelectedGame.Name} — 检测到游戏后将自动附加…");
         }
         catch
         {
-            Log("✗ 无法通过 Steam 启动（appid 17480），请手动启动游戏后再点「开始游戏」。");
+            Log($"✗ 无法通过 Steam 启动{SelectedGame.Name}，请手动启动游戏后再点「开始游戏」。");
             return;
         }
         WaitingForGame = true;
@@ -253,14 +288,22 @@ public sealed class MainVM : ObservableObject
             {
                 await Task.Delay(2000, token);
                 if (!Engine.ProbeGameRunning()) continue;
-                WaitingForGame = false;
-                System.Windows.Application.Current?.Dispatcher.BeginInvoke(TryAttach);
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                {
+                    if (token.IsCancellationRequested) return;
+                    WaitingForGame = false;
+                    TryAttach();
+                });
                 return;
             }
             if (!token.IsCancellationRequested)
             {
-                WaitingForGame = false;
-                Log("✗ 等待超时：5 分钟内未检测到游戏进程，请手动点「开始游戏」重试。");
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                {
+                    if (token.IsCancellationRequested) return;
+                    WaitingForGame = false;
+                    Log("✗ 等待超时：5 分钟内未检测到游戏进程，请手动点「开始游戏」重试。");
+                });
             }
         }
         catch (OperationCanceledException)
@@ -277,6 +320,15 @@ public sealed class MainVM : ObservableObject
         Log(message);
     }
 
+    /// <summary>游戏进程退出（正常关闭或崩溃）→ 自动脱离。事件来自线程池线程，
+    /// 切回 UI 线程再调引擎；Detach 走死亡进程快速路径（跳过字节恢复），
+    /// StateChanged 负责刷新全部 UI 状态。</summary>
+    private void OnGameExited() =>
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            if (Attached) Engine.Detach();
+        });
+
     private void OnStateChanged()
     {
         Attached = Engine.Attached;
@@ -289,6 +341,9 @@ public sealed class MainVM : ObservableObject
         Raise(nameof(ProcessStateText));
         Raise(nameof(SiteCheckText));
         Raise(nameof(PidText));
+        Raise(nameof(VersionText));
+        Raise(nameof(BuildStatusText));
+        Raise(nameof(CanSelectGame));
         foreach (var g in Groups)
             foreach (var f in g.Items)
                 f.SyncFromEngine();

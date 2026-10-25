@@ -43,14 +43,14 @@ public static class SpawnActions
     {
         var bodies = SelectionActions.ReadSelection(
             address => mem.ReadU32(address), address => mem.Read(address, 1)[0],
-            imageBase + data.Globals.SelectionList.RvaFor(version));
+            imageBase + data.Globals.SelectionList.RvaFor(version), GameLayout.For(version));
         var targets = new List<(uint, float, float, float)>();
         var spread = 0;
         foreach (var body in bodies)
         {
             if (!SelectionActions.IsSelectedBody(
-                    address => mem.ReadU32(address), address => mem.Read(address, 1)[0], body)) continue;
-            var tracker = mem.ReadU32(body + 0x3CCu);
+                    address => mem.ReadU32(address), address => mem.Read(address, 1)[0], body, GameLayout.For(version))) continue;
+            var tracker = mem.ReadU32(body + GameLayout.For(version).Tracker);
             if (tracker < 0x10000) continue;
             var holder = mem.ReadU32(tracker + 4u);
             if (holder < 0x10000 || mem.ReadU32(holder + 0x14u) < 0x10000) continue;
@@ -71,11 +71,11 @@ public static class SpawnActions
     {
         var bodies = SelectionActions.ReadSelection(
             address => mem.ReadU32(address), address => mem.Read(address, 1)[0],
-            imageBase + data.Globals.SelectionList.RvaFor(version));
+            imageBase + data.Globals.SelectionList.RvaFor(version), GameLayout.For(version));
         foreach (var body in bodies)
         {
             if (!SelectionActions.IsSelectedBody(
-                    address => mem.ReadU32(address), address => mem.Read(address, 1)[0], body)) continue;
+                    address => mem.ReadU32(address), address => mem.Read(address, 1)[0], body, GameLayout.For(version))) continue;
             if (TryReadPosition(mem, body, out var x, out var y, out var z))
                 return (x, y, z);
         }

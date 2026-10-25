@@ -1,0 +1,6 @@
+[ENABLE]
+iEnable+11:
+db 01
+[disable]
+iEnable+11:
+db 00

@@ -1,3 +1,4 @@
+using RA3MT.Core.Model;
 using System.Buffers.Binary;
 using RA3MT.Core.Memory;
 
@@ -30,8 +31,9 @@ public static class KillDispatcher
     private const uint DamageType = 6;
     private const uint DeathType = 1;
 
-    public static byte[] Emit(nuint stubVA, nuint blockVA, nuint damageEntryVA, nuint rootVA)
+    public static byte[] Emit(nuint stubVA, nuint blockVA, nuint damageEntryVA, nuint rootVA, GameLayout? layout = null)
     {
+        layout ??= GameLayout.RedAlert3;
         uint start = checked((uint)stubVA), block = checked((uint)blockVA);
         uint api = checked((uint)damageEntryVA), root = checked((uint)rootVA);
         _ = root; // reserved: consumer layout passes the player root uniformly
@@ -59,12 +61,12 @@ public static class KillDispatcher
 
         a.MovRegAbs(R.Esi, Slot(BodyOffset)); NonNull(R.Esi);
         a.MovRegAbs(R.Edi, Slot(DrawableOffset)); NonNull(R.Edi);
-        a.CmpRegMRegDisp32(R.Edi, R.Esi, 0xF4); Branch(0x85, Rejected);
+        a.CmpRegMRegDisp32(R.Edi, R.Esi, layout.BodyDrawable); Branch(0x85, Rejected);
         a.CmpRegMRegDisp32(R.Esi, R.Edi, 0x138); Branch(0x85, Rejected);
         a.Db(0xF6, 0x87, 0x3D, 0x01, 0, 0, 0x40);       // selected bit 13D40
         Branch(0x84, Rejected);
         a.MovRegAbs(R.Eax, Slot(HpOffset)); NonNull(R.Eax);
-        a.CmpRegMRegDisp32(R.Eax, R.Esi, 0x33C);        // hp == [body+0x33C]?
+        a.CmpRegMRegDisp32(R.Eax, R.Esi, layout.Health);        // hp == [body+0x33C]?
         Branch(0x85, Rejected);
 
         // Full damage entry call. Callee is thiscall(ecx = Body) with three

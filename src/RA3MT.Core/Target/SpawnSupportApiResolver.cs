@@ -83,6 +83,16 @@ public static class SpawnSupportApiResolver
 
     public static SpawnSupportApis Resolve(string version, nuint imageBase, IImageReader image)
     {
+        if (Model.GameLayout.IsUprising(version))
+        {
+            var build = UprisingTarget.Build(version);
+            foreach (var contract in new[] { "hashCaller", "mouseRegister", "selectionRegister" })
+                build.Verify(contract, imageBase, image);
+            return new SpawnSupportApis(build.Verify("lookup",imageBase,image),build.Verify("find",imageBase,image),
+                build.Verify("owner",imageBase,image),build.Verify("predicate",imageBase,image),
+                imageBase+build.Rva("hashTable"), imageBase+build.Rva("gameLogic"),
+                build.Verify("mouse",imageBase,image),imageBase+build.Rva("mouseObject"));
+        }
         ArgumentNullException.ThrowIfNull(image);
         var layout = Layouts.FirstOrDefault(item => item.Version == version)
             ?? throw new InvalidOperationException("Unsupported spawn support API version");

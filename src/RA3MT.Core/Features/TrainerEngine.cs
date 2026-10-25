@@ -55,17 +55,42 @@ public sealed class TrainerEngine : IDisposable
     public event Action<string>? Log;
     public event Action? StateChanged;
 
+    /// <summary>Raised once when the attached game process exits (thread-pool
+    /// thread). The UI marshals this to its own thread and calls
+    /// <see cref="Detach"/>, which takes the dead-process fast path.</summary>
+    public event Action? GameExited;
+
+    private System.Diagnostics.Process? _proc;   // liveness watcher (Exited event)
+    private readonly object _detachGate = new(); // detach may race: UI click vs game exit
+
     /// <summary>Owner of the on/off state for stub-flag features. Created eagerly so
     /// the UI can read it before the first attach; the flag writes themselves are
     /// routed through <see cref="WriteFeatureFlag"/> and need an installed block.</summary>
-    private readonly SwitchBank _switches;
-    private readonly FeatureRegistry _registry;
+    private SwitchBank _switches;
+    private FeatureRegistry _registry;
     private readonly Dictionary<string, IFeatureState> _featureStates = new(StringComparer.Ordinal);
     private FeatureServiceRegistry _services = new();
 
     public IReadOnlyDictionary<string, bool> ToggleState => _switches.Snapshot;
     public FeaturesData Data => _data;
     public FeatureRegistry Registry => _registry;
+    public GameDefinition Game { get; private set; } = GameCatalog.RedAlert3;
+
+    public void SelectGame(GameId game)
+    {
+        if (Attached || RecoveryRequired) throw new InvalidOperationException("请先脱离当前游戏再切换");
+        if (Game.Id == game) return;
+        var definition = GameCatalog.Get(game);
+        var data = FeaturesData.LoadEmbedded(game);
+        var registry = FeatureCatalog.Build(data, this);
+        _data = data;
+        Game = definition;
+        _registry = registry;
+        _switches = new SwitchBank(_data,WriteFeatureFlag,m => Log?.Invoke(m));
+        _featureStates.Clear();
+        Version = ""; Pid = 0; ProcessPath = ""; Base = 0; ResolvedSites = 0;
+        StateChanged?.Invoke();
+    }
 
     public TrainerEngine()
     {
@@ -122,6 +147,7 @@ public sealed class TrainerEngine : IDisposable
         var registry = new FeatureServiceRegistry();
         registry.Register<IGameMemory>(new GameMemory(_mem!, Version, Base));
         registry.Register<ISwitchBank>(_switches);
+        registry.Register<Actions.IFlagRequests>(new Actions.FlagRequests(WriteFeatureFlag));
         var bridges = _bridges ?? throw new InvalidOperationException("桥协调器需要已附加的会话");
         registry.Register<IBridgeGateway>(new EngineAdapters.BridgeGateway(
             bridges.IsActive, (id, name) => bridges.SubmitSelected(name, id)));
@@ -234,23 +260,35 @@ public sealed class TrainerEngine : IDisposable
     public bool ProbeGameRunning() =>
         !Attached && ProcessMemory.FindGame(_data.Game.ModuleNames) is not null;
 
-    public void Attach()
+    public void Attach(int? preferredPid = null)
     {
         if (Attached) throw new InvalidOperationException("已附加");
-        var found = ProcessMemory.FindGame(_data.Game.ModuleNames)
-                    ?? throw new InvalidOperationException("未找到运行中的红警3进程（ra3_1.12/1.13.game）");
+        var found = ProcessMemory.FindGame(_data.Game.ModuleNames, preferredPid)
+                    ?? throw new InvalidOperationException($"未找到运行中的{Game.Name}进程（{string.Join('/', Game.ModuleNames)}）");
         var mem = new ProcessMemory(found.pid);
         MasterCode? pendingMaster = null;
         var version = found.version;
         try
         {
-            var main = System.Diagnostics.Process.GetProcessById(found.pid).MainModule
+            var proc = System.Diagnostics.Process.GetProcessById(found.pid);
+            var main = proc.MainModule
                        ?? throw new InvalidOperationException("无法读取主模块");
             var baseAddr = (nuint)main.BaseAddress;
 
             // ra3_1.12.game is the module name of both the Steam repack and the
             // EA original; classify by content before resolving any hook.
-            if (version == "1.12")
+            if (Game.Id == GameId.Uprising)
+            {
+                version = GameBuildClassifier.ClassifyUprising(
+                    new DelegateImageReader((rva,len) => mem.Read(baseAddr+rva,len)), version, _data);
+                // Validate both globals independently of the optional spawn bridge.
+                UprisingTarget.Build(version).Verify("selectionRegister",baseAddr,
+                    new DelegateImageReader((rva,len) => mem.Read(baseAddr+rva,len)));
+                foreach (var contract in UprisingTarget.Build(version).Contracts.Keys.Where(k=>k.StartsWith("layout",StringComparison.Ordinal)))
+                    UprisingTarget.Build(version).Verify(contract,baseAddr,
+                        new DelegateImageReader((rva,len) => mem.Read(baseAddr+rva,len)));
+            }
+            else if (version == "1.12")
             {
                 version = Target.GameBuildClassifier.Classify(mem, baseAddr, _data);
                 if (version != found.version)
@@ -259,7 +297,7 @@ public sealed class TrainerEngine : IDisposable
 
             Log?.Invoke($"附加 {found.modulePath} (PID {found.pid}) 基址 0x{baseAddr:X}");
             var image = new Target.DelegateImageReader((rva, len) => mem.Read(baseAddr + rva, len));
-            var text = mem.Read(baseAddr + 0x1000, 0x7D0000);
+            var text = PeTextSection.Read(image);
             var sites = HookResolver.ResolveAll(
                 _data, version,
                 readRva: image.Read,
@@ -276,7 +314,7 @@ public sealed class TrainerEngine : IDisposable
             var mc = new MasterCode(mem, baseAddr, baseAddr + rootRva, sites, _data.Hooks, Log,
                 bridges.Rank, bridges.Capture, bridges.KillDamageEntry, bridges.KillDeathMarker,
                 bridges.SpawnWrapper, bridges.HashLookup, bridges.HashTableGlobal,
-                bridges.MouseObjectGlobal, bridges.MouseTransform);
+                bridges.MouseObjectGlobal, bridges.MouseTransform, GameLayout.For(version));
             pendingMaster = mc;
             mc.Install();
 
@@ -294,12 +332,21 @@ public sealed class TrainerEngine : IDisposable
             _bridges = new BridgeCoordinator(mc, mem, version, baseAddr, _data,
                 m => Log?.Invoke(m), () => StateChanged?.Invoke());
             CreateFeatureStates();
+            WatchGameProcess(proc);
 
             Log?.Invoke($"修改器已就绪：{sites.Count}/{_data.Hooks.Count} 挂钩点全部通过原始字节校验 ✓");
             StateChanged?.Invoke();
         }
         catch (Exception installError)
         {
+            // If the game died mid-attach there is nothing to roll back — the
+            // writes would fail one by one. Just drop the half-open session.
+            if (!mem.IsProcessAlive)
+            {
+                mem.Dispose();
+                Log?.Invoke($"附加中断：游戏进程已退出（{installError.Message}）");
+                throw;
+            }
             try { pendingMaster?.Uninstall(); }
             catch (Exception rollbackError)
             {
@@ -320,33 +367,65 @@ public sealed class TrainerEngine : IDisposable
 
     public void Detach()
     {
-        if (!Attached) return;
-        try { _mc?.Uninstall(); }
-        catch (Exception ex)
+        lock (_detachGate)
         {
-            RecoveryRequired = true;
-            StateChanged?.Invoke();
-            Log?.Invoke("卸载失败，功能已禁用；请重试脱离或重启游戏: " + ex.Message);
-            return;
-        }
-        // Restore the build-anywhere branch patch if its toggle is still on. The
-        // patch belongs to the feature, so ask the feature state for both the
-        // "is it on" question and the restore; the raw address is only a fallback
-        // for when no state exists.
-        if (_featureStates.TryGetValue(Patches.BuildAnywhereFeature.FeatureId, out var ba)
-            && ba.IsOn && _mem != null && Version != null)
-        {
-            try
+            if (!Attached) return;
+
+            // The game exited before the detach click (or the auto-detach raced
+            // the manual one): its memory died with it. There is nothing to
+            // restore — attempting the writes would spam one failure per hook
+            // site and wedge the session in RecoveryRequired forever.
+            if (_mem is { IsProcessAlive: false })
             {
-                if (!ba.SetOn(false).Ok)
-                {
-                    var siteRva = PrivateOffsets.RvaFor(_data, Version,
-                        Patches.BuildAnywhereFeature.FeatureId, "site");
-                    if (siteRva != 0)
-                        _mem.Write(Base + siteRva, new byte[] { 0x75, 0x0C });
-                }
+                ReleaseSession();
+                Log?.Invoke("游戏进程已退出，直接脱离（进程内存已随之消失，无需恢复挂钩）。");
+                StateChanged?.Invoke();
+                return;
             }
-            catch { /* best-effort restore on detach */ }
+
+            try { _mc?.Uninstall(); }
+            catch (Exception ex)
+            {
+                RecoveryRequired = true;
+                StateChanged?.Invoke();
+                Log?.Invoke("卸载失败，功能已禁用；请重试脱离或重启游戏: " + ex.Message);
+                return;
+            }
+            // Restore the build-anywhere branch patch if its toggle is still on. The
+            // patch belongs to the feature, so ask the feature state for both the
+            // "is it on" question and the restore; the raw address is only a fallback
+            // for when no state exists.
+            if (_featureStates.TryGetValue(Patches.BuildAnywhereFeature.FeatureId, out var ba)
+                && ba.IsOn && _mem != null && Version != null)
+            {
+                try
+                {
+                    if (!ba.SetOn(false).Ok)
+                    {
+                        var siteRva = PrivateOffsets.RvaFor(_data, Version,
+                            Patches.BuildAnywhereFeature.FeatureId, "site");
+                        if (siteRva != 0)
+                            _mem.Write(Base + siteRva, new byte[] { 0x75, 0x0C });
+                    }
+                }
+                catch { /* best-effort restore on detach */ }
+            }
+            ReleaseSession();
+            Log?.Invoke("已从游戏进程脱离，全部挂钩已还原。");
+            StateChanged?.Invoke();
+        }
+    }
+
+    /// <summary>Drop every session-scoped object. Shared by the normal detach
+    /// (after byte restoration) and the dead-process fast path (nothing to
+    /// restore). Leaves the engine ready for a fresh attach.</summary>
+    private void ReleaseSession()
+    {
+        if (_proc is not null)
+        {
+            _proc.Exited -= OnGameExited;
+            _proc.Dispose();
+            _proc = null;
         }
         _mem?.Dispose();
         _mem = null;
@@ -358,8 +437,22 @@ public sealed class TrainerEngine : IDisposable
         Attached = false;
         RecoveryRequired = false;
         _switches.ResetAll();
-        Log?.Invoke("已从游戏进程脱离，全部挂钩已还原。");
-        StateChanged?.Invoke();
+    }
+
+    /// <summary>Watch the attached process so the UI can auto-detach the moment
+    /// the game exits (clean close or crash), instead of waiting for the user
+    /// to notice features stopped working.</summary>
+    private void WatchGameProcess(System.Diagnostics.Process proc)
+    {
+        _proc = proc;
+        proc.EnableRaisingEvents = true;
+        proc.Exited += OnGameExited;
+    }
+
+    private void OnGameExited(object? sender, EventArgs e)
+    {
+        try { GameExited?.Invoke(); }
+        catch { /* never take down the thread-pool thread */ }
     }
 
     // ---------------------------------------------------------------------

@@ -8,7 +8,9 @@
 
   <ItemGroup>
     <EmbeddedResource Include="..\..\assets\features.json" Link="Data\features.json" />
+    <EmbeddedResource Include="..\..\assets\uprising.json" Link="Data\uprising.json" />
     <EmbeddedResource Include="..\..\assets\reinforcement_codes.json" Link="Data\reinforcement_codes.json" />
+    <EmbeddedResource Include="..\..\assets\uprising_reinforcement_codes.json" Link="Data\uprising_reinforcement_codes.json" />
   </ItemGroup>
 
   <!-- keep .pdb files out of single-file publish output -->

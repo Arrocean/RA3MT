@@ -121,6 +121,23 @@ def parse_csf(data):
 
 # ---------- assembly ----------
 def load_hashmap(data_dir):
+    if not os.path.exists(os.path.join(data_dir, 'WBStringHashes.big')):
+        # Uprising ships the same registry as a compiled StringHashes asset.
+        # Its serialized offsets are relative to the 8-byte asset header.
+        path = os.path.join(data_dir, 'Misc.big')
+        entry = next(e for e in big_entries(path) if e[0].endswith('stringhashes.bin'))
+        raw = refpack_decompress(big_read(path, entry))
+        count = struct.unpack_from('<I', raw, 16)[0]
+        if count > 1_000_000 or 24 + count*12 > len(raw):
+            raise ValueError('invalid compiled string hash table')
+        hmap = {}
+        for i in range(count):
+            h, size, offset = struct.unpack_from('<III', raw, 24+i*12)
+            if size == 0 or offset+8+size > len(raw):
+                raise ValueError('invalid compiled string hash entry')
+            text = raw[offset+8:offset+8+size].rstrip(b'\0').decode('utf8')
+            hmap[text] = h
+        return hmap
     entries = big_entries(os.path.join(data_dir, 'WBStringHashes.big'))
     xml_name = next(n for n, _, _ in entries if n.endswith('stringhashes.xml'))
     xml = big_read(os.path.join(data_dir, 'WBStringHashes.big'),
@@ -140,7 +157,11 @@ def load_gameobject_names(data_dir):
         if m and (best is None or int(m.group(1)) > best[0]):
             best = (int(m.group(1)), fn)
     if best is None:
-        raise SystemExit("no Core*.big found in game Data dir")
+        path = os.path.join(data_dir, 'StaticStream.big')
+        entries = big_entries(path)
+        entry = next(e for e in entries if e[0].lower() == 'data\\static.manifest')
+        raw = refpack_decompress(big_read(path, entry))
+        return set(x.decode() for x in re.findall(rb'GameObject:([A-Za-z0-9_]+)\x00', raw))
     core = os.path.join(data_dir, best[1])
     entries = big_entries(core)
     man_entry = next(e for e in entries if e[0].endswith(f'static.{best[0]}.manifest'))
@@ -178,7 +199,8 @@ def main():
     zh = load_zh_names(data_dir, args.lang_big)
     print(f"hashes={len(hmap)} objects={len(objects)} zh-names={len(zh)}")
 
-    out = {"source": "RA3 WBStringHashes.big + static manifest + "
+    registry = 'WBStringHashes.big' if os.path.exists(os.path.join(data_dir,'WBStringHashes.big')) else 'Uprising Misc.big/stringhashes.bin'
+    out = {"source": registry + " + static manifest + "
                      f"{args.lang_big}（自动提取，与手动解包法等价）",
            "categories": []}
     faction_prefixes = ('Allied', 'Soviet', 'Japan')
