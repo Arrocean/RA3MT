@@ -10,6 +10,10 @@ public static class BlockLayoutCatalog
     /// <summary>Reserved size of the injected block (VirtualAllocEx).</summary>
     public const uint BlockSize = 0x2000;
 
+    /// <summary>Persistent public detection record, independent of all game
+    /// fields and stub bytes. Retained for the target process's lifetime.</summary>
+    public const uint IdentityOffset = 0x1FC0;
+
     /// <summary>First byte available to stub code (below it: flags/diagnostics).</summary>
     public const uint StubAreaStart = 0x40;
 
@@ -49,6 +53,7 @@ public static class BlockLayoutCatalog
         layout.Declare("Diagnostics", DiagnosticsOffset, DiagnosticsSize, "diagnostics");
         layout.Declare("CaptureCount", CaptureCountOffset, 4, "selection-capture");
         layout.Declare("CaptureArray", CaptureArrayOffset, CaptureArrayBytes, "selection-capture");
+        layout.Declare("TrainerIdentity", IdentityOffset, Model.TrainerIdentity.RecordSize, "public-identity");
         return layout;
     }
 

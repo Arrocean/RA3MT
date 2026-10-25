@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
-  <assemblyIdentity version="2.0.0.0" name="RA3MT.UI"/>
+  <!-- Permanent public project identity. Do not change with release filenames. -->
+  <assemblyIdentity type="win32" version="2.0.0.0" name="RA3MT.Trainer.2A616556-4683-43AF-8863-359BF95B0FEE"/>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">

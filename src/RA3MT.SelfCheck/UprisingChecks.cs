@@ -123,10 +123,14 @@ public static class UprisingChecks
             var master = new MasterCode(memory, 0x400000, 0x400000 + data.Globals.PlayerRoot.RvaFor(version), sites, data.Hooks, null,
                 0x785600, 0x7B5DF0, 0x7C7190, 0x7513F0, 0x62E3E0, 0x80D5B0, 0xCF0108, 0xCE43BC, 0x60ECF0, GameLayout.Uprising);
             master.Install();
+            var identity = memory.Read(master.Block + BlockLayoutCatalog.IdentityOffset, TrainerIdentity.RecordSize);
+            Check(TrainerIdentity.TryParse(identity, out var marker) && marker.Kind == TrainerIdentityKind.GameProcess &&
+                  marker.TrainerProcessId == Environment.ProcessId, "public marker independent of Uprising build");
             Check(master.Bridges.Consumers.Count == 4, "all bridge layouts fit");
             foreach (var site in sites.Values) Check(memory.Read(site.Va, 1)[0] == 0xE9, "every declared hook installed");
             master.SetFlag("challenge_money", true); master.SetFlag("challenge_time", true);
             master.Uninstall();
+            Check(memory.Read(master.Block + BlockLayoutCatalog.IdentityOffset, TrainerIdentity.RecordSize).SequenceEqual(identity), "public game marker retained after detach");
             foreach (var site in sites.Values) Check(memory.Read(site.Va, site.Displaced.Length).SequenceEqual(site.Displaced), "exact restoration");
             Console.WriteLine($"PASS {version}: 28 hooks, {build.Contracts.Count} API/global/layout contracts, four-bridge install/restore");
         }

@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-基于 Ken22265 的 FINAL3 修改器进行现代重制与扩展，使用 **C# / .NET 10 + WPF**，UI by WhiteSprite。当前文档对应 **v261025-7**，版本格式为 `vYYMMDD-N`（日期 + 当日第 N 次发布）。
+基于 Ken22265 的 FINAL3 修改器进行现代重制与扩展，使用 **C# / .NET 10 + WPF**，UI by WhiteSprite。当前文档对应 **v261025-8**，版本格式为 `vYYMMDD-N`（日期 + 当日第 N 次发布）。
 
 左侧选择游戏，附加时自动识别构建：**红色警戒 3 原版 34 项功能、26 个挂钩；起义时刻 36 项功能、28 个挂钩**。原版内置 125 条增援单位记录，起义时刻使用独立的 137 条记录。
 
@@ -63,12 +63,14 @@
 
 ```powershell
 dotnet build RA3MT.slnx -c Release
-dotnet publish src/RA3MT.UI -c Release -r win-x86 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish-v261025-7
+dotnet publish src/RA3MT.UI -c Release -r win-x86 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish-v261025-8
 ```
 
-文件名为 `Red Alert 3 Modern Trainer v261025-7.exe`。发布前同步修改 `MainVM.AppVersion` 与 UI 项目的 `AssemblyName`；Git Bash 中也使用 `-p:` 参数。
+文件名为 `Red Alert 3 Modern Trainer v261025-8.exe`。发布前同步修改 `MainVM.AppVersion` 与 UI 项目的 `AssemblyName`；Git Bash 中也使用 `-p:` 参数。
 
 ## 文档与项目结构
+
+平台接入说明见 [DETECTION.md](docs/DETECTION.md)，包含修改器命名对象、exe 清单身份和游戏内存记录格式。
 
 | 位置                                             | 内容                                                            |
 |--------------------------------------------------|-----------------------------------------------------------------|

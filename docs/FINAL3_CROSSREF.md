@@ -1,6 +1,6 @@
 # FINAL3 ↔ Final2a ↔ RA3MT 完整对照审计
 
-当前项目为 **v261025-7**。本表保留 v16 时期的原版对照，不能将当时的“未移植/推测”当作当前状态，也不能把原版地址用于起义时刻。当前功能与验证范围见 [中文 README](../README-zh_CN.md)，后续修正见 [NOTES.md](NOTES.md) 和 [UPRISING.md](UPRISING.md)，保留工具与检查命令见 [TOOLS.md](TOOLS.md)。
+当前项目为 **v261025-8**。本表保留 v16 时期的原版对照，不能将当时的“未移植/推测”当作当前状态，也不能把原版地址用于起义时刻。当前功能与验证范围见 [中文 README](../README-zh_CN.md)，后续修正见 [NOTES.md](NOTES.md) 和 [UPRISING.md](UPRISING.md)，保留工具与检查命令见 [TOOLS.md](TOOLS.md)。
 
 > **时效性说明**：本文档为历史交付物，写作于 2026-10-11（v16 时期）。
 > 此后的结论演进以 `docs/NOTES.md`（v17 起）为准——特别是 FINAL3 脚本语义（v19b 行为级审计）、

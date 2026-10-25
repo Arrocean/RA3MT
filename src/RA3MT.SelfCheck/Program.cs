@@ -3,6 +3,17 @@ using RA3MT.Core.Model;
 using RA3MT.Core.Scan;
 using RA3MT.Core.Target;
 
+if (args.Length == 1 && args[0] == "identitytest")
+{
+    RA3MT.SelfCheck.IdentityChecks.Run();
+    return 0;
+}
+if (args.Length == 1 && args[0] == "identity-child")
+{
+    RA3MT.SelfCheck.IdentityChecks.Child();
+    return 0;
+}
+
 // stub-dump mode: emit every MasterCode stub to a folder (for offline
 // disassembly verification)
 if (args.Length == 1 && args[0] == "uprisingtest")

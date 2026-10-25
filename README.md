@@ -2,7 +2,7 @@
 
 English | [简体中文](README-zh_CN.md)
 
-A modern rebuild and extension of Ken22265's FINAL3 trainer, using **C# / .NET 10 + WPF**, with UI by WhiteSprite. These documents describe **v261025-7**. Versions use `vYYMMDD-N`: date and release sequence for that day.
+A modern rebuild and extension of Ken22265's FINAL3 trainer, using **C# / .NET 10 + WPF**, with UI by WhiteSprite. These documents describe **v261025-8**. Versions use `vYYMMDD-N`: date and release sequence for that day.
 
 Select the game in the sidebar. **Red Alert 3 has 34 features and 26 hooks; Uprising has 36 features and 28 hooks.** Each game has its own reinforcement catalog: 125 RA3 entries and 137 Uprising entries.
 
@@ -61,10 +61,10 @@ From the repository root:
 
 ```powershell
 dotnet build RA3MT.slnx -c Release
-dotnet publish src/RA3MT.UI -c Release -r win-x86 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish-v261025-7
+dotnet publish src/RA3MT.UI -c Release -r win-x86 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish-v261025-8
 ```
 
-Output: `Red Alert 3 Modern Trainer v261025-7.exe`. Update both `MainVM.AppVersion` and the UI project's `AssemblyName` for a release. Use `-p:` in Git Bash as well.
+Output: `Red Alert 3 Modern Trainer v261025-8.exe`. Update both `MainVM.AppVersion` and the UI project's `AssemblyName` for a release. Use `-p:` in Git Bash as well.
 
 ## Repository and documentation
 
@@ -79,6 +79,7 @@ Output: `Red Alert 3 Modern Trainer v261025-7.exe`. Update both `MainVM.AppVersi
 | `src/RA3MT.UI.SelfCheck`                         | WPF binding/rendering checks without a game                                                                  |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md)          | Current architecture, data ownership and extension rules                                                     |
 | [TOOLS.md](docs/TOOLS.md)                        | Retained tools, dependencies, commands and cleanup inventory                                                 |
+| [DETECTION.md](docs/DETECTION.md)                | Permanent trainer/game process identity and platform integration protocol                                    |
 | [UPRISING.md](docs/UPRISING.md)                  | Uprising addresses, layout differences, fixes and validation limits                                          |
 | [NOTES.md](docs/NOTES.md)                        | Version history, reverse-engineering evidence and corrections                                                |
 | `docs/FINAL3_*.md`                               | Historical FINAL3 analysis, retaining its original conclusions                                               |
@@ -93,7 +94,7 @@ py tools/harness/run_uprising_audit.py
 py tools/harness/stub_regression.py
 ```
 
-The audit builds the projects, exports each Uprising profile, runs ten suites per profile and checks WPF bindings. It does not open a game process. The baseline gate compares 34 RA3 exports. Choose other checks according to the change; see [TOOLS.md](docs/TOOLS.md) for commands and the boundaries of live diagnostics.
+The audit builds the projects, checks public identity using its own helper process, exports each Uprising profile, runs ten suites per profile and checks WPF bindings. It does not open a game process. The baseline gate compares 34 RA3 exports. Choose other checks according to the change; see [TOOLS.md](docs/TOOLS.md) for commands and the boundaries of live diagnostics.
 
 Never regenerate expected bytes or freeze a baseline merely to hide unexplained differences. Establish the instruction, field and control-flow change first.
 

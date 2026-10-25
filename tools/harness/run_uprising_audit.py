@@ -27,6 +27,7 @@ def main():
     run(['dotnet','build','RA3MT.slnx','-c','Release','--nologo'])
     run([sys.executable,'tools/analysis/audit_uprising.py'])
     selfcheck=['dotnet','run','--project','src/RA3MT.SelfCheck','-c','Release','--no-build','--']
+    run(selfcheck+['identitytest'])
     run(selfcheck+['uprisingtest'])
     scripts=['test_disabled_stubs.py','test_execution_stubs.py','test_rank_dispatcher.py',
              'test_bridge_dispatchers.py','test_rank_money_bridge.py','test_uprising_stubs.py',
@@ -43,6 +44,6 @@ def main():
         results[version]={'suites':len(outputs),'status':'passed'}
     run(['dotnet','run','--project','src/RA3MT.UI.SelfCheck','-c','Release','--no-build'])
     (OUT/'results.json').write_text(json.dumps(results,indent=2)+'\n',encoding='utf8')
-    print('\nPASS: all three builds, ten offline suites per build, static contracts and WPF checks')
+    print('\nPASS: public process identity, all three builds, ten offline suites per build, static contracts and WPF checks')
 
 if __name__=='__main__':main()

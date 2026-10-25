@@ -156,7 +156,15 @@ public sealed class MasterCode
         if (Installed) return;
         if (_patched.Count != 0) throw new InvalidOperationException("残留挂钩尚未恢复，拒绝重新安装");
         Block = _mem.Alloc(BlockSize);
-        _mem.Write(Block, new byte[BlockSize]); // zero
+        var initial = new byte[BlockSize];
+        // Publish identity before installing any hook. Even an attempted
+        // attachment followed by rollback may leave this cooperative marker.
+        // Detach restores code but intentionally retains the record in this
+        // already-retained allocation; it says "touched", not "cheat enabled".
+        var ownerPid = _mem is ProcessMemory process ? checked((uint)process.Pid) : 0u;
+        TrainerIdentity.CreateRecord(TrainerIdentityKind.GameProcess, ownerPid,
+            checked((uint)Environment.ProcessId)).CopyTo(initial, (int)BlockLayoutCatalog.IdentityOffset);
+        _mem.Write(Block, initial);
         _layout = BlockLayoutCatalog.Create();
         Bridges = BuildBridgeConsumers();
         foreach (var consumer in Bridges.Consumers) consumer.Declare(_layout);

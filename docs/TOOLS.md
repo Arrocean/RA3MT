@@ -1,6 +1,6 @@
 # 工具与检查入口
 
-本文对应 **v261025-7**，2026-10-25 完成脚本整理。所有命令从仓库根目录执行。当前保留 **5 个证据/数据工具、14 个离线审计/回归脚本或共享模块**；游戏修改逻辑由 C# Core 维护，Python 不再保留第二套修改器实现。
+本文对应 **v261025-8**，2026-10-25 完成脚本整理。所有命令从仓库根目录执行。当前保留 **5 个证据/数据工具、14 个离线审计/回归脚本或共享模块**；游戏修改逻辑由 C# Core 维护，Python 不再保留第二套修改器实现。
 
 `artifacts` 不参与修改器的构建、发布或运行。版本控制只保留 `baseline_stubs/` 回归基线及 `final3/`、`uprising-final/` 原件脚本归档；`stubs_semantic/` 等当前导出、日志、截图与临时镜像均不提交，检查前按下文命令生成。
 
@@ -66,7 +66,7 @@ dotnet run --project src/RA3MT.SelfCheck -c Release --no-build -- stubdump artif
 C# 离线模式按改动选择：
 
 ```powershell
-$checks = @('bridgetest','rankmailboxtest','ranktest','actiontest','installertest','resolvertest','asmtest','selectiontest','featuretest','layouttest','spawntest','reinforcetest','processtest')
+$checks = @('bridgetest','rankmailboxtest','ranktest','actiontest','installertest','resolvertest','asmtest','selectiontest','featuretest','layouttest','spawntest','reinforcetest','processtest','identitytest')
 foreach ($check in $checks) {
     dotnet run --project src/RA3MT.SelfCheck -c Release --no-build -- $check
     if ($LASTEXITCODE) { throw "SelfCheck failed: $check" }
@@ -74,6 +74,8 @@ foreach ($check in $checks) {
 ```
 
 不指定模式时，`SelfCheck` 检查原版游戏镜像的挂钩地址。`processtest` 只检查本机进程句柄/退出状态，不访问游戏。
+
+`identitytest` 的 157 项检查覆盖永久常量、标准 FNV 向量、标记格式、损坏拒绝、块布局、清单一致性，以及自建辅助进程中的真实跨进程读取、命名对象发现及退出清理；不访问游戏。`identity-child` 是它内部启动的辅助入口，无需手工运行。该检查也包含在起义时刻一键审计中。平台接入规则见 [DETECTION.md](DETECTION.md)。
 
 原版 Python 套件可单独运行：
 

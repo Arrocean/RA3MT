@@ -68,6 +68,14 @@ public static class InstallerChecks
                 installer.Uninstall();
                 Original(memory);
                 if (installer.Installed) throw new Exception("Installation still marked active after recovery");
+                // An incomplete initial buffer need not contain a valid record.
+                // Once that buffer was written fully, later rollback retains it.
+                if (failure > 1 || mode == 2)
+                {
+                    var retained = memory.Read(installer.Block + BlockLayoutCatalog.IdentityOffset, TrainerIdentity.RecordSize);
+                    if (!TrainerIdentity.TryParse(retained, out var identity) || identity.Kind != TrainerIdentityKind.GameProcess)
+                        throw new Exception("Install rollback erased the public game identity");
+                }
                 cases++;
             }
         }
@@ -76,6 +84,9 @@ public static class InstallerChecks
             var memory = Memory();
             var installer = Installer(memory);
             installer.Install();
+            var identity = memory.Read(installer.Block + BlockLayoutCatalog.IdentityOffset, TrainerIdentity.RecordSize);
+            if (!TrainerIdentity.TryParse(identity, out var marker) || marker.Kind != TrainerIdentityKind.GameProcess)
+                throw new Exception("Public identity missing from installed block");
             var patchedOrder = memory.Writes.Skip(1 + sites.Count).ToArray();
             memory.Failures[memory.WriteCount + failRestore] = 0;
             var start = memory.Writes.Count;
@@ -89,6 +100,8 @@ public static class InstallerChecks
             if (memory.Writes.Count != retryStart + 1) throw new Exception("Retry wrote already restored hooks");
             Original(memory);
             if (installer.Installed) throw new Exception("Retry did not clear active state");
+            if (!memory.Read(installer.Block + BlockLayoutCatalog.IdentityOffset, TrainerIdentity.RecordSize).SequenceEqual(identity))
+                throw new Exception("Detach erased the public game identity");
             cases++;
         }
         Console.WriteLine($"PASS {cases} installer failure/recovery cases (before, partial, post-write and retry)");
