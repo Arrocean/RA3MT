@@ -147,6 +147,7 @@ public sealed class TrainerEngine : IDisposable
         var registry = new FeatureServiceRegistry();
         registry.Register<IGameMemory>(new GameMemory(_mem!, Version, Base));
         registry.Register<ISwitchBank>(_switches);
+        registry.Register(_actionState);
         registry.Register<Actions.IFlagRequests>(new Actions.FlagRequests(WriteFeatureFlag));
         var bridges = _bridges ?? throw new InvalidOperationException("桥协调器需要已附加的会话");
         registry.Register<IBridgeGateway>(new EngineAdapters.BridgeGateway(

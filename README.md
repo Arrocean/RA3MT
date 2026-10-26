@@ -2,7 +2,7 @@
 
 English | [简体中文](README-zh_CN.md)
 
-A modern rebuild and extension of Ken22265's FINAL3 trainer, using **C# / .NET 10 + WPF**, with UI by WhiteSprite. These documents describe **v261025-8**. Versions use `vYYMMDD-N`: date and release sequence for that day.
+A modern rebuild and extension of Ken22265's FINAL3 trainer, using **C# / .NET 10 + WPF**, with UI by WhiteSprite. These documents describe **v261026-1**. Versions use `vYYMMDD-N`: date and release sequence for that day.
 
 Select the game in the sidebar. **Red Alert 3 has 34 features and 26 hooks; Uprising has 36 features and 28 hooks.** Each game has its own reinforcement catalog: 125 RA3 entries and 137 Uprising entries.
 
@@ -61,10 +61,10 @@ From the repository root:
 
 ```powershell
 dotnet build RA3MT.slnx -c Release
-dotnet publish src/RA3MT.UI -c Release -r win-x86 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish-v261025-8
+dotnet publish src/RA3MT.UI -c Release -r win-x86 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish-v261026-1
 ```
 
-Output: `Red Alert 3 Modern Trainer v261025-8.exe`. Update both `MainVM.AppVersion` and the UI project's `AssemblyName` for a release. Use `-p:` in Git Bash as well.
+Output: `Red Alert 3 Modern Trainer v261026-1.exe`. Update both `MainVM.AppVersion` and the UI project's `AssemblyName` for a release. Use `-p:` in Git Bash as well.
 
 ## Repository and documentation
 

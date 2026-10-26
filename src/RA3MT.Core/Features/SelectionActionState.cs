@@ -1,10 +1,12 @@
 using RA3MT.Core.Memory;
+using RA3MT.Core.Features.Host;
 
 namespace RA3MT.Core.Features;
 
 /// <summary>Original per-instance speeds scoped to one attached game session.</summary>
-public sealed class SelectionActionState
+public sealed class SelectionActionState : IFeatureService
 {
+    public bool IsAvailable => true;
     private readonly Dictionary<uint, (uint template, float original, float written)> _speeds = new();
 
     public bool SetSpeed(IInjectionMemory memory, uint locomotor, float speed)

@@ -5,8 +5,8 @@ namespace RA3MT.Core.Features.Selection;
 /// <summary>One-shot actions on the current selection (speed, freeze, health,
 /// capture …). The selected-unit enumeration and every write go through
 /// <see cref="SelectionActions"/>, which already validates the selection chain
-/// before touching anything; this feature only maps the action id to it and keeps
-/// the small amount of state a few actions need (e.g. the speed to restore).</summary>
+/// before touching anything. Speed actions share the session's original-speed
+/// service so restore can undo changes made by the other feature cards.</summary>
 public sealed class SelectionActionFeature(string id, string action, bool carriesState = true) : IFeature
 {
     public string Id { get; } = id;
@@ -20,7 +20,7 @@ public sealed class SelectionActionFeature(string id, string action, bool carrie
     public bool IsMigrated => true;
 
     public IFeatureState CreateState(FeatureContext context) =>
-        new State(context, this, CarriesState ? new SelectionActionState() : null);
+        new State(context, this, CarriesState ? context.Host.Services.Get<SelectionActionState>() : null);
 
     private sealed class State(FeatureContext context, SelectionActionFeature feature,
         SelectionActionState? actionState) : IFeatureState
@@ -33,11 +33,15 @@ public sealed class SelectionActionFeature(string id, string action, bool carrie
         {
             try
             {
+                if (actionState is null && feature.Action is ("speed1" or "speed2" or "freeze1" or "freeze2" or "speedrestore"))
+                    return FeatureResult.Failure("选中单位速度记录服务不可用（未附加或未初始化）");
                 var applied = SelectionActions.Apply(context.Host.Memory, context.Data, context.Version,
                     feature.Action, context.ImageBase, actionState);
                 context.Host.Log($"{feature.Id}: 作用于 {applied} 个选中目标");
                 if (applied == 0)
-                    return FeatureResult.Failure("没有可处理的选中目标（未选中或目标不支持此功能）");
+                    return FeatureResult.Failure(feature.Action == "speedrestore"
+                        ? "未找到可恢复的速度记录（请选中本次附加期间修改过速度的单位）"
+                        : "没有可处理的选中目标（未选中或目标不支持此功能）");
                 return FeatureResult.Success;
             }
             catch (Exception ex)
